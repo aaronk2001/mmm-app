@@ -1,0 +1,235 @@
+================================================================================
+NEXUS MONEY HUB — DESIGN FOUNDATION COMPLETE
+================================================================================
+
+Project: C:\Users\aaron\projects\Finance agent\nexus-app
+Date: June 23, 2026
+Status: ✅ COMPLETE
+
+================================================================================
+DELIVERABLES
+================================================================================
+
+1. LIGHT THEME CSS
+   File: src/styles/money-theme.css (10KB)
+   - Fully scoped under .money-hub wrapper
+   - No interference with existing OLED-dark terminal
+   - 23 CSS custom properties (--m-* tokens)
+   - 45+ utility classes (.m-card, .m-btn, .m-input, etc.)
+   - Subtle animations, focus rings, accessibility features
+   - Scrollbar theming, reduced-motion support
+
+2. SHARED PRIMITIVES (7 components)
+   Location: src/components/money/shared/
+
+   ✓ Card.jsx
+     Props: children, className, variant, hoverable, ...props
+     Purpose: Card container with optional hover effect
+
+   ✓ BigStat.jsx
+     Props: value, label, delta, prefix, suffix
+     Purpose: Large number display with optional % delta + color
+
+   ✓ Money.jsx
+     Props: value, prefix, decimals, className
+     Purpose: Currency formatter with tabular-nums
+
+   ✓ Term.jsx
+     Props: name, children, className
+     Purpose: Glossary tooltip (dotted underline, fetches on hover)
+     Backend: GET /api/money/glossary?term=<name>
+
+   ✓ EmptyState.jsx
+     Props: title, message, icon, action
+     Purpose: Friendly empty state card
+
+   ✓ ComingSoon.jsx
+     Props: title, description
+     Purpose: Coming soon placeholder (full-height)
+
+   ✓ SectionHeader.jsx
+     Props: icon, title, subtitle
+     Purpose: Consistent section header (icon badge + title)
+
+3. MAIN HUB COMPONENT
+   File: src/components/money/MoneyHub.jsx
+   Features:
+   - Left sidebar with 9 navigation sections (icons + labels)
+   - Tab-based navigation (Accounts, Spending, Cash Flow, Goals, etc.)
+   - 3 MVP sections (lazy-loaded)
+   - 6 Coming Soon placeholders
+   - Onboarding flow (no data → seed sample or start fresh)
+   - Error handling, loading states
+   - Responsive layout (240px sidebar + flex main)
+
+4. MVP SECTION COMPONENTS (3)
+   Location: src/components/money/sections/
+
+   ✓ AccountsNetWorth.jsx
+     API: GET /api/money/accounts, GET /api/money/overview
+     Placeholder: Shows net worth summary
+
+   ✓ Transactions.jsx
+     API: GET /api/money/transactions
+     Placeholder: Ready for transaction list UI
+
+   ✓ Budget.jsx
+     API: GET /api/money/cashflow
+     Placeholder: Ready for income/expense breakdown
+
+5. DOCUMENTATION (3 files)
+   Location: docs/
+
+   ✓ MONEY_HUB_DESIGN_FOUNDATION.md (13KB)
+     - Complete design system overview
+     - Theme tokens with hex values
+     - Shared primitives API (detailed prop tables)
+     - Section component contract
+     - CSS classes & utilities
+     - Design principles (no cursor-pointer on cards, color-blind safe, etc.)
+     - Onboarding flow
+     - Backend API contract
+     - File structure
+
+   ✓ MONEY_HUB_QUICK_API.md (7.8KB)
+     - Import paths for all components
+     - Quick prop reference tables
+     - CSS class lookup
+     - Color tokens reference
+     - Section component template
+     - Backend API endpoints
+     - Lucide icon list
+
+   ✓ MONEY_HUB_INDEX.md
+     - Executive summary
+     - File structure tree
+     - Design system at a glance
+     - Shared primitives table
+     - Getting started guide
+     - Best practices
+     - Validation checklist
+
+================================================================================
+FILE STRUCTURE
+================================================================================
+
+src/components/money/
+├── MoneyHub.jsx                          (main hub)
+├── shared/
+│   ├── Card.jsx
+│   ├── BigStat.jsx
+│   ├── Money.jsx
+│   ├── Term.jsx
+│   ├── EmptyState.jsx
+│   ├── ComingSoon.jsx
+│   └── SectionHeader.jsx
+└── sections/
+    ├── AccountsNetWorth.jsx
+    ├── Transactions.jsx
+    └── Budget.jsx
+
+src/styles/
+└── money-theme.css
+
+docs/
+├── MONEY_HUB_DESIGN_FOUNDATION.md
+├── MONEY_HUB_QUICK_API.md
+├── MONEY_HUB_INDEX.md
+└── MONEY_HUB_SUMMARY.txt
+
+Total: 11 component files + 1 CSS file + 4 doc files
+
+================================================================================
+KEY DESIGN DECISIONS
+================================================================================
+
+1. SCOPED CSS — All tokens/classes prefixed --m- / .m-, wrapped in .money-hub
+2. LIGHT THEME — Apple blue, white surfaces, generous whitespace, calm aesthetic
+3. NO CURSOR-POINTER ON CARDS — Only interactive buttons get it (Aaron's preference)
+4. COLOR-BLIND SAFE — Always pair color with icon or label
+5. GLOSSARY INTEGRATION — <Term> component with hover-fetched definitions
+6. SECTION AUTONOMY — No props required, each fetches own data
+7. TABULAR NUMERALS — All numbers use monospace + tabular-nums for alignment
+8. LAZY-LOADED SECTIONS — Code-split for performance
+
+================================================================================
+IMPORT PATHS (from section components)
+================================================================================
+
+import Card from '../shared/Card';
+import BigStat from '../shared/BigStat';
+import Money from '../shared/Money';
+import Term from '../shared/Term';
+import EmptyState from '../shared/EmptyState';
+import ComingSoon from '../shared/ComingSoon';
+import SectionHeader from '../shared/SectionHeader';
+import { useEffect, useState } from 'react';
+import { <LucideIcon> } from 'lucide-react';
+
+================================================================================
+COMPONENT SIGNATURES
+================================================================================
+
+Card({ children, className = '', variant = 'default', hoverable = true, ...props })
+BigStat({ value, label, delta = null, prefix = '', suffix = '' })
+Money({ value, prefix = '$', decimals = 2, className = '' })
+Term({ name, children, className = '' })
+EmptyState({ title, message, icon = AlertCircle, action = null })
+ComingSoon({ title, description = 'This section is coming soon.' })
+SectionHeader({ icon, title, subtitle = null })
+
+Section components:
+export default function SectionName() { /* no props */ }
+
+================================================================================
+CSS UTILITIES (quick reference)
+================================================================================
+
+Cards:       .m-card, .m-card-sm, .m-card-no-hover
+Buttons:     .m-btn, .m-btn-primary, .m-btn-secondary, .m-btn-ghost, .m-btn-sm, .m-btn-icon
+Forms:       .m-input, .m-input-label
+Spacing:     .m-gap-1 to .m-gap-6, .m-p-1 to .m-p-6, .m-mb-2 to .m-mb-6
+Typography:  .num, .m-text-muted, .m-text-secondary, .m-text-accent
+Layout:      .m-scroll
+
+================================================================================
+BACKEND API CONTRACT
+================================================================================
+
+GET /api/money/overview          → { netWorth: number, ... }
+GET /api/money/accounts          → { accounts: [...] }
+GET /api/money/transactions      → { transactions: [...] }
+GET /api/money/cashflow          → { income, expenses, ... }
+GET /api/money/glossary?term=foo → { definition: string }
+POST /api/money/seed-sample      → Success
+POST /api/money/reset            → Success
+
+================================================================================
+VALIDATION
+================================================================================
+
+✅ All 11 JSX files have valid syntax
+✅ All shared primitives export default
+✅ All section components export default
+✅ MoneyHub imports correctly
+✅ CSS scoped under .money-hub
+✅ No conflicts with existing dark theme
+✅ Documentation complete and cross-linked
+✅ Import paths verified
+✅ Prop signatures documented
+✅ Backend API contract specified
+
+================================================================================
+READY FOR SECTION AGENTS
+================================================================================
+
+- Read: docs/MONEY_HUB_DESIGN_FOUNDATION.md (full spec)
+- Reference: docs/MONEY_HUB_QUICK_API.md (quick lookup)
+- Use template from Quick API doc
+- Import from ../shared/ paths above
+- Fetch GET /api/money/<endpoint> on mount
+- Render with shared primitives
+- Style with .m-* classes only (no custom CSS)
+- Validate against checklist in MONEY_HUB_INDEX.md
+
+================================================================================

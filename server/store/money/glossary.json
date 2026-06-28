@@ -1,0 +1,259 @@
+{
+  "terms": [
+    {
+      "term": "Net Worth",
+      "plain": "Your total assets minus total liabilities. The bottom-line measure of your financial position.",
+      "more": "Negative net worth means you owe more than you own; positive means you have a cushion."
+    },
+    {
+      "term": "Cash Flow",
+      "plain": "The movement of money in and out of your accounts over time. Positive cash flow means more money coming in than going out.",
+      "more": "Essential to solvency; even high net worth can fail with poor cash flow."
+    },
+    {
+      "term": "Budget",
+      "plain": "A spending plan that allocates money to different categories based on expected income and goals.",
+      "more": "Not a restriction—a tool to align spending with priorities."
+    },
+    {
+      "term": "Envelope Budgeting",
+      "plain": "A method where you allocate a fixed amount to each spending category (like cash envelopes), and stop spending once it runs out.",
+      "more": "Forces awareness and prevents overspending in any one category."
+    },
+    {
+      "term": "Emergency Fund",
+      "plain": "Cash savings set aside to cover unexpected expenses (3-6 months of living costs).",
+      "more": "Prevents debt spirals when emergencies strike; foundational financial security."
+    },
+    {
+      "term": "FIRE",
+      "plain": "Financial Independence, Retire Early. A movement focused on maximizing savings rate to retire before traditional age.",
+      "more": "Requires 25-30x annual expenses in invested assets for safe withdrawal."
+    },
+    {
+      "term": "Roth IRA",
+      "plain": "A tax-advantaged retirement account where you contribute after-tax money and withdrawals in retirement are tax-free.",
+      "more": "No required minimum distributions; great for long-term wealth building."
+    },
+    {
+      "term": "401(k)",
+      "plain": "An employer-sponsored retirement plan where contributions reduce your current taxable income.",
+      "more": "Employer match is free money; always contribute enough to capture it."
+    },
+    {
+      "term": "Expense Ratio",
+      "plain": "The annual percentage of a fund's assets paid to cover operating costs and management fees.",
+      "more": "Low expense ratios (under 0.2%) significantly boost long-term returns."
+    },
+    {
+      "term": "APR vs APY",
+      "plain": "APR (Annual Percentage Rate) is interest without compounding; APY includes the effect of compounding over a year.",
+      "more": "APY is always higher; critical for savings and debt decisions."
+    },
+    {
+      "term": "Debt-to-Income Ratio (DTI)",
+      "plain": "Total monthly debt payments divided by gross monthly income. Lenders use this to assess lending risk.",
+      "more": "Lower is better; below 36% is typically considered healthy."
+    },
+    {
+      "term": "Amortization",
+      "plain": "The process of paying off a loan through regular installments that cover both principal and interest.",
+      "more": "Early payments mostly cover interest; later payments mostly cover principal."
+    },
+    {
+      "term": "Asset Allocation",
+      "plain": "The breakdown of your investments across stocks, bonds, cash, and other asset classes based on risk tolerance and goals.",
+      "more": "More important than picking individual securities for long-term wealth."
+    },
+    {
+      "term": "Monte Carlo Simulation",
+      "plain": "A statistical method that runs thousands of scenarios with random market outcomes to estimate the probability of financial goals succeeding.",
+      "more": "Reveals true retirement safety, not just average-case analysis."
+    },
+    {
+      "term": "Cost Basis",
+      "plain": "The original purchase price of an investment, used to calculate capital gains or losses when sold.",
+      "more": "Essential for tax planning and determining actual profit."
+    },
+    {
+      "term": "Capital Gains",
+      "plain": "Profit from selling an investment for more than its cost basis. Taxed differently than regular income.",
+      "more": "Long-term gains (1+ year) are taxed lower than short-term gains."
+    },
+    {
+      "term": "Tax Bracket",
+      "plain": "The range of income at which a specific tax rate applies. The US uses a progressive system with multiple brackets.",
+      "more": "Moving into a higher bracket only increases tax on income within that bracket."
+    },
+    {
+      "term": "Marginal vs Effective Tax Rate",
+      "plain": "Marginal rate is the tax on the next dollar earned; effective rate is total tax divided by total income.",
+      "more": "Your marginal rate drives financial decisions; your effective rate shows overall tax burden."
+    },
+    {
+      "term": "Compound Interest",
+      "plain": "Interest earned on both the principal and previously earned interest, creating exponential growth.",
+      "more": "The eighth wonder of the world; time is your greatest asset."
+    },
+    {
+      "term": "Diversification",
+      "plain": "Spreading investments across different asset classes, sectors, and geographies to reduce risk.",
+      "more": "Uncorrelated assets protect you when one market struggles."
+    },
+    {
+      "term": "Liquidity",
+      "plain": "How quickly an asset can be converted to cash without significant loss of value.",
+      "more": "Cash is most liquid; real estate and collectibles are least liquid."
+    },
+    {
+      "term": "Dollar-Cost Averaging",
+      "plain": "Investing a fixed amount at regular intervals, regardless of asset price, to reduce impact of market volatility.",
+      "more": "Removes emotion and timing risk from investing."
+    },
+    {
+      "term": "Rebalancing",
+      "plain": "Periodically adjusting your portfolio back to target allocations to maintain risk level and enforce buy-low/sell-high.",
+      "more": "Annual or quarterly rebalancing keeps discipline in check."
+    },
+    {
+      "term": "Savings Rate",
+      "plain": "The percentage of income you save rather than spend. Critical for wealth building and achieving financial independence.",
+      "more": "Doubling your savings rate cuts time to financial goals by 50%+."
+    },
+    {
+      "term": "Sunk Cost",
+      "plain": "Money already spent that cannot be recovered. Should never influence future financial decisions.",
+      "more": "Ignore sunk costs; decide based only on future value and opportunity."
+    },
+    {
+      "term": "Opportunity Cost",
+      "plain": "The benefit forgone by choosing one option over the next best alternative.",
+      "more": "Critical for deciding where to allocate time, money, and attention."
+    },
+    {
+      "term": "Risk Tolerance",
+      "plain": "Your ability and willingness to endure investment losses without panic-selling or deviating from your plan.",
+      "more": "Determine this honestly; it drives your entire investment strategy."
+    },
+    {
+      "term": "Market Correction",
+      "plain": "A decline of 10% or more from recent highs, commonly occurring several times per decade.",
+      "more": "Normal and necessary; panic-selling locks in losses."
+    },
+    {
+      "term": "Bear Market",
+      "plain": "A prolonged decline of 20%+ from recent highs, often accompanied by economic recession.",
+      "more": "Happens roughly every 3-5 years; wealth is built by staying invested."
+    },
+    {
+      "term": "Bull Market",
+      "plain": "An extended period of rising prices and investor optimism, often gaining 20%+ or more.",
+      "more": "Can last years; missing just 10 best days cuts returns by 50%."
+    },
+    {
+      "term": "Inflation",
+      "plain": "The general increase in prices of goods and services over time, reducing purchasing power.",
+      "more": "Erodes cash savings; invest to stay ahead of inflation."
+    },
+    {
+      "term": "Real Return",
+      "plain": "Your investment return minus inflation. The true measure of wealth growth.",
+      "more": "5% nominal return minus 2% inflation = 3% real return."
+    },
+    {
+      "term": "Index Fund",
+      "plain": "A fund that tracks a market index (like the S&P 500) with low fees and automatic diversification.",
+      "more": "Outperforms 80%+ of actively managed funds over 15+ years."
+    },
+    {
+      "term": "ETF (Exchange-Traded Fund)",
+      "plain": "A fund traded like a stock that holds a basket of securities, offering low cost and tax efficiency.",
+      "more": "Often preferable to mutual funds for individual investors."
+    },
+    {
+      "term": "Dividend",
+      "plain": "A portion of company profits distributed to shareholders, usually quarterly.",
+      "more": "Provides passive income and can compound significantly over decades."
+    },
+    {
+      "term": "Price-to-Earnings Ratio (P/E)",
+      "plain": "Stock price divided by earnings per share; indicates if a stock is expensive or cheap relative to profits.",
+      "more": "Lower P/E can signal undervalue; context matters greatly."
+    },
+    {
+      "term": "Credit Score",
+      "plain": "A numerical rating (300-850) based on credit history, used by lenders to assess default risk.",
+      "more": "Each 50-point increase saves thousands in interest over a lifetime."
+    },
+    {
+      "term": "Credit Utilization",
+      "plain": "The percentage of available credit you're using. Keeping it under 30% is best for credit score.",
+      "more": "Even zero balance is better than high utilization."
+    },
+    {
+      "term": "Debt Payoff Strategies",
+      "plain": "Methods like debt snowball (smallest first) or avalanche (highest rate first) to systematically eliminate debt.",
+      "more": "Snowball provides psychological wins; avalanche minimizes interest."
+    },
+    {
+      "term": "Mortgage",
+      "plain": "A long-term loan to purchase real estate, secured by the property itself.",
+      "more": "30-year fixed is common; prepaying principal accelerates payoff."
+    },
+    {
+      "term": "Equity",
+      "plain": "In real estate, the difference between property value and outstanding mortgage. Your true ownership stake.",
+      "more": "Building equity through payments and appreciation is core wealth strategy."
+    },
+    {
+      "term": "Net Interest Margin",
+      "plain": "For banks and lenders, the profit on interest charged versus interest paid to depositors.",
+      "more": "Affects rate offers you'll receive on deposits and loans."
+    },
+    {
+      "term": "Recession",
+      "plain": "Two consecutive quarters of negative GDP growth, typically marked by job losses and reduced spending.",
+      "more": "Happens every 5-10 years on average; stay employed and invested."
+    },
+    {
+      "term": "Wage Stagnation",
+      "plain": "When income growth fails to keep pace with inflation, reducing real purchasing power.",
+      "more": "One reason to maximize savings rate and invest for compounding."
+    },
+    {
+      "term": "Financial Freedom",
+      "plain": "When passive income and assets cover living expenses, eliminating the need to work for money.",
+      "more": "Earlier than retirement; the ultimate financial goal."
+    },
+    {
+      "term": "Side Hustle",
+      "plain": "A secondary income source outside your primary job, often providing income for aggressive saving.",
+      "more": "Dramatically accelerates wealth building; compresses timeline to goals."
+    },
+    {
+      "term": "Passive Income",
+      "plain": "Money earned with minimal ongoing effort, like dividends, rent, or royalties.",
+      "more": "Build passive income streams to reduce dependence on active work."
+    },
+    {
+      "term": "Tax-Loss Harvesting",
+      "plain": "Deliberately selling investments at a loss to offset capital gains, reducing tax burden.",
+      "more": "A free tax reduction strategy; essential for taxable investment accounts."
+    },
+    {
+      "term": "Qualified Charitable Distribution",
+      "plain": "Direct transfer of IRA funds to charity, counting toward charitable giving without increasing taxable income.",
+      "more": "Available at 70.5+; maximizes tax efficiency of giving."
+    },
+    {
+      "term": "Financial Plan",
+      "plain": "A comprehensive roadmap covering goals, cash flow, debt, investments, insurance, and retirement.",
+      "more": "Written plans dramatically increase success rates vs. vague intentions."
+    },
+    {
+      "term": "Scenario Analysis",
+      "plain": "Testing your financial plan against different future scenarios (job loss, market crash, inheritance).",
+      "more": "Reveals gaps and builds confidence in your resilience."
+    }
+  ]
+}
