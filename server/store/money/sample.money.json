@@ -1,0 +1,588 @@
+{
+  "accounts": [
+    {
+      "id": "acc_checking",
+      "name": "Primary Checking",
+      "type": "cash",
+      "balance": 4250.50,
+      "institution": "Chase Bank",
+      "currency": "USD",
+      "status": "active",
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "acc_savings",
+      "name": "Emergency Fund",
+      "type": "cash",
+      "balance": 12500.00,
+      "institution": "Chase Bank",
+      "currency": "USD",
+      "status": "active",
+      "created_at": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "acc_credit_card",
+      "name": "Chase Sapphire",
+      "type": "credit",
+      "balance": -2350.75,
+      "institution": "Chase Bank",
+      "currency": "USD",
+      "status": "active",
+      "created_at": "2024-03-01T10:00:00Z"
+    },
+    {
+      "id": "acc_brokerage",
+      "name": "Fidelity Brokerage",
+      "type": "brokerage",
+      "balance": 28500.00,
+      "institution": "Fidelity",
+      "currency": "USD",
+      "status": "active",
+      "created_at": "2024-01-20T10:00:00Z"
+    },
+    {
+      "id": "acc_car_loan",
+      "name": "Auto Loan - Civic",
+      "type": "loan",
+      "balance": -18500.00,
+      "institution": "Wells Fargo",
+      "currency": "USD",
+      "status": "active",
+      "created_at": "2023-11-10T10:00:00Z"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "txn_001",
+      "account_id": "acc_checking",
+      "date": "2026-05-01",
+      "amount": 3500,
+      "payee": "Payroll - Northwind",
+      "category_id": "inc",
+      "tags": ["income", "salary"],
+      "note": "Biweekly paycheck",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_002",
+      "account_id": "acc_checking",
+      "date": "2026-05-02",
+      "amount": -1200,
+      "payee": "Rent - Oak Street Apartment",
+      "category_id": "hou",
+      "tags": ["monthly", "housing"],
+      "note": "May rent payment",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_003",
+      "account_id": "acc_checking",
+      "date": "2026-05-03",
+      "amount": -85.50,
+      "payee": "Whole Foods Market",
+      "category_id": "fod",
+      "tags": ["groceries"],
+      "note": "Weekly grocery run",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_004",
+      "account_id": "acc_checking",
+      "date": "2026-05-03",
+      "amount": -42.30,
+      "payee": "Chipotle - Mill Ave",
+      "category_id": "fod",
+      "tags": ["dining"],
+      "note": "Lunch",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_005",
+      "account_id": "acc_checking",
+      "date": "2026-05-04",
+      "amount": -125.00,
+      "payee": "Uber - Trip Downtown",
+      "category_id": "tra",
+      "tags": ["transportation"],
+      "note": "Downtown event",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_006",
+      "account_id": "acc_checking",
+      "date": "2026-05-04",
+      "amount": -89.99,
+      "payee": "Netflix",
+      "category_id": "sub",
+      "tags": ["subscription"],
+      "note": "Monthly subscription",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_007",
+      "account_id": "acc_checking",
+      "date": "2026-05-05",
+      "amount": -156.75,
+      "payee": "Target",
+      "category_id": "sho",
+      "tags": ["shopping", "household"],
+      "note": "Household items",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_008",
+      "account_id": "acc_checking",
+      "date": "2026-05-06",
+      "amount": -2500,
+      "payee": "Transfer to Savings",
+      "category_id": "sav",
+      "tags": ["transfer"],
+      "note": "Monthly savings transfer",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_009",
+      "account_id": "acc_checking",
+      "date": "2026-05-07",
+      "amount": -65.00,
+      "payee": "Lyft - Work Commute",
+      "category_id": "tra",
+      "tags": ["transportation"],
+      "note": "Commute to Northwind",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_010",
+      "account_id": "acc_checking",
+      "date": "2026-05-08",
+      "amount": -340.00,
+      "payee": "CVS Pharmacy",
+      "category_id": "hea",
+      "tags": ["health", "pharmacy"],
+      "note": "Prescription + OTC meds",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_011",
+      "account_id": "acc_checking",
+      "date": "2026-05-09",
+      "amount": -14.99,
+      "payee": "Spotify",
+      "category_id": "sub",
+      "tags": ["subscription"],
+      "note": "Premium monthly",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_012",
+      "account_id": "acc_checking",
+      "date": "2026-05-10",
+      "amount": -78.50,
+      "payee": "Amazon",
+      "category_id": "sho",
+      "tags": ["shopping", "online"],
+      "note": "USB cables + charger",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_013",
+      "account_id": "acc_checking",
+      "date": "2026-05-10",
+      "amount": -52.00,
+      "payee": "Restaurant 1702",
+      "category_id": "fod",
+      "tags": ["dining"],
+      "note": "Dinner with friends",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_014",
+      "account_id": "acc_checking",
+      "date": "2026-05-12",
+      "amount": -185.00,
+      "payee": "SRP Electric",
+      "category_id": "uti",
+      "tags": ["utilities", "electricity"],
+      "note": "May electricity bill",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_015",
+      "account_id": "acc_checking",
+      "date": "2026-05-13",
+      "amount": -95.00,
+      "payee": "Comcast Internet",
+      "category_id": "uti",
+      "tags": ["utilities", "internet"],
+      "note": "Monthly internet",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_016",
+      "account_id": "acc_checking",
+      "date": "2026-05-15",
+      "amount": 3500,
+      "payee": "Payroll - Northwind",
+      "category_id": "inc",
+      "tags": ["income", "salary"],
+      "note": "Biweekly paycheck",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_017",
+      "account_id": "acc_checking",
+      "date": "2026-05-16",
+      "amount": -45.99,
+      "payee": "Movie Theater - Harkins",
+      "category_id": "ent",
+      "tags": ["entertainment"],
+      "note": "Movie + snacks",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_018",
+      "account_id": "acc_checking",
+      "date": "2026-05-17",
+      "amount": -62.00,
+      "payee": "Whole Foods Market",
+      "category_id": "fod",
+      "tags": ["groceries"],
+      "note": "Weekly groceries",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_019",
+      "account_id": "acc_checking",
+      "date": "2026-05-18",
+      "amount": -300.00,
+      "payee": "Car Payment - Wells Fargo",
+      "category_id": "tra",
+      "tags": ["loan", "auto"],
+      "note": "May auto loan payment",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_020",
+      "account_id": "acc_checking",
+      "date": "2026-05-19",
+      "amount": -125.50,
+      "payee": "Shell Gas Station",
+      "category_id": "tra",
+      "tags": ["transportation", "gas"],
+      "note": "Gas fill-up",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_021",
+      "account_id": "acc_checking",
+      "date": "2026-05-20",
+      "amount": -89.99,
+      "payee": "Apple Music",
+      "category_id": "sub",
+      "tags": ["subscription"],
+      "note": "Monthly music subscription",
+      "source": "manual",
+      "cleared": false
+    },
+    {
+      "id": "txn_022",
+      "account_id": "acc_checking",
+      "date": "2026-05-21",
+      "amount": -275.00,
+      "payee": "Amazon",
+      "category_id": "sho",
+      "tags": ["shopping", "online"],
+      "note": "Desk lamp + keyboard",
+      "source": "manual",
+      "cleared": false
+    },
+    {
+      "id": "txn_023",
+      "account_id": "acc_checking",
+      "date": "2026-05-22",
+      "amount": -155.00,
+      "payee": "LA Fitness",
+      "category_id": "hea",
+      "tags": ["health", "gym"],
+      "note": "Monthly gym membership",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_024",
+      "account_id": "acc_checking",
+      "date": "2026-05-23",
+      "amount": -38.50,
+      "payee": "Trader Joes",
+      "category_id": "fod",
+      "tags": ["groceries"],
+      "note": "Snacks + frozen meals",
+      "source": "manual",
+      "cleared": false
+    },
+    {
+      "id": "txn_025",
+      "account_id": "acc_credit_card",
+      "date": "2026-05-05",
+      "amount": -850.00,
+      "payee": "Best Buy",
+      "category_id": "sho",
+      "tags": ["shopping", "electronics"],
+      "note": "Laptop stand + accessories",
+      "source": "manual",
+      "cleared": false
+    },
+    {
+      "id": "txn_026",
+      "account_id": "acc_credit_card",
+      "date": "2026-05-10",
+      "amount": -620.50,
+      "payee": "Delta Airlines",
+      "category_id": "ent",
+      "tags": ["travel"],
+      "note": "Flight to Houston for interview",
+      "source": "manual",
+      "cleared": false
+    },
+    {
+      "id": "txn_027",
+      "account_id": "acc_credit_card",
+      "date": "2026-05-15",
+      "amount": -880.25,
+      "payee": "Hotels.com - Houston",
+      "category_id": "ent",
+      "tags": ["travel"],
+      "note": "Hotel stay - interview trip",
+      "source": "manual",
+      "cleared": false
+    },
+    {
+      "id": "txn_028",
+      "account_id": "acc_savings",
+      "date": "2026-05-06",
+      "amount": 2500,
+      "payee": "Transfer from Checking",
+      "category_id": "sav",
+      "tags": ["transfer"],
+      "note": "Monthly savings deposit",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_029",
+      "account_id": "acc_savings",
+      "date": "2026-05-20",
+      "amount": 150.45,
+      "payee": "Interest Earned",
+      "category_id": "inc",
+      "tags": ["interest"],
+      "note": "Monthly interest accrual",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_030",
+      "account_id": "acc_brokerage",
+      "date": "2026-04-15",
+      "amount": 250.75,
+      "payee": "Dividend - VOO (S&P 500 ETF)",
+      "category_id": "inc",
+      "tags": ["dividend"],
+      "note": "Quarterly dividend",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_031",
+      "account_id": "acc_brokerage",
+      "date": "2026-04-20",
+      "amount": 175.50,
+      "payee": "Dividend - VTI (US Total Market)",
+      "category_id": "inc",
+      "tags": ["dividend"],
+      "note": "Quarterly dividend",
+      "source": "manual",
+      "cleared": true
+    },
+    {
+      "id": "txn_032",
+      "account_id": "acc_brokerage",
+      "date": "2026-05-01",
+      "amount": 5000,
+      "payee": "Transfer from Checking",
+      "category_id": "sav",
+      "tags": ["transfer", "investment"],
+      "note": "Monthly investment",
+      "source": "manual",
+      "cleared": true
+    }
+  ],
+  "categories": [
+    {
+      "id": "inc",
+      "name": "Income",
+      "group": "income",
+      "color": "#10b981",
+      "icon": "plus"
+    },
+    {
+      "id": "hou",
+      "name": "Housing",
+      "group": "expenses",
+      "color": "#f59e0b",
+      "icon": "home"
+    },
+    {
+      "id": "fod",
+      "name": "Food & Dining",
+      "group": "expenses",
+      "color": "#ef4444",
+      "icon": "utensils"
+    },
+    {
+      "id": "tra",
+      "name": "Transportation",
+      "group": "expenses",
+      "color": "#3b82f6",
+      "icon": "car"
+    },
+    {
+      "id": "sho",
+      "name": "Shopping",
+      "group": "expenses",
+      "color": "#8b5cf6",
+      "icon": "bag"
+    },
+    {
+      "id": "uti",
+      "name": "Utilities",
+      "group": "expenses",
+      "color": "#ec4899",
+      "icon": "zap"
+    },
+    {
+      "id": "ent",
+      "name": "Entertainment",
+      "group": "expenses",
+      "color": "#06b6d4",
+      "icon": "film"
+    },
+    {
+      "id": "hea",
+      "name": "Health",
+      "group": "expenses",
+      "color": "#06b6d4",
+      "icon": "heart"
+    },
+    {
+      "id": "sav",
+      "name": "Savings",
+      "group": "transfers",
+      "color": "#14b8a6",
+      "icon": "piggy-bank"
+    },
+    {
+      "id": "sub",
+      "name": "Subscriptions",
+      "group": "expenses",
+      "color": "#a78bfa",
+      "icon": "layers"
+    },
+    {
+      "id": "oth",
+      "name": "Other",
+      "group": "expenses",
+      "color": "#6b7280",
+      "icon": "circle"
+    }
+  ],
+  "budgets": [
+    {
+      "id": "bud_fod",
+      "category_id": "fod",
+      "period": "monthly",
+      "limit": 600,
+      "rollover": false
+    },
+    {
+      "id": "bud_tra",
+      "category_id": "tra",
+      "period": "monthly",
+      "limit": 800,
+      "rollover": false
+    },
+    {
+      "id": "bud_ent",
+      "category_id": "ent",
+      "period": "monthly",
+      "limit": 300,
+      "rollover": true
+    },
+    {
+      "id": "bud_sho",
+      "category_id": "sho",
+      "period": "monthly",
+      "limit": 400,
+      "rollover": false
+    },
+    {
+      "id": "bud_uti",
+      "category_id": "uti",
+      "period": "monthly",
+      "limit": 350,
+      "rollover": false
+    }
+  ],
+  "networth_snapshots": [
+    {
+      "date": "2026-04-23",
+      "assets": 45250.50,
+      "liabilities": 20850.75,
+      "net": 24399.75
+    },
+    {
+      "date": "2026-04-30",
+      "assets": 47750.50,
+      "liabilities": 20850.75,
+      "net": 26899.75
+    },
+    {
+      "date": "2026-05-07",
+      "assets": 50250.50,
+      "liabilities": 20550.75,
+      "net": 29699.75
+    },
+    {
+      "date": "2026-05-14",
+      "assets": 52750.50,
+      "liabilities": 20250.75,
+      "net": 32499.75
+    },
+    {
+      "date": "2026-05-21",
+      "assets": 55250.50,
+      "liabilities": 20050.75,
+      "net": 35199.75
+    }
+  ]
+}

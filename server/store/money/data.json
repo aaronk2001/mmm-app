@@ -1,0 +1,85 @@
+{
+  "accounts": [],
+  "transactions": [],
+  "categories": [
+    {
+      "id": "inc",
+      "name": "Income",
+      "group": "income",
+      "color": "#10b981",
+      "icon": "plus"
+    },
+    {
+      "id": "hou",
+      "name": "Housing",
+      "group": "expenses",
+      "color": "#f59e0b",
+      "icon": "home"
+    },
+    {
+      "id": "fod",
+      "name": "Food & Dining",
+      "group": "expenses",
+      "color": "#ef4444",
+      "icon": "utensils"
+    },
+    {
+      "id": "tra",
+      "name": "Transportation",
+      "group": "expenses",
+      "color": "#3b82f6",
+      "icon": "car"
+    },
+    {
+      "id": "sho",
+      "name": "Shopping",
+      "group": "expenses",
+      "color": "#8b5cf6",
+      "icon": "bag"
+    },
+    {
+      "id": "uti",
+      "name": "Utilities",
+      "group": "expenses",
+      "color": "#ec4899",
+      "icon": "zap"
+    },
+    {
+      "id": "ent",
+      "name": "Entertainment",
+      "group": "expenses",
+      "color": "#06b6d4",
+      "icon": "film"
+    },
+    {
+      "id": "hea",
+      "name": "Health",
+      "group": "expenses",
+      "color": "#06b6d4",
+      "icon": "heart"
+    },
+    {
+      "id": "sav",
+      "name": "Savings",
+      "group": "transfers",
+      "color": "#14b8a6",
+      "icon": "piggy-bank"
+    },
+    {
+      "id": "sub",
+      "name": "Subscriptions",
+      "group": "expenses",
+      "color": "#a78bfa",
+      "icon": "layers"
+    },
+    {
+      "id": "oth",
+      "name": "Other",
+      "group": "expenses",
+      "color": "#6b7280",
+      "icon": "circle"
+    }
+  ],
+  "budgets": [],
+  "networth_snapshots": []
+}
