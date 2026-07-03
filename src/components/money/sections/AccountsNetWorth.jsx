@@ -19,6 +19,8 @@ import {
 import SectionHeader from '../shared/SectionHeader';
 import Card from '../shared/Card';
 import Money from '../shared/Money';
+import { confirmDialog } from '../../../lib/confirm';
+import { toast } from '../../../lib/toast';
 import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
 import BigStat from '../shared/BigStat';
@@ -141,7 +143,11 @@ export default function AccountsNetWorth() {
   }
 
   async function handleDeleteAccount(accountId) {
-    if (!confirm('Delete this account?')) return;
+    if (!(await confirmDialog({
+      title: 'Delete account?',
+      message: 'Its transactions will also be removed.',
+      confirmLabel: 'Delete',
+    }))) return;
 
     try {
       const res = await fetch(`/api/money/accounts/${accountId}`, {
@@ -150,9 +156,12 @@ export default function AccountsNetWorth() {
 
       if (res.ok) {
         await loadAllData();
+      } else {
+        toast.error('Delete failed.');
       }
     } catch (err) {
       console.error('Delete failed:', err);
+      toast.error(`Delete failed: ${err.message}`);
     }
   }
 

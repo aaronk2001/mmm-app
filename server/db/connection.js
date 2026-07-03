@@ -5,18 +5,44 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const repo = require('./repo');
 
-const MONEY_DIR = path.join(__dirname, '..', 'store', 'money');
-const DB_FILE = process.env.MMM_DB_FILE || path.join(MONEY_DIR, 'mmm.db');
-const JSON_FILE = path.join(MONEY_DIR, 'data.json');
+// ASSET_DIR holds bundled read-only files (glossary.json, sample.money.json)
+// and doubles as the dev-mode data dir. Packaged builds pass MMM_DATA_DIR
+// (%APPDATA%\mmm) so user data lives outside the app folder and survives
+// rebuilds/updates.
+const ASSET_DIR = path.join(__dirname, '..', 'store', 'money');
+const DATA_DIR = process.env.MMM_DATA_DIR || ASSET_DIR;
+const DB_FILE = process.env.MMM_DB_FILE || path.join(DATA_DIR, 'mmm.db');
+const JSON_FILE = path.join(ASSET_DIR, 'data.json');
 const SCHEMA = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 const SCHEMA_VERSION = '1';
 
 let _db = null;
 
+// One-time relocation: DBs created before MMM_DATA_DIR existed live next to the
+// bundled assets (inside the app folder) and would be lost on rebuild. Merge the
+// WAL into the main file, then copy it to the new home.
+function migrateLegacyDb() {
+  const legacy = path.join(ASSET_DIR, 'mmm.db');
+  if (path.resolve(DB_FILE) === path.resolve(legacy)) return;
+  if (fs.existsSync(DB_FILE) || !fs.existsSync(legacy)) return;
+  try {
+    try {
+      const old = new Database(legacy);
+      old.pragma('wal_checkpoint(TRUNCATE)');
+      old.close();
+    } catch { /* best effort — copy whatever is there */ }
+    fs.copyFileSync(legacy, DB_FILE);
+    console.log('[MMM db] migrated legacy mmm.db ->', DB_FILE);
+  } catch (e) {
+    console.error('[MMM db] legacy DB migration failed:', e.message);
+  }
+}
+
 // Lazily open (and one-time initialize) the SQLite database. Singleton.
 function db() {
   if (_db) return _db;
-  fs.mkdirSync(MONEY_DIR, { recursive: true });
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  migrateLegacyDb();
   _db = new Database(DB_FILE);
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
@@ -57,4 +83,4 @@ function initialize(d) {
   d.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)").run(SCHEMA_VERSION);
 }
 
-module.exports = { db };
+module.exports = { db, DATA_DIR, DB_FILE, ASSET_DIR };

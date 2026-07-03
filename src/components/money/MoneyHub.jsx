@@ -8,14 +8,15 @@ import {
   Target,
   CreditCard,
   TrendingUp,
-  PieChart,
   FileText,
-  MessageCircle,
   Settings,
 } from 'lucide-react';
 import '../../styles/money-theme.css';
 import Card from './shared/Card';
-import ComingSoon from './shared/ComingSoon';
+import ErrorBoundary from './shared/ErrorBoundary';
+import Toasts from './shared/Toasts';
+import ConfirmHost from './shared/ConfirmDialog';
+import { toast } from '../../lib/toast';
 
 // Live sections (lazy)
 const Overview = lazy(() => import('./sections/Overview'));
@@ -25,8 +26,6 @@ const Budget = lazy(() => import('./sections/Budget'));
 const CashFlow = lazy(() => import('./sections/CashFlow'));
 const Goals = lazy(() => import('./sections/Goals'));
 const Debt = lazy(() => import('./sections/Debt'));
-const Tax = lazy(() => import('./sections/Tax'));
-const Advisor = lazy(() => import('./sections/Advisor'));
 const SettingsSection = lazy(() => import('./sections/Settings'));
 const Investments = lazy(() => import('./sections/Investments'));
 const Reports = lazy(() => import('./sections/Reports'));
@@ -40,9 +39,7 @@ const SECTIONS = [
   { id: 'goals',        label: 'Goals',                icon: Target },
   { id: 'debt',         label: 'Debt Payoff',          icon: CreditCard },
   { id: 'investments',  label: 'Investments',          icon: TrendingUp },
-  { id: 'tax',          label: 'Tax',                  icon: PieChart },
   { id: 'reports',      label: 'Reports',              icon: FileText },
-  { id: 'advisor',      label: 'Advisor',              icon: MessageCircle },
   { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },
 ];
 
@@ -82,16 +79,28 @@ export default function MoneyHub() {
 
   const handleSeedSample = async () => {
     setSeeding(true);
-    try { await fetch('/api/money/seed-sample', { method: 'POST' }); await refreshEmpty(); }
-    catch (err) { console.error('[MoneyHub] seed failed:', err.message); }
-    finally { setSeeding(false); }
+    try {
+      const res = await fetch('/api/money/seed-sample', { method: 'POST' });
+      if (!res.ok) throw new Error(`seed failed (${res.status})`);
+      await refreshEmpty();
+      toast.success('Sample data loaded.');
+    } catch (err) {
+      console.error('[MoneyHub] seed failed:', err.message);
+      toast.error(`Couldn't load sample data: ${err.message}`);
+    } finally { setSeeding(false); }
   };
 
   const handleReset = async () => {
     setSeeding(true);
-    try { await fetch('/api/money/reset', { method: 'POST' }); setIsEmpty(true); }
-    catch (err) { console.error('[MoneyHub] reset failed:', err.message); }
-    finally { setSeeding(false); }
+    try {
+      const res = await fetch('/api/money/reset', { method: 'POST' });
+      if (!res.ok) throw new Error(`reset failed (${res.status})`);
+      setIsEmpty(true);
+      toast.success('Starting fresh — data cleared.');
+    } catch (err) {
+      console.error('[MoneyHub] reset failed:', err.message);
+      toast.error(`Couldn't reset: ${err.message}`);
+    } finally { setSeeding(false); }
   };
 
   const renderSection = () => {
@@ -103,8 +112,6 @@ export default function MoneyHub() {
       case 'cashflow':     return <CashFlow />;
       case 'goals':        return <Goals />;
       case 'debt':         return <Debt />;
-      case 'tax':          return <Tax />;
-      case 'advisor':      return <Advisor />;
       case 'investments':  return <Investments />;
       case 'reports':      return <Reports />;
       case 'settings':     return <SettingsSection />;
@@ -179,13 +186,18 @@ export default function MoneyHub() {
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-              <Suspense fallback={<SectionLoader />}>
-                {renderSection()}
-              </Suspense>
+              <ErrorBoundary key={activeSection}>
+                <Suspense fallback={<SectionLoader />}>
+                  {renderSection()}
+                </Suspense>
+              </ErrorBoundary>
             </div>
           </div>
         )}
       </main>
+
+      <Toasts />
+      <ConfirmHost />
     </div>
   );
 }

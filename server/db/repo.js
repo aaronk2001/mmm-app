@@ -41,7 +41,6 @@ const TABLES = {
   budgets:            ['id', 'category_id', 'period', 'limit', 'rollover'],
   goals:              ['id', 'name', 'target', 'current', 'linked_account_id', 'target_date', 'template', 'monthly_contribution', 'custom'],
   rules:              ['id', 'match', 'category_id', 'tag'],
-  deductions:         ['id', 'category', 'amount', 'note', 'date'],
   holdings:           ['id', 'account_id', 'symbol', 'shares', 'cost_basis', 'current_price', 'price_source', 'updated_at'],
   networth_snapshots: ['date', 'assets', 'liabilities', 'net'],
 };

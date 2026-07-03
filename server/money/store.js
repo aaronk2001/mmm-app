@@ -556,82 +556,6 @@ function applyRules(transactions, rules) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Tax helpers (simple estimation)
-// ────────────────────────────────────────────────────────────────────────────
-
-function computeTaxEstimate(transactions) {
-  const data = readData();
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-
-  // YTD income (positive amounts, income category)
-  const incomeCategory = data.categories.find(c => c.id === 'inc');
-  const ytdIncome = transactions
-    .filter(t => new Date(t.date) >= yearStart && t.category_id === 'inc' && t.amount > 0)
-    .reduce((sum, t) => sum + parseFloat(t.amount) || 0, 0);
-
-  // Estimate annual (extrapolate YTD to full year)
-  const daysPassed = Math.ceil((now - yearStart) / 86400000);
-  const estimatedAnnual = (ytdIncome / daysPassed) * 365;
-
-  // Simple tax brackets (2024 US, single filer)
-  const brackets = [
-    { rate: 0.10, upTo: 11600 },
-    { rate: 0.12, upTo: 47150 },
-    { rate: 0.22, upTo: 100525 },
-  ];
-
-  let tax = 0;
-  let prev = 0;
-  const taxableIncome = Math.max(0, estimatedAnnual - 14600); // standard deduction
-
-  for (const bracket of brackets) {
-    if (taxableIncome <= prev) break;
-    const taxable = Math.min(taxableIncome, bracket.upTo) - prev;
-    tax += taxable * bracket.rate;
-    prev = bracket.upTo;
-  }
-
-  // Add FICA (7.65% if self-employed context, 0 for W2)
-  const ficaTax = estimatedAnnual * 0.0765;
-  const totalTax = tax + ficaTax;
-
-  // Quarterly estimates (divide by 4)
-  const quarterlyEstimate = Math.round((totalTax / 4) * 100) / 100;
-
-  return {
-    ytdIncome: Math.round(ytdIncome * 100) / 100,
-    estimatedAnnualIncome: Math.round(estimatedAnnual * 100) / 100,
-    deductions: data.deductions || [],
-    quarterlyEstimate: {
-      q1: quarterlyEstimate,
-      q2: quarterlyEstimate,
-      q3: quarterlyEstimate,
-      q4: quarterlyEstimate,
-    },
-    bracketInfo: 'Based on 2024 US single filer standard deduction ($14,600) and tax brackets.',
-    disclaimer: 'Educational only, not tax advice. Consult a CPA.',
-  };
-}
-
-function createDeduction(category, amount, note = '') {
-  const data = readData();
-  if (!data.deductions) data.deductions = [];
-
-  const deduction = {
-    id: newId(),
-    category,
-    amount: parseFloat(amount),
-    note,
-    date: new Date().toISOString().split('T')[0],
-  };
-
-  data.deductions.push(deduction);
-  writeData(data);
-  return deduction;
-}
-
-// ────────────────────────────────────────────────────────────────────────────
 // Snapshot management
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -1296,9 +1220,6 @@ module.exports = {
   updateRule,
   deleteRule,
   applyRules,
-
-  computeTaxEstimate,
-  createDeduction,
 
   seedSample,
   reset,

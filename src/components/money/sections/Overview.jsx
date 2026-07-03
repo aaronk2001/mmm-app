@@ -24,8 +24,9 @@ export default function Overview() {
   // Initialize layout once settings arrive.
   useEffect(() => {
     if (settings && layout === null) {
-      const saved = settings?.dashboards?.overview?.layout;
-      setLayout(saved && saved.length ? saved : DEFAULT_LAYOUT);
+      // Drop entries for widgets that no longer exist (e.g. removed from the registry).
+      const saved = (settings?.dashboards?.overview?.layout || []).filter((l) => WIDGETS[l.i]);
+      setLayout(saved.length ? saved : DEFAULT_LAYOUT);
     }
   }, [settings, layout]);
 

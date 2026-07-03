@@ -5,6 +5,8 @@ import SectionHeader from '../shared/SectionHeader';
 import Card from '../shared/Card';
 import EmptyState from '../shared/EmptyState';
 import { useApi, api, queryClient } from '../../../lib/query';
+import { confirmDialog } from '../../../lib/confirm';
+import { toast } from '../../../lib/toast';
 
 const f$ = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
 const fSigned = (n) => (Number(n) >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(Number(n) || 0)).toLocaleString();
@@ -50,8 +52,9 @@ export default function Investments() {
     finally { setBusy(false); }
   }
   async function remove(id) {
-    if (!confirm('Delete this holding?')) return;
-    try { await api('money/holdings/' + id, { method: 'DELETE' }); refresh(); } catch (err) { console.error(err); }
+    if (!(await confirmDialog({ message: 'Delete this holding?', confirmLabel: 'Delete' }))) return;
+    try { await api('money/holdings/' + id, { method: 'DELETE' }); refresh(); }
+    catch (err) { console.error(err); toast.error(`Delete failed: ${err.message}`); }
   }
 
   if (isLoading) {

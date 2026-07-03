@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react';
-import { Monitor, Sun, Moon, Check, ShieldCheck, RotateCcw, Database, Download, Upload, Globe } from 'lucide-react';
+import { Monitor, Sun, Moon, Check, ShieldCheck, RotateCcw, Database, Download, Upload, Globe, History } from 'lucide-react';
 import {
   applyTheme, applyDensity, applyAccent, getTheme, getDensity, getAccent,
 } from '../../../lib/theme';
 import { saveSettings, queryClient, useApi } from '../../../lib/query';
 import RulesManager from './RulesManager';
 import CustomFieldsManager from './CustomFieldsManager';
+import { confirmDialog } from '../../../lib/confirm';
+import { toast } from '../../../lib/toast';
 
 const ACCENTS = [
   { name: 'Blue',   hex: '#0071e3' },
@@ -118,6 +120,43 @@ export default function Settings() {
   const fileRef = useRef(null);
   const [backupMsg, setBackupMsg] = useState(null);
 
+  const { data: backupsRes } = useApi('money/backups');
+  const backups = backupsRes?.backups || [];
+  const lastBackup = backups[0] || null;
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  async function backupNow() {
+    setBackupBusy(true);
+    try {
+      const res = await fetch('/api/money/backups/run', { method: 'POST' });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || 'backup failed');
+      toast.success(`Backed up (${out.date}).`);
+      queryClient.invalidateQueries({ queryKey: ['money/backups'] });
+    } catch (e) {
+      toast.error(`Backup failed: ${e.message}`);
+    } finally { setBackupBusy(false); }
+  }
+
+  async function restoreFrom(date) {
+    if (!(await confirmDialog({
+      title: `Restore backup from ${date}?`,
+      message: 'Your current data will be replaced by that snapshot.',
+      confirmLabel: 'Restore',
+    }))) return;
+    try {
+      const res = await fetch('/api/money/backups/restore', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || 'restore failed');
+      toast.success(`Restored ${out.counts.accounts} accounts and ${out.counts.transactions} transactions from ${date}.`);
+      queryClient.invalidateQueries();
+    } catch (e) {
+      toast.error(`Restore failed: ${e.message}`);
+    }
+  }
+
   async function exportData() {
     try {
       const data = await (await fetch('/api/money/export')).json();
@@ -212,8 +251,40 @@ export default function Settings() {
           <ShieldCheck size={20} style={{ color: 'var(--m-green)', flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontSize: 13, color: 'var(--m-ink-2)', lineHeight: 1.55 }}>
             Your accounts, transactions, budgets, and goals live in a local SQLite database on this device.
-            Nothing is sent to the cloud. The AI coach runs on a local model by default; it only reaches Anthropic
-            if you explicitly turn on Claude and provide your own API key.
+            Nothing is sent to the cloud — MMM runs fully offline.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0 4px', borderTop: '1px solid var(--m-border)', marginTop: 8 }}>
+          <History size={20} style={{ color: 'var(--m-muted)', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: 'var(--m-ink-2)', lineHeight: 1.55, marginBottom: 12 }}>
+              MMM snapshots your data automatically every day and keeps the last 30
+              {lastBackup
+                ? ` — most recent: ${lastBackup.date} (${(lastBackup.size / 1024).toFixed(0)} KB).`
+                : ' — no automatic backup yet.'}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button className="m-btn m-btn-secondary m-btn-sm" onClick={backupNow} disabled={backupBusy}>
+                <Database size={14} style={{ marginRight: 6 }} /> {backupBusy ? 'Backing up…' : 'Back up now'}
+              </button>
+            </div>
+            {backups.length > 0 && (
+              <div style={{ marginTop: 10, display: 'grid', gap: 4 }}>
+                {backups.slice(0, 5).map((b) => (
+                  <div key={b.date} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--m-ink-2)' }}>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{b.date}</span>
+                    <span style={{ color: 'var(--m-muted)', fontVariantNumeric: 'tabular-nums' }}>{(b.size / 1024).toFixed(0)} KB</span>
+                    <button
+                      className="m-btn m-btn-ghost m-btn-sm"
+                      style={{ padding: '2px 8px', fontSize: 12 }}
+                      onClick={() => restoreFrom(b.date)}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0 4px', borderTop: '1px solid var(--m-border)', marginTop: 8 }}>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Wallet, TrendingUp, Zap, PiggyBank, Target, Landmark, Receipt, MessageCircle,
+  Wallet, TrendingUp, Zap, PiggyBank, Target, Landmark, Receipt,
   Calculator, Pencil, Check, X,
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
@@ -194,27 +194,6 @@ function RecentTransactions({ config = {} }) {
   );
 }
 
-function CoachNudges() {
-  const { data, isLoading } = useApi('money/coach/nudges');
-  if (isLoading) return <Loading />;
-  const items = (data?.nudges || []);
-  if (!items.length) return <Empty>You're on track — no nudges right now.</Empty>;
-  const dot = { warn: 'var(--m-red)', info: 'var(--m-accent)' };
-  return (
-    <div style={{ display: 'grid', gap: 10 }}>
-      {items.map((n, i) => (
-        <div key={i} style={{ display: 'flex', gap: 8 }}>
-          <div style={{ width: 7, height: 7, borderRadius: 999, background: dot[n.level] || 'var(--m-muted)', marginTop: 5, flexShrink: 0 }} />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--m-ink)' }}>{n.title}</div>
-            <div style={{ fontSize: 12, color: 'var(--m-ink-2)', lineHeight: 1.4 }}>{n.detail}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // Custom-metric widget: user-defined formula over the named financial variables.
 const CM_DEFAULT = { label: 'Savings Rate', formula: 'savings_rate * 100', format: 'percent' };
 
@@ -307,7 +286,6 @@ export const WIDGETS = {
   goals:              { title: 'Goals',                icon: Target,        layout: { w: 4, h: 4, minW: 3, minH: 3 }, Component: Goals, scroll: true },
   accounts:           { title: 'Accounts',             icon: Landmark,      layout: { w: 4, h: 4, minW: 3, minH: 3 }, Component: Accounts, scroll: true },
   recentTransactions: { title: 'Recent Transactions',  icon: Receipt,       layout: { w: 4, h: 5, minW: 3, minH: 3 }, Component: RecentTransactions, scroll: true },
-  coachNudges:        { title: 'Coach Insights',       icon: MessageCircle, layout: { w: 4, h: 4, minW: 3, minH: 3 }, Component: CoachNudges, scroll: true },
   customMetric:       { title: 'Custom Metric',        icon: Calculator,    layout: { w: 4, h: 3, minW: 3, minH: 3 }, Component: CustomMetric, scroll: true },
 };
 
@@ -315,7 +293,6 @@ export const WIDGETS = {
 export const DEFAULT_LAYOUT = [
   { i: 'netWorth',           x: 0, y: 0, w: 4, h: 2 },
   { i: 'cashFlow',           x: 4, y: 0, w: 4, h: 2 },
-  { i: 'coachNudges',        x: 8, y: 0, w: 4, h: 4 },
   { i: 'netWorthTrend',      x: 0, y: 2, w: 8, h: 4 },
   { i: 'accounts',           x: 8, y: 4, w: 4, h: 4 },
   { i: 'budgets',            x: 0, y: 6, w: 4, h: 4 },

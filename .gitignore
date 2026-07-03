@@ -12,3 +12,6 @@ mmm.db
 mmm.db-wal
 mmm.db-shm
 *.migrated.bak
+
+# Dev-mode automatic backups (packaged app writes to %APPDATA%\mmm\backups)
+server/store/money/backups/
