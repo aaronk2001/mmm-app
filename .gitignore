@@ -6,3 +6,9 @@ build/
 *.orig
 .DS_Store
 npm-debug.log*
+
+# SQLite runtime DB (regenerated from data.json on first run)
+mmm.db
+mmm.db-wal
+mmm.db-shm
+*.migrated.bak

@@ -1,0 +1,90 @@
+/* MMM 2.0 — design tokens + Tailwind v4 entry.
+   Semantic CSS variables drive everything. `data-theme` swaps dark/light,
+   `--accent` is user-overridable (Settings), `data-density` adjusts spacing.
+   The legacy --m-* tokens in money-theme.css reference these, so the whole
+   existing UI is theme-aware without touching component markup. */
+
+@import "tailwindcss" source(none);
+@source "../components/**/*.{jsx,js}";
+@source "../*.{jsx,js,html}";
+@source "../lib/**/*.{jsx,js}";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+:root {
+  /* Light (default) — matches the original palette so light mode is unchanged */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f5;
+  --ink: #0b1220;
+  --ink-2: #475569;
+  --muted: #94a3b8;
+  --border: #e6e8ec;
+  --accent: #0071e3;
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --positive: #15a34a;
+  --negative: #dc2626;
+  --warning: #d97706;
+  --radius: 16px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.05);
+  --density: 1;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0b0e14;
+  --surface: #141923;
+  --surface-2: #1b212e;
+  --ink: #e7eaee;
+  --ink-2: #9aa6b6;
+  --muted: #5f6b7c;
+  --border: #232b39;
+  --accent: #2f86ff;
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+  --positive: #22c55e;
+  --negative: #ef4444;
+  --warning: #f59e0b;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+[data-density="compact"] { --density: 0.86; }
+
+/* Expose the semantic tokens as Tailwind utilities. `inline` makes utilities
+   resolve the live CSS variable, so theme/accent swaps apply at runtime. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --radius-card: var(--radius);
+}
+
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+
+/* Accessibility: a visible keyboard-focus ring everywhere interactive, and
+   honor the OS "reduce motion" preference (kills the section/widget animations). */
+:where(button, a, input, select, textarea, [tabindex], [role="button"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

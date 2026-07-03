@@ -17,6 +17,10 @@ import Money from '../shared/Money';
 import Term from '../shared/Term';
 import BigStat from '../shared/BigStat';
 import EmptyState from '../shared/EmptyState';
+import CustomFieldInputs from './parts/CustomFieldInputs';
+import CustomFieldFilters from './parts/CustomFieldFilters';
+import { useApi } from '../../../lib/query';
+import { fieldsFor, matchesFilter } from '../../../lib/customFields';
 
 /**
  * Goals & Savings section — goal tracking, emergency fund adequacy, FIRE progress.
@@ -41,7 +45,10 @@ export default function Goals() {
     monthly_contribution: '',
     target_date: '',
     template: '',
+    custom: {},
   });
+  const [cfFilters, setCfFilters] = useState({});
+  const { data: cfSettings } = useApi('settings');
 
   // Load goals and insights
   useEffect(() => {
@@ -72,6 +79,7 @@ export default function Goals() {
         monthly_contribution: formData.monthly_contribution ? parseFloat(formData.monthly_contribution) : null,
         target_date: formData.target_date || null,
         template: formData.template || null,
+        custom: formData.custom || {},
       };
 
       let res;
@@ -92,7 +100,7 @@ export default function Goals() {
       if (res.ok) {
         const goalsRes = await fetch('/api/money/goals');
         if (goalsRes.ok) setGoals(await goalsRes.json());
-        setFormData({ name: '', target: '', current: '', monthly_contribution: '', target_date: '', template: '' });
+        setFormData({ name: '', target: '', current: '', monthly_contribution: '', target_date: '', template: '', custom: {} });
         setShowAddForm(false);
         setEditingGoalId(null);
       }
@@ -122,6 +130,7 @@ export default function Goals() {
       monthly_contribution: String(goal.monthly_contribution || ''),
       target_date: goal.target_date || '',
       template: goal.template || '',
+      custom: goal.custom || {},
     });
     setShowAddForm(true);
   };
@@ -165,7 +174,7 @@ export default function Goals() {
     );
   }
 
-  const goalsList = goals?.goals || [];
+  const goalsList = (goals?.goals || []).filter(g => fieldsFor(cfSettings, 'goal').every(f => matchesFilter(g, f, cfFilters[f.id])));
   const em = insights?.emergencyFund || null;
   const fr = insights?.fire || null;
 
@@ -465,6 +474,7 @@ export default function Goals() {
                     onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
                     style={{ fontSize: '13px' }}
                   />
+                  <CustomFieldInputs entity="goal" value={formData.custom} onChange={(c) => setFormData({ ...formData, custom: c })} />
                 </div>
 
                 {/* Action buttons */}
@@ -481,6 +491,14 @@ export default function Goals() {
           </motion.div>
         )}
       </div>
+
+      {fieldsFor(cfSettings, 'goal').length > 0 && (
+        <Card className="m-card-sm" style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+            <CustomFieldFilters entity="goal" value={cfFilters} onChange={setCfFilters} />
+          </div>
+        </Card>
+      )}
 
       {/* Goals list */}
       {goalsList.length === 0 ? (

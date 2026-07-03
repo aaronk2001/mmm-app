@@ -10,7 +10,8 @@ const router = express.Router();
 router.get('/overview', (req, res) => {
   try {
     const data = store.readData();
-    const nw = store.computeNetWorth(data.accounts);
+    const cc = store.getCurrencyConfig();
+    const nw = store.computeNetWorth(data.accounts, cc.baseCurrency, cc.fxRates);
 
     // Top categories this month
     const now = new Date();
@@ -62,6 +63,7 @@ router.get('/overview', (req, res) => {
       snapshots: recentSnapshots,
       topCategoriesThisMonth: topCategories,
       budgetStatus,
+      displayCurrency: cc.baseCurrency,
       isEmpty: data.accounts.length === 0 && data.transactions.length === 0,
     });
   } catch (err) {
@@ -83,8 +85,8 @@ router.get('/accounts', (req, res) => {
 
 router.post('/accounts', (req, res) => {
   try {
-    const { name, type, balance, institution, currency, status } = req.body;
-    const account = store.createAccount(name, type, balance, institution, currency, status);
+    const { name, type, balance, institution, currency, status, custom } = req.body;
+    const account = store.createAccount(name, type, balance, institution, currency, status, custom);
     res.status(201).json({ account });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -130,7 +132,7 @@ router.get('/transactions', (req, res) => {
 
 router.post('/transactions', (req, res) => {
   try {
-    const { account_id, date, amount, payee, category_id, tags, note, source, cleared } = req.body;
+    const { account_id, date, amount, payee, category_id, tags, note, source, cleared, custom } = req.body;
     const transaction = store.createTransaction(
       account_id,
       date,
@@ -140,9 +142,31 @@ router.post('/transactions', (req, res) => {
       tags,
       note,
       source,
-      cleared
+      cleared,
+      custom
     );
     res.status(201).json({ transaction });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Bulk ops registered before /:id so the path can't be captured by it.
+router.post('/transactions/bulk-update', (req, res) => {
+  try {
+    const { ids, updates } = req.body;
+    const updated = store.updateTransactionsBulk(ids, updates);
+    res.json({ updated });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/transactions/bulk-delete', (req, res) => {
+  try {
+    const { ids } = req.body;
+    const deleted = store.deleteTransactionsBulk(ids);
+    res.json({ deleted });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -175,6 +199,16 @@ router.post('/transactions/import', (req, res) => {
     const { account_id, rows, csv, mapping } = req.body;
     const result = store.importTransactions(account_id, rows, csv, mapping);
     res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// OFX / QIF file import (file read as text client-side, posted as JSON — no upload middleware).
+router.post('/transactions/import-file', (req, res) => {
+  try {
+    const { account_id, format, content } = req.body;
+    res.json(store.importFile(account_id, format, content));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -255,6 +289,72 @@ router.get('/networth', (req, res) => {
   }
 });
 
+// Named numeric variables for the custom-metric formula engine.
+router.get('/metrics', (req, res) => {
+  try {
+    res.json({ metrics: store.getMetrics() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Multi-currency: base currency + FX rates + the available currency list.
+router.get('/currency', (req, res) => {
+  try {
+    res.json(store.getCurrencyConfig());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Investments / holdings
+// ────────────────────────────────────────────────────────────────────────────
+
+router.get('/holdings', (req, res) => {
+  try {
+    res.json({ holdings: store.getHoldings(req.query.account_id || null) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/holdings', (req, res) => {
+  try {
+    const { account_id, symbol, shares, cost_basis, current_price } = req.body;
+    const holding = store.createHolding(account_id, symbol, shares, cost_basis, current_price);
+    res.status(201).json({ holding });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.put('/holdings/:id', (req, res) => {
+  try {
+    res.json({ holding: store.updateHolding(req.params.id, req.body) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete('/holdings/:id', (req, res) => {
+  try {
+    store.deleteHolding(req.params.id);
+    res.json({ deleted: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/investments/summary', (req, res) => {
+  try {
+    const holdings = store.getHoldings();
+    res.json({ holdings, ...store.computeInvestmentMetrics(holdings) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 // Recurring
 // ────────────────────────────────────────────────────────────────────────────
@@ -299,8 +399,8 @@ router.get('/goals', (req, res) => {
 
 router.post('/goals', (req, res) => {
   try {
-    const { name, target, current, linked_account_id, target_date, template, monthly_contribution } = req.body;
-    const goal = store.createGoal(name, target, current, linked_account_id, target_date, template, monthly_contribution);
+    const { name, target, current, linked_account_id, target_date, template, monthly_contribution, custom } = req.body;
+    const goal = store.createGoal(name, target, current, linked_account_id, target_date, template, monthly_contribution, custom);
     res.status(201).json({ goal });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -555,6 +655,40 @@ function getAIClient() {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 }
 
+// Typed tools the coach can call to read the user's real SQLite data on demand,
+// so it answers from actual numbers instead of a fixed context dump.
+const COACH_TOOLS = [
+  { name: 'get_metrics', description: 'Key financial metrics: net_worth, assets, liabilities, debt_total, liquid_savings, monthly_income/expenses/surplus, savings_rate, runway_months, debt_to_income.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_accounts', description: 'All accounts with name, type, balance, currency.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_transactions', description: 'Recent transactions (date, payee, amount, category). Filter by days and/or category_name.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Only transactions within the last N days' }, category_name: { type: 'string' }, limit: { type: 'number' } } } },
+  { name: 'get_budgets', description: 'Budget status per category: spent, limit, pct.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_goals', description: 'Savings goals with target and current amounts.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_debt', description: 'Debts (loans + credit cards) with balance, APR, minimum payment.', input_schema: { type: 'object', properties: {} } },
+  { name: 'get_holdings', description: 'Investment holdings with symbol, shares, value, and gain/loss plus portfolio totals.', input_schema: { type: 'object', properties: {} } },
+];
+
+function dispatchCoachTool(name, input = {}) {
+  const data = store.readData();
+  const catName = (id) => data.categories.find(c => c.id === id)?.name || 'Uncategorized';
+  switch (name) {
+    case 'get_metrics': return store.getMetrics();
+    case 'get_accounts': return data.accounts.map(a => ({ name: a.name, type: a.type, balance: a.balance, currency: a.currency }));
+    case 'get_budgets': return store.computeBudgetStatus(data.budgets, data.transactions);
+    case 'get_goals': return store.getGoals();
+    case 'get_holdings': { const h = store.getHoldings(); return { holdings: h, ...store.computeInvestmentMetrics(h) }; }
+    case 'get_debt': return data.accounts.filter(a => a.type === 'loan' || a.type === 'credit')
+      .map(a => ({ name: a.name, balance: Math.abs(parseFloat(a.balance) || 0), apr: a.apr || (a.type === 'credit' ? 0.20 : 0.07), min_payment: a.min_payment }));
+    case 'get_transactions': {
+      let txns = data.transactions.slice();
+      if (input.days) { const cutoff = new Date(Date.now() - input.days * 86400000); txns = txns.filter(t => new Date(t.date) >= cutoff); }
+      if (input.category_name) { const cat = data.categories.find(c => c.name.toLowerCase() === String(input.category_name).toLowerCase()); txns = cat ? txns.filter(t => t.category_id === cat.id) : []; }
+      txns = txns.sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, Math.min(input.limit || 50, 200));
+      return txns.map(t => ({ date: t.date, payee: t.payee, amount: t.amount, category: catName(t.category_id) }));
+    }
+    default: return { error: 'unknown tool' };
+  }
+}
+
 router.post('/coach', async (req, res) => {
   try {
     const { message, persona } = req.body;
@@ -594,13 +728,29 @@ Goals: ${store.getGoals().length > 0 ? store.getGoals().map(g => `${g.name} ($${
     const anthropic = getAIClient();
     if (anthropic) {
       try {
-        const response = await anthropic.messages.create({
-          model: process.env.MONEY_COACH_MODEL || 'claude-haiku-4-5-20251001',
-          max_tokens: 500,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: fullMessage }],
-        });
-        reply = response.content.find(b => b.type === 'text')?.text || null;
+        const messages = [{ role: 'user', content: message }];
+        const toolSystem = systemPrompt + " You have tools to read the user's real financial data (accounts, transactions, budgets, goals, debt, holdings, metrics). Call them to ground your advice in actual numbers. Be concise, specific, and actionable.";
+        let final = null;
+        for (let i = 0; i < 6; i++) {
+          const response = await anthropic.messages.create({
+            model: process.env.MONEY_COACH_MODEL || 'claude-haiku-4-5-20251001',
+            max_tokens: 800,
+            system: toolSystem,
+            tools: COACH_TOOLS,
+            messages,
+          });
+          if (response.stop_reason === 'tool_use') {
+            messages.push({ role: 'assistant', content: response.content });
+            const toolResults = response.content
+              .filter(b => b.type === 'tool_use')
+              .map(b => ({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(dispatchCoachTool(b.name, b.input)).slice(0, 6000) }));
+            messages.push({ role: 'user', content: toolResults });
+            continue;
+          }
+          final = response.content.find(b => b.type === 'text')?.text || null;
+          break;
+        }
+        reply = final;
         usedModel = 'claude-api';
       } catch (e) {
         // Fall back to local
@@ -745,6 +895,40 @@ router.post('/reset', (req, res) => {
   try {
     store.reset();
     res.json({ reset: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Backup export / import (full data blob — stays on the device)
+// ────────────────────────────────────────────────────────────────────────────
+
+router.get('/export', (req, res) => {
+  try {
+    res.json(store.readData());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/import', (req, res) => {
+  try {
+    const data = req.body;
+    if (!data || typeof data !== 'object' || Array.isArray(data) ||
+        !Array.isArray(data.accounts) || !Array.isArray(data.transactions)) {
+      return res.status(400).json({ error: 'Not a valid MMM backup (missing accounts/transactions arrays).' });
+    }
+    store.writeData(data);
+    res.json({
+      imported: true,
+      counts: {
+        accounts: data.accounts.length,
+        transactions: data.transactions.length,
+        budgets: Array.isArray(data.budgets) ? data.budgets.length : 0,
+        goals: Array.isArray(data.goals) ? data.goals.length : 0,
+      },
+    });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

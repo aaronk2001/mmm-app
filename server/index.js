@@ -7,6 +7,7 @@ const compression = require('compression');
 const path        = require('path');
 
 const moneyRoutes = require('./money/routes');
+const settingsRoutes = require('./settings/routes');
 
 const app  = express();
 const PORT = process.env.PORT || 5006;
@@ -24,7 +25,7 @@ app.use(cors({ origin: ['http://localhost:5006', 'http://localhost:5173', 'http:
 app.use(compression());
 
 // ─── Body parsing — 10 KB hard cap ───────────────────────────────────────────
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '2mb' })); // larger for settings + CSV/backup import
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 // General API limiter — 120 req/min. Tight limiter on the AI coach (each call
@@ -60,6 +61,7 @@ app.use(express.static(path.join(__dirname, '..', 'src', 'dist')));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/money', moneyRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
