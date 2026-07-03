@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   TrendingDown,
@@ -14,6 +14,10 @@ import Card from '../shared/Card';
 import EmptyState from '../shared/EmptyState';
 import Term from '../shared/Term';
 import Money from '../shared/Money';
+import CustomFieldInputs from './parts/CustomFieldInputs';
+import CustomFieldFilters from './parts/CustomFieldFilters';
+import { useApi } from '../../../lib/query';
+import { fieldsFor, matchesFilter } from '../../../lib/customFields';
 
 /**
  * Transactions (Spending) section.
@@ -39,6 +43,9 @@ export default function Transactions() {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterFromDate, setFilterFromDate] = useState('');
   const [filterToDate, setFilterToDate] = useState('');
+  const [cfFilters, setCfFilters] = useState({});
+
+  const { data: settings } = useApi('settings');
 
   // State: add form
   const [addForm, setAddForm] = useState({
@@ -48,6 +55,7 @@ export default function Transactions() {
     account_id: '',
     category_id: '',
     note: '',
+    custom: {},
   });
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState(null);
@@ -61,9 +69,17 @@ export default function Transactions() {
   const [csvError, setCsvError] = useState(null);
   const [csvResult, setCsvResult] = useState(null);
 
-  // State: edit inline
-  const [editingTxnId, setEditingTxnId] = useState(null);
-  const [editingCategory, setEditingCategory] = useState(null);
+  // State: file import (OFX / QIF)
+  const [importFormat, setImportFormat] = useState('csv'); // 'csv' | 'ofx' | 'qif'
+  const [fileContent, setFileContent] = useState('');
+  const [fileName, setFileName] = useState('');
+
+  // State: inline cell edit + row selection + bulk
+  const [editingCell, setEditingCell] = useState(null); // { id, field }
+  const [editValue, setEditValue] = useState('');
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkCat, setBulkCat] = useState('');
+  const savingRef = useRef(false);
 
   // Load data on mount
   useEffect(() => {
@@ -105,6 +121,7 @@ export default function Transactions() {
     if (filterCategory !== 'all' && txn.category_id !== filterCategory) return false;
     if (filterFromDate && txn.date < filterFromDate) return false;
     if (filterToDate && txn.date > filterToDate) return false;
+    if (!fieldsFor(settings, 'transaction').every(f => matchesFilter(txn, f, cfFilters[f.id]))) return false;
     return true;
   });
 
@@ -122,6 +139,7 @@ export default function Transactions() {
         payee: addForm.payee,
         category_id: addForm.category_id || undefined,
         note: addForm.note || undefined,
+        custom: addForm.custom || {},
       };
 
       const res = await fetch('/api/money/transactions', {
@@ -139,6 +157,7 @@ export default function Transactions() {
           account_id: '',
           category_id: '',
           note: '',
+          custom: {},
         });
         setActiveTab('list');
       } else {
@@ -168,22 +187,81 @@ export default function Transactions() {
     }
   }
 
-  // Update transaction category
-  async function handleUpdateCategory(txnId, newCategoryId) {
+  // Inline cell editing (date, payee, amount via text inputs; category via select)
+  function startEdit(txn, field) {
+    setEditingCell({ id: txn.id, field });
+    setEditValue(field === 'amount' ? String(txn.amount ?? '') : (txn[field] ?? ''));
+  }
+  function cancelEdit() {
+    setEditingCell(null);
+    setEditValue('');
+  }
+  async function saveField(id, field, rawValue) {
+    if (savingRef.current) return;
+    let value = rawValue;
+    if (field === 'amount') {
+      value = parseFloat(rawValue);
+      if (Number.isNaN(value)) { cancelEdit(); return; }
+    }
+    savingRef.current = true;
     try {
-      const res = await fetch(`/api/money/transactions/${txnId}`, {
+      const res = await fetch(`/api/money/transactions/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category_id: newCategoryId }),
+        body: JSON.stringify({ [field]: value }),
       });
-
-      if (res.ok) {
-        await loadAllData();
-        setEditingTxnId(null);
-      }
+      if (res.ok) await loadAllData();
     } catch (err) {
-      console.error('Update failed:', err);
+      console.error('Save failed:', err);
+    } finally {
+      savingRef.current = false;
+      setEditingCell(null);
+      setEditValue('');
     }
+  }
+  function commitEdit() {
+    if (editingCell) saveField(editingCell.id, editingCell.field, editValue);
+  }
+
+  // Row selection
+  function toggleRow(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setSelectedIds(prev =>
+      prev.size === filteredTransactions.length && prev.size > 0
+        ? new Set()
+        : new Set(filteredTransactions.map(t => t.id))
+    );
+  }
+  function clearSelection() { setSelectedIds(new Set()); }
+
+  // Bulk ops
+  async function bulkSetCategory(categoryId) {
+    if (!categoryId || !selectedIds.size) return;
+    await fetch('/api/money/transactions/bulk-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [...selectedIds], updates: { category_id: categoryId } }),
+    });
+    setBulkCat('');
+    clearSelection();
+    await loadAllData();
+  }
+  async function bulkDelete() {
+    if (!selectedIds.size) return;
+    if (!confirm(`Delete ${selectedIds.size} transaction(s)?`)) return;
+    await fetch('/api/money/transactions/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [...selectedIds] }),
+    });
+    clearSelection();
+    await loadAllData();
   }
 
   // CSV: parse preview
@@ -257,6 +335,42 @@ export default function Transactions() {
       } else {
         setCsvError('Import failed');
       }
+    } catch (err) {
+      setCsvError(err.message);
+    } finally {
+      setCsvImporting(false);
+    }
+  }
+
+  // OFX / QIF file import — read as text client-side, post as JSON (no upload middleware)
+  function onFilePick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setFileName(file.name);
+    setCsvError(null);
+    setCsvResult(null);
+    const reader = new FileReader();
+    reader.onload = () => setFileContent(String(reader.result || ''));
+    reader.readAsText(file);
+  }
+  async function handleFileImport() {
+    if (!csvAccount) { setCsvError('Select an account'); return; }
+    if (!fileContent) { setCsvError('Choose a file first'); return; }
+    setCsvError(null);
+    setCsvImporting(true);
+    try {
+      const res = await fetch('/api/money/transactions/import-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: csvAccount, format: importFormat, content: fileContent }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || 'Import failed');
+      setCsvResult(out);
+      setFileContent('');
+      setFileName('');
+      await loadAllData();
     } catch (err) {
       setCsvError(err.message);
     } finally {
@@ -388,6 +502,7 @@ export default function Transactions() {
                     onChange={e => setFilterToDate(e.target.value)}
                   />
                 </div>
+                <CustomFieldFilters entity="transaction" value={cfFilters} onChange={setCfFilters} />
               </div>
             </Card>
           )}
@@ -418,128 +533,90 @@ export default function Transactions() {
               }
             />
           ) : (
-            <Card className="m-card-sm m-scroll" style={{ overflowX: 'auto', maxHeight: '600px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid var(--m-border)', textAlign: 'left' }}>
-                    <th style={{ padding: '12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Date
-                    </th>
-                    <th style={{ padding: '12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Payee
-                    </th>
-                    <th style={{ padding: '12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      <Term name="category">Category</Term>
-                    </th>
-                    <th style={{ padding: '12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Account
-                    </th>
-                    <th style={{ padding: '12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>
-                      Amount
-                    </th>
-                    <th style={{ padding: '12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', width: '60px' }}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTransactions.map((txn, idx) => (
-                    <tr
-                      key={txn.id}
-                      style={{
-                        borderBottom: '1px solid var(--m-border)',
-                        backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(0, 113, 227, 0.02)',
-                      }}
-                    >
-                      <td style={{ padding: '12px' }}>
-                        <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--m-ink)' }}>
-                          {new Date(txn.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px', color: 'var(--m-ink)' }}>{txn.payee}</td>
-                      <td style={{ padding: '12px' }}>
-                        {editingTxnId === txn.id ? (
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            <select
-                              className="m-input"
-                              value={editingCategory || txn.category_id || ''}
-                              onChange={e => setEditingCategory(e.target.value)}
-                              style={{ fontSize: '12px', padding: '4px 8px', flex: 1 }}
-                            >
-                              <option value="">Uncategorized</option>
-                              {categories.map(cat => (
-                                <option key={cat.id} value={cat.id}>
-                                  {cat.name}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              className="m-btn m-btn-sm m-btn-primary"
-                              onClick={() => handleUpdateCategory(txn.id, editingCategory)}
-                              style={{ padding: '4px 8px' }}
-                            >
-                              ✓
-                            </button>
-                            <button
-                              className="m-btn m-btn-sm"
-                              onClick={() => setEditingTxnId(null)}
-                              style={{ padding: '4px 8px' }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
-                          <div
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              background: 'var(--m-surface-2)',
-                              cursor: 'pointer',
-                              color: getCategoryColor(txn.category_id),
-                              fontSize: '12px',
-                              fontWeight: 500,
-                            }}
-                            onClick={() => {
-                              setEditingTxnId(txn.id);
-                              setEditingCategory(txn.category_id);
-                            }}
-                          >
-                            <Tag size={12} />
-                            {getCategoryLabel(txn.category_id)}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px', color: 'var(--m-ink-2)', fontSize: '13px' }}>
-                        {getAccountLabel(txn.account_id)}
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>
-                        <Money
-                          value={txn.amount}
-                          className={txn.amount > 0 ? 'positive' : 'negative'}
-                          style={{
-                            color: txn.amount > 0 ? 'var(--m-green)' : 'var(--m-red)',
-                            fontWeight: 600,
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <button
-                          className="m-btn m-btn-icon m-btn-ghost m-btn-sm"
-                          onClick={() => handleDeleteTransaction(txn.id)}
-                          title="Delete"
-                          style={{ width: '32px', height: '32px', padding: 0 }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
+            <>
+              {selectedIds.size > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12, padding: '10px 14px', background: 'var(--m-surface-2)', border: '1px solid var(--m-border)', borderRadius: 'var(--m-radius)' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--m-ink)' }}>{selectedIds.size} selected</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Tag size={14} style={{ color: 'var(--m-muted)' }} />
+                    <select className="m-input" value={bulkCat} onChange={e => bulkSetCategory(e.target.value)} style={{ fontSize: 13, padding: '4px 8px' }}>
+                      <option value="">Set category…</option>
+                      {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                    </select>
+                  </div>
+                  <button className="m-btn m-btn-secondary m-btn-sm" onClick={bulkDelete}><Trash2 size={14} style={{ marginRight: 4 }} /> Delete</button>
+                  <button className="m-btn m-btn-ghost m-btn-sm" onClick={clearSelection}>Clear</button>
+                </div>
+              )}
+              <Card className="m-card-sm m-scroll" style={{ overflowX: 'auto', maxHeight: '600px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--m-border)', textAlign: 'left' }}>
+                      <th style={{ padding: '12px', width: 36 }}>
+                        <input type="checkbox" checked={filteredTransactions.length > 0 && selectedIds.size === filteredTransactions.length} onChange={toggleAll} aria-label="Select all" style={{ cursor: 'pointer' }} />
+                      </th>
+                      {['Date', 'Payee', 'Category', 'Account', 'Amount', ''].map((h, i) => (
+                        <th key={i} style={{ padding: '12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: h === 'Amount' ? 'right' : 'left', width: h === '' ? '48px' : undefined }}>
+                          {h === 'Category' ? <Term name="category">Category</Term> : h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
+                  </thead>
+                  <tbody>
+                    {filteredTransactions.map((txn, idx) => {
+                      const sel = selectedIds.has(txn.id);
+                      const editing = field => editingCell && editingCell.id === txn.id && editingCell.field === field;
+                      const cellInput = (field, type, align) => (
+                        <input autoFocus type={type} step={type === 'number' ? '0.01' : undefined} className="m-input"
+                          value={editValue} onChange={e => setEditValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
+                          onBlur={commitEdit}
+                          style={{ fontSize: 13, padding: '4px 6px', width: '100%', textAlign: align || 'left' }} />
+                      );
+                      const display = (field, node) => (
+                        <div onClick={() => startEdit(txn, field)} title="Click to edit" style={{ cursor: 'text', padding: '2px 4px', borderRadius: 4, minHeight: 20 }}>{node}</div>
+                      );
+                      return (
+                        <tr key={txn.id} style={{ borderBottom: '1px solid var(--m-border)', backgroundColor: sel ? 'rgba(0,113,227,0.08)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,113,227,0.02)') }}>
+                          <td style={{ padding: '12px', textAlign: 'center' }}>
+                            <input type="checkbox" checked={sel} onChange={() => toggleRow(txn.id)} aria-label="Select row" style={{ cursor: 'pointer' }} />
+                          </td>
+                          <td style={{ padding: '8px 12px', color: 'var(--m-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                            {editing('date') ? cellInput('date', 'date') : display('date', new Date(txn.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: 'var(--m-ink)' }}>
+                            {editing('payee') ? cellInput('payee', 'text') : display('payee', txn.payee || '—')}
+                          </td>
+                          <td style={{ padding: '8px 12px' }}>
+                            {editing('category_id') ? (
+                              <select autoFocus className="m-input" value={editValue} onChange={e => { setEditValue(e.target.value); saveField(txn.id, 'category_id', e.target.value); }} onBlur={cancelEdit} style={{ fontSize: 12, padding: '4px 8px' }}>
+                                <option value="">Uncategorized</option>
+                                {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                              </select>
+                            ) : (
+                              <div onClick={() => startEdit(txn, 'category_id')} title="Click to edit" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 6, background: 'var(--m-surface-2)', cursor: 'pointer', color: getCategoryColor(txn.category_id), fontSize: 12, fontWeight: 500 }}>
+                                <Tag size={12} />{getCategoryLabel(txn.category_id)}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: 'var(--m-ink-2)', fontSize: 13 }}>{getAccountLabel(txn.account_id)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                            {editing('amount') ? cellInput('amount', 'number', 'right') : (
+                              <div onClick={() => startEdit(txn, 'amount')} title="Click to edit" style={{ cursor: 'text' }}>
+                                <Money value={txn.amount} className={txn.amount > 0 ? 'positive' : 'negative'} style={{ color: txn.amount > 0 ? 'var(--m-green)' : 'var(--m-red)', fontWeight: 600 }} />
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                            <button className="m-btn m-btn-icon m-btn-ghost m-btn-sm" onClick={() => handleDeleteTransaction(txn.id)} title="Delete" style={{ width: 32, height: 32, padding: 0 }}><Trash2 size={14} /></button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </Card>
+            </>
           )}
         </motion.div>
       )}
@@ -620,6 +697,7 @@ export default function Transactions() {
                     ))}
                   </select>
                 </div>
+                <CustomFieldInputs entity="transaction" value={addForm.custom} onChange={(c) => setAddForm({ ...addForm, custom: c })} />
               </div>
 
               <div>
@@ -681,6 +759,27 @@ export default function Transactions() {
               </div>
 
               <div>
+                <label className="m-input-label">Format</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {['csv', 'ofx', 'qif'].map(fmt => (
+                    <button key={fmt} type="button" onClick={() => { setImportFormat(fmt); setCsvError(null); setCsvResult(null); }}
+                      className={`m-btn m-btn-sm ${importFormat === fmt ? 'm-btn-primary' : 'm-btn-secondary'}`}>
+                      {fmt.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {importFormat !== 'csv' && (
+                <div>
+                  <label className="m-input-label">{importFormat.toUpperCase()} file</label>
+                  <input type="file" accept={importFormat === 'ofx' ? '.ofx,.qfx' : '.qif'} onChange={onFilePick} className="m-input" style={{ padding: 8 }} />
+                  {fileName && <div style={{ fontSize: 12, color: 'var(--m-ink-2)', marginTop: 6 }}>Loaded: {fileName}{fileContent ? '' : ' (reading…)'}</div>}
+                </div>
+              )}
+
+              {importFormat === 'csv' && (<>
+              <div>
                 <label className="m-input-label">Column Mapping</label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                   <div>
@@ -741,6 +840,7 @@ export default function Transactions() {
                   ))}
                 </div>
               )}
+              </>)}
 
               {csvError && (
                 <div style={{ padding: '12px', background: 'rgba(220, 38, 38, 0.05)', borderRadius: '8px', color: 'var(--m-red)', fontSize: '14px' }}>
@@ -764,8 +864,8 @@ export default function Transactions() {
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button
                   className="m-btn m-btn-primary"
-                  onClick={handleCsvImport}
-                  disabled={csvImporting || !csvText.trim() || !csvAccount}
+                  onClick={importFormat === 'csv' ? handleCsvImport : handleFileImport}
+                  disabled={csvImporting || !csvAccount || (importFormat === 'csv' ? !csvText.trim() : !fileContent)}
                 >
                   {csvImporting ? 'Importing...' : 'Import Transactions'}
                 </button>

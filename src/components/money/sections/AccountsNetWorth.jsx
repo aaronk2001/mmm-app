@@ -23,6 +23,10 @@ import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
 import BigStat from '../shared/BigStat';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import CustomFieldInputs from './parts/CustomFieldInputs';
+import CustomFieldFilters from './parts/CustomFieldFilters';
+import { useApi } from '../../../lib/query';
+import { fieldsFor, matchesFilter } from '../../../lib/customFields';
 
 /**
  * Accounts & Net Worth section.
@@ -52,7 +56,10 @@ export default function AccountsNetWorth() {
     balance: '',
     institution: '',
     status: 'active',
+    custom: {},
   });
+  const [cfFilters, setCfFilters] = useState({});
+  const { data: cfSettings } = useApi('settings');
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
 
@@ -103,6 +110,7 @@ export default function AccountsNetWorth() {
         balance: parseFloat(formData.balance),
         institution: formData.institution || undefined,
         status: formData.status,
+        custom: formData.custom || {},
       };
 
       const res = await fetch('/api/money/accounts', {
@@ -119,6 +127,7 @@ export default function AccountsNetWorth() {
           balance: '',
           institution: '',
           status: 'active',
+          custom: {},
         });
         setShowAddForm(false);
       } else {
@@ -148,9 +157,10 @@ export default function AccountsNetWorth() {
   }
 
   // Group accounts by type
+  const visibleAccounts = accounts.filter(a => fieldsFor(cfSettings, 'account').every(f => matchesFilter(a, f, cfFilters[f.id])));
   const groupedAccounts = {
-    assets: accounts.filter(a => ['cash', 'brokerage', 'retirement', 'crypto', 'real_estate', 'vehicle', 'other'].includes(a.type)),
-    liabilities: accounts.filter(a => ['credit', 'loan'].includes(a.type)),
+    assets: visibleAccounts.filter(a => ['cash', 'brokerage', 'retirement', 'crypto', 'real_estate', 'vehicle', 'other'].includes(a.type)),
+    liabilities: visibleAccounts.filter(a => ['credit', 'loan'].includes(a.type)),
   };
 
   const accountTypeIcons = {
@@ -390,6 +400,7 @@ export default function AccountsNetWorth() {
                     onChange={e => setFormData({ ...formData, institution: e.target.value })}
                   />
                 </div>
+                <CustomFieldInputs entity="account" value={formData.custom} onChange={(c) => setFormData({ ...formData, custom: c })} />
               </div>
 
               {formError && (
@@ -414,6 +425,14 @@ export default function AccountsNetWorth() {
             </form>
           </Card>
         </motion.div>
+      )}
+
+      {fieldsFor(cfSettings, 'account').length > 0 && (
+        <Card className="m-card-sm" style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+            <CustomFieldFilters entity="account" value={cfFilters} onChange={setCfFilters} />
+          </div>
+        </Card>
       )}
 
       {/* Assets Section */}

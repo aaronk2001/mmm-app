@@ -4,7 +4,7 @@
       "id": "acc_checking",
       "name": "Primary Checking",
       "type": "cash",
-      "balance": 4250.50,
+      "balance": 4250.5,
       "institution": "Chase Bank",
       "currency": "USD",
       "status": "active",
@@ -14,7 +14,7 @@
       "id": "acc_savings",
       "name": "Emergency Fund",
       "type": "cash",
-      "balance": 12500.00,
+      "balance": 12500,
       "institution": "Chase Bank",
       "currency": "USD",
       "status": "active",
@@ -34,7 +34,7 @@
       "id": "acc_brokerage",
       "name": "Fidelity Brokerage",
       "type": "brokerage",
-      "balance": 28500.00,
+      "balance": 28500,
       "institution": "Fidelity",
       "currency": "USD",
       "status": "active",
@@ -44,7 +44,7 @@
       "id": "acc_car_loan",
       "name": "Auto Loan - Civic",
       "type": "loan",
-      "balance": -18500.00,
+      "balance": -18500,
       "institution": "Wells Fargo",
       "currency": "USD",
       "status": "active",
@@ -59,7 +59,10 @@
       "amount": 3500,
       "payee": "Payroll - Handwrytten",
       "category_id": "inc",
-      "tags": ["income", "salary"],
+      "tags": [
+        "income",
+        "salary"
+      ],
       "note": "Biweekly paycheck",
       "source": "manual",
       "cleared": true
@@ -71,7 +74,10 @@
       "amount": -1200,
       "payee": "Rent - Tempe Apartment",
       "category_id": "hou",
-      "tags": ["monthly", "housing"],
+      "tags": [
+        "monthly",
+        "housing"
+      ],
       "note": "May rent payment",
       "source": "manual",
       "cleared": true
@@ -80,10 +86,12 @@
       "id": "txn_003",
       "account_id": "acc_checking",
       "date": "2026-05-03",
-      "amount": -85.50,
+      "amount": -85.5,
       "payee": "Whole Foods Market",
       "category_id": "fod",
-      "tags": ["groceries"],
+      "tags": [
+        "groceries"
+      ],
       "note": "Weekly grocery run",
       "source": "manual",
       "cleared": true
@@ -92,10 +100,12 @@
       "id": "txn_004",
       "account_id": "acc_checking",
       "date": "2026-05-03",
-      "amount": -42.30,
+      "amount": -42.3,
       "payee": "Chipotle - Mill Ave",
       "category_id": "fod",
-      "tags": ["dining"],
+      "tags": [
+        "dining"
+      ],
       "note": "Lunch",
       "source": "manual",
       "cleared": true
@@ -104,10 +114,12 @@
       "id": "txn_005",
       "account_id": "acc_checking",
       "date": "2026-05-04",
-      "amount": -125.00,
+      "amount": -125,
       "payee": "Uber - Trip Downtown",
       "category_id": "tra",
-      "tags": ["transportation"],
+      "tags": [
+        "transportation"
+      ],
       "note": "Downtown event",
       "source": "manual",
       "cleared": true
@@ -119,7 +131,9 @@
       "amount": -89.99,
       "payee": "Netflix",
       "category_id": "sub",
-      "tags": ["subscription"],
+      "tags": [
+        "subscription"
+      ],
       "note": "Monthly subscription",
       "source": "manual",
       "cleared": true
@@ -131,7 +145,10 @@
       "amount": -156.75,
       "payee": "Target",
       "category_id": "sho",
-      "tags": ["shopping", "household"],
+      "tags": [
+        "shopping",
+        "household"
+      ],
       "note": "Household items",
       "source": "manual",
       "cleared": true
@@ -143,7 +160,9 @@
       "amount": -2500,
       "payee": "Transfer to Savings",
       "category_id": "sav",
-      "tags": ["transfer"],
+      "tags": [
+        "transfer"
+      ],
       "note": "Monthly savings transfer",
       "source": "manual",
       "cleared": true
@@ -152,10 +171,12 @@
       "id": "txn_009",
       "account_id": "acc_checking",
       "date": "2026-05-07",
-      "amount": -65.00,
+      "amount": -65,
       "payee": "Lyft - Work Commute",
       "category_id": "tra",
-      "tags": ["transportation"],
+      "tags": [
+        "transportation"
+      ],
       "note": "Commute to Handwrytten",
       "source": "manual",
       "cleared": true
@@ -164,10 +185,13 @@
       "id": "txn_010",
       "account_id": "acc_checking",
       "date": "2026-05-08",
-      "amount": -340.00,
+      "amount": -340,
       "payee": "CVS Pharmacy",
       "category_id": "hea",
-      "tags": ["health", "pharmacy"],
+      "tags": [
+        "health",
+        "pharmacy"
+      ],
       "note": "Prescription + OTC meds",
       "source": "manual",
       "cleared": true
@@ -179,7 +203,9 @@
       "amount": -14.99,
       "payee": "Spotify",
       "category_id": "sub",
-      "tags": ["subscription"],
+      "tags": [
+        "subscription"
+      ],
       "note": "Premium monthly",
       "source": "manual",
       "cleared": true
@@ -188,10 +214,13 @@
       "id": "txn_012",
       "account_id": "acc_checking",
       "date": "2026-05-10",
-      "amount": -78.50,
+      "amount": -78.5,
       "payee": "Amazon",
       "category_id": "sho",
-      "tags": ["shopping", "online"],
+      "tags": [
+        "shopping",
+        "online"
+      ],
       "note": "USB cables + charger",
       "source": "manual",
       "cleared": true
@@ -200,10 +229,12 @@
       "id": "txn_013",
       "account_id": "acc_checking",
       "date": "2026-05-10",
-      "amount": -52.00,
+      "amount": -52,
       "payee": "Restaurant 1702",
       "category_id": "fod",
-      "tags": ["dining"],
+      "tags": [
+        "dining"
+      ],
       "note": "Dinner with friends",
       "source": "manual",
       "cleared": true
@@ -212,10 +243,13 @@
       "id": "txn_014",
       "account_id": "acc_checking",
       "date": "2026-05-12",
-      "amount": -185.00,
+      "amount": -185,
       "payee": "SRP Electric",
       "category_id": "uti",
-      "tags": ["utilities", "electricity"],
+      "tags": [
+        "utilities",
+        "electricity"
+      ],
       "note": "May electricity bill",
       "source": "manual",
       "cleared": true
@@ -224,10 +258,13 @@
       "id": "txn_015",
       "account_id": "acc_checking",
       "date": "2026-05-13",
-      "amount": -95.00,
+      "amount": -95,
       "payee": "Comcast Internet",
       "category_id": "uti",
-      "tags": ["utilities", "internet"],
+      "tags": [
+        "utilities",
+        "internet"
+      ],
       "note": "Monthly internet",
       "source": "manual",
       "cleared": true
@@ -239,7 +276,10 @@
       "amount": 3500,
       "payee": "Payroll - Handwrytten",
       "category_id": "inc",
-      "tags": ["income", "salary"],
+      "tags": [
+        "income",
+        "salary"
+      ],
       "note": "Biweekly paycheck",
       "source": "manual",
       "cleared": true
@@ -251,7 +291,9 @@
       "amount": -45.99,
       "payee": "Movie Theater - Harkins",
       "category_id": "ent",
-      "tags": ["entertainment"],
+      "tags": [
+        "entertainment"
+      ],
       "note": "Movie + snacks",
       "source": "manual",
       "cleared": true
@@ -260,10 +302,12 @@
       "id": "txn_018",
       "account_id": "acc_checking",
       "date": "2026-05-17",
-      "amount": -62.00,
+      "amount": -62,
       "payee": "Whole Foods Market",
       "category_id": "fod",
-      "tags": ["groceries"],
+      "tags": [
+        "groceries"
+      ],
       "note": "Weekly groceries",
       "source": "manual",
       "cleared": true
@@ -272,10 +316,13 @@
       "id": "txn_019",
       "account_id": "acc_checking",
       "date": "2026-05-18",
-      "amount": -300.00,
+      "amount": -300,
       "payee": "Car Payment - Wells Fargo",
       "category_id": "tra",
-      "tags": ["loan", "auto"],
+      "tags": [
+        "loan",
+        "auto"
+      ],
       "note": "May auto loan payment",
       "source": "manual",
       "cleared": true
@@ -284,10 +331,13 @@
       "id": "txn_020",
       "account_id": "acc_checking",
       "date": "2026-05-19",
-      "amount": -125.50,
+      "amount": -125.5,
       "payee": "Shell Gas Station",
       "category_id": "tra",
-      "tags": ["transportation", "gas"],
+      "tags": [
+        "transportation",
+        "gas"
+      ],
       "note": "Gas fill-up",
       "source": "manual",
       "cleared": true
@@ -299,7 +349,9 @@
       "amount": -89.99,
       "payee": "Apple Music",
       "category_id": "sub",
-      "tags": ["subscription"],
+      "tags": [
+        "subscription"
+      ],
       "note": "Monthly music subscription",
       "source": "manual",
       "cleared": false
@@ -308,10 +360,13 @@
       "id": "txn_022",
       "account_id": "acc_checking",
       "date": "2026-05-21",
-      "amount": -275.00,
+      "amount": -275,
       "payee": "Amazon",
       "category_id": "sho",
-      "tags": ["shopping", "online"],
+      "tags": [
+        "shopping",
+        "online"
+      ],
       "note": "Desk lamp + keyboard",
       "source": "manual",
       "cleared": false
@@ -320,10 +375,13 @@
       "id": "txn_023",
       "account_id": "acc_checking",
       "date": "2026-05-22",
-      "amount": -155.00,
+      "amount": -155,
       "payee": "LA Fitness",
       "category_id": "hea",
-      "tags": ["health", "gym"],
+      "tags": [
+        "health",
+        "gym"
+      ],
       "note": "Monthly gym membership",
       "source": "manual",
       "cleared": true
@@ -332,10 +390,12 @@
       "id": "txn_024",
       "account_id": "acc_checking",
       "date": "2026-05-23",
-      "amount": -38.50,
+      "amount": -38.5,
       "payee": "Trader Joes",
       "category_id": "fod",
-      "tags": ["groceries"],
+      "tags": [
+        "groceries"
+      ],
       "note": "Snacks + frozen meals",
       "source": "manual",
       "cleared": false
@@ -344,10 +404,13 @@
       "id": "txn_025",
       "account_id": "acc_credit_card",
       "date": "2026-05-05",
-      "amount": -850.00,
+      "amount": -850,
       "payee": "Best Buy",
       "category_id": "sho",
-      "tags": ["shopping", "electronics"],
+      "tags": [
+        "shopping",
+        "electronics"
+      ],
       "note": "Laptop stand + accessories",
       "source": "manual",
       "cleared": false
@@ -356,10 +419,12 @@
       "id": "txn_026",
       "account_id": "acc_credit_card",
       "date": "2026-05-10",
-      "amount": -620.50,
+      "amount": -620.5,
       "payee": "Delta Airlines",
       "category_id": "ent",
-      "tags": ["travel"],
+      "tags": [
+        "travel"
+      ],
       "note": "Flight to Houston for interview",
       "source": "manual",
       "cleared": false
@@ -371,7 +436,9 @@
       "amount": -880.25,
       "payee": "Hotels.com - Houston",
       "category_id": "ent",
-      "tags": ["travel"],
+      "tags": [
+        "travel"
+      ],
       "note": "Hotel stay - interview trip",
       "source": "manual",
       "cleared": false
@@ -383,7 +450,9 @@
       "amount": 2500,
       "payee": "Transfer from Checking",
       "category_id": "sav",
-      "tags": ["transfer"],
+      "tags": [
+        "transfer"
+      ],
       "note": "Monthly savings deposit",
       "source": "manual",
       "cleared": true
@@ -395,7 +464,9 @@
       "amount": 150.45,
       "payee": "Interest Earned",
       "category_id": "inc",
-      "tags": ["interest"],
+      "tags": [
+        "interest"
+      ],
       "note": "Monthly interest accrual",
       "source": "manual",
       "cleared": true
@@ -407,7 +478,9 @@
       "amount": 250.75,
       "payee": "Dividend - VOO (S&P 500 ETF)",
       "category_id": "inc",
-      "tags": ["dividend"],
+      "tags": [
+        "dividend"
+      ],
       "note": "Quarterly dividend",
       "source": "manual",
       "cleared": true
@@ -416,10 +489,12 @@
       "id": "txn_031",
       "account_id": "acc_brokerage",
       "date": "2026-04-20",
-      "amount": 175.50,
+      "amount": 175.5,
       "payee": "Dividend - VTI (US Total Market)",
       "category_id": "inc",
-      "tags": ["dividend"],
+      "tags": [
+        "dividend"
+      ],
       "note": "Quarterly dividend",
       "source": "manual",
       "cleared": true
@@ -431,7 +506,10 @@
       "amount": 5000,
       "payee": "Transfer from Checking",
       "category_id": "sav",
-      "tags": ["transfer", "investment"],
+      "tags": [
+        "transfer",
+        "investment"
+      ],
       "note": "Monthly investment",
       "source": "manual",
       "cleared": true
@@ -556,33 +634,75 @@
   "networth_snapshots": [
     {
       "date": "2026-04-23",
-      "assets": 45250.50,
+      "assets": 45250.5,
       "liabilities": 20850.75,
       "net": 24399.75
     },
     {
       "date": "2026-04-30",
-      "assets": 47750.50,
+      "assets": 47750.5,
       "liabilities": 20850.75,
       "net": 26899.75
     },
     {
       "date": "2026-05-07",
-      "assets": 50250.50,
+      "assets": 50250.5,
       "liabilities": 20550.75,
       "net": 29699.75
     },
     {
       "date": "2026-05-14",
-      "assets": 52750.50,
+      "assets": 52750.5,
       "liabilities": 20250.75,
       "net": 32499.75
     },
     {
       "date": "2026-05-21",
-      "assets": 55250.50,
+      "assets": 55250.5,
       "liabilities": 20050.75,
       "net": 35199.75
+    }
+  ],
+  "holdings": [
+    {
+      "id": "h_aapl",
+      "account_id": "acc_brokerage",
+      "symbol": "AAPL",
+      "shares": 40,
+      "cost_basis": 150,
+      "current_price": 210,
+      "price_source": "manual",
+      "updated_at": "2026-06-28"
+    },
+    {
+      "id": "h_msft",
+      "account_id": "acc_brokerage",
+      "symbol": "MSFT",
+      "shares": 15,
+      "cost_basis": 320,
+      "current_price": 440,
+      "price_source": "manual",
+      "updated_at": "2026-06-28"
+    },
+    {
+      "id": "h_vti",
+      "account_id": "acc_brokerage",
+      "symbol": "VTI",
+      "shares": 30,
+      "cost_basis": 220,
+      "current_price": 280,
+      "price_source": "manual",
+      "updated_at": "2026-06-28"
+    },
+    {
+      "id": "h_nvda",
+      "account_id": "acc_brokerage",
+      "symbol": "NVDA",
+      "shares": 5,
+      "cost_basis": 600,
+      "current_price": 1020,
+      "price_source": "manual",
+      "updated_at": "2026-06-28"
     }
   ]
 }

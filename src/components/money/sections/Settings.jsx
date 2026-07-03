@@ -1,0 +1,244 @@
+import { useState, useRef } from 'react';
+import { Monitor, Sun, Moon, Check, ShieldCheck, RotateCcw, Database, Download, Upload, Globe } from 'lucide-react';
+import {
+  applyTheme, applyDensity, applyAccent, getTheme, getDensity, getAccent,
+} from '../../../lib/theme';
+import { saveSettings, queryClient, useApi } from '../../../lib/query';
+import RulesManager from './RulesManager';
+import CustomFieldsManager from './CustomFieldsManager';
+
+const ACCENTS = [
+  { name: 'Blue',   hex: '#0071e3' },
+  { name: 'Indigo', hex: '#5856d6' },
+  { name: 'Violet', hex: '#7c3aed' },
+  { name: 'Teal',   hex: '#0a9396' },
+  { name: 'Green',  hex: '#2fb344' },
+  { name: 'Amber',  hex: '#f59e0b' },
+  { name: 'Rose',   hex: '#ff2d55' },
+];
+const DEFAULT_ACCENT = '#0071e3';
+
+const THEMES = [
+  { id: 'system', label: 'System', Icon: Monitor },
+  { id: 'light',  label: 'Light',  Icon: Sun },
+  { id: 'dark',   label: 'Dark',   Icon: Moon },
+];
+const DENSITIES = [
+  { id: 'comfortable', label: 'Comfortable' },
+  { id: 'compact',     label: 'Compact' },
+];
+
+function Section({ title, subtitle, children }) {
+  return (
+    <div className="m-card m-card-no-hover" style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--m-ink)' }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 13, color: 'var(--m-ink-2)', marginTop: 2 }}>{subtitle}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, hint, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 0', borderTop: '1px solid var(--m-border)' }}>
+      <div>
+        <div style={{ fontSize: 14, color: 'var(--m-ink)' }}>{label}</div>
+        {hint && <div style={{ fontSize: 12, color: 'var(--m-muted)', marginTop: 2 }}>{hint}</div>}
+      </div>
+      <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+function Segmented({ options, value, onChange }) {
+  return (
+    <div style={{ display: 'inline-flex', background: 'var(--m-surface-2)', borderRadius: 10, padding: 3, gap: 2 }}>
+      {options.map((o) => {
+        const active = o.id === value;
+        const Icon = o.Icon;
+        return (
+          <button
+            key={o.id}
+            onClick={() => onChange(o.id)}
+            className="m-no-drag"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 13, fontWeight: 500, padding: '7px 14px', borderRadius: 8,
+              border: 'none', cursor: 'pointer',
+              background: active ? 'var(--m-surface)' : 'transparent',
+              color: active ? 'var(--m-ink)' : 'var(--m-ink-2)',
+              boxShadow: active ? 'var(--m-shadow)' : 'none',
+            }}
+          >
+            {Icon && <Icon size={15} />}
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function Settings() {
+  const [theme, setTheme] = useState(getTheme);
+  const [density, setDensity] = useState(getDensity);
+  const [accent, setAccent] = useState(() => getAccent() || DEFAULT_ACCENT);
+
+  const { data: ccfg } = useApi('money/currency');
+  const [baseCurrency, setBaseCurrency] = useState(null);
+  const currency = baseCurrency ?? ccfg?.baseCurrency ?? 'USD';
+  const currencyList = ccfg?.availableCurrencies || ['USD'];
+  function pickCurrency(cur) {
+    setBaseCurrency(cur);
+    saveSettings({ baseCurrency: cur }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ['money/overview'] });
+    queryClient.invalidateQueries({ queryKey: ['money/metrics'] });
+    queryClient.invalidateQueries({ queryKey: ['money/currency'] });
+  }
+
+  // Persist the appearance triple to the server (mirrors localStorage, which the
+  // no-flash boot reads). Best-effort — the live UI already updated via the apply* call.
+  function persist(next) {
+    saveSettings({ appearance: { theme, density, accent, ...next } }).catch(() => {});
+  }
+
+  function pickTheme(id)   { setTheme(id);   applyTheme(id);   persist({ theme: id }); }
+  function pickDensity(id) { setDensity(id); applyDensity(id); persist({ density: id }); }
+  function pickAccent(hex) { setAccent(hex); applyAccent(hex); persist({ accent: hex }); }
+
+  function resetDefaults() {
+    setTheme('system'); applyTheme('system');
+    setDensity('comfortable'); applyDensity('comfortable');
+    setAccent(DEFAULT_ACCENT); applyAccent(DEFAULT_ACCENT);
+    saveSettings({ appearance: { theme: 'system', density: 'comfortable', accent: DEFAULT_ACCENT } }).catch(() => {});
+  }
+
+  const fileRef = useRef(null);
+  const [backupMsg, setBackupMsg] = useState(null);
+
+  async function exportData() {
+    try {
+      const data = await (await fetch('/api/money/export')).json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mmm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      setBackupMsg({ ok: true, text: 'Backup downloaded.' });
+    } catch (e) {
+      setBackupMsg({ ok: false, text: 'Export failed: ' + (e.message || 'unknown error') });
+    }
+  }
+
+  async function onImportFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const res = await fetch('/api/money/import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || 'Invalid backup file');
+      setBackupMsg({ ok: true, text: `Imported ${out.counts.accounts} accounts and ${out.counts.transactions} transactions.` });
+      queryClient.invalidateQueries();
+    } catch (err) {
+      setBackupMsg({ ok: false, text: 'Import failed: ' + (err.message || 'invalid file') });
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--m-ink)' }}>Settings &amp; Privacy</div>
+        <div style={{ fontSize: 13, color: 'var(--m-ink-2)' }}>Make MMM yours — and keep your money on your machine.</div>
+      </div>
+
+      <Section title="Appearance" subtitle="Theme, accent color, and layout density apply instantly.">
+        <Row label="Theme" hint="Match your system or lock it in.">
+          <Segmented options={THEMES} value={theme} onChange={pickTheme} />
+        </Row>
+        <Row label="Accent" hint="Used for highlights, charts, and the active state.">
+          <div style={{ display: 'flex', gap: 8 }}>
+            {ACCENTS.map((a) => {
+              const active = a.hex.toLowerCase() === accent.toLowerCase();
+              return (
+                <button
+                  key={a.hex}
+                  title={a.name}
+                  onClick={() => pickAccent(a.hex)}
+                  className="m-no-drag"
+                  style={{
+                    width: 26, height: 26, borderRadius: 999, cursor: 'pointer',
+                    background: a.hex,
+                    border: '2px solid var(--m-surface)',
+                    outline: active ? `2px solid ${a.hex}` : '2px solid transparent',
+                    outlineOffset: 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  {active && <Check size={14} color="#fff" strokeWidth={3} />}
+                </button>
+              );
+            })}
+          </div>
+        </Row>
+        <Row label="Density" hint="Compact fits more on screen.">
+          <Segmented options={DENSITIES} value={density} onChange={pickDensity} />
+        </Row>
+        <Row label={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Globe size={14} style={{ color: 'var(--m-muted)' }} /> Display currency</span>} hint="Net worth and metrics convert to this currency.">
+          <select className="m-input" value={currency} onChange={(e) => pickCurrency(e.target.value)} style={{ minWidth: 110 }}>
+            {currencyList.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </Row>
+        <div style={{ paddingTop: 14, borderTop: '1px solid var(--m-border)' }}>
+          <button className="m-btn m-btn-ghost m-btn-sm m-no-drag" onClick={resetDefaults}>
+            <RotateCcw size={14} style={{ marginRight: 6 }} /> Reset to defaults
+          </button>
+        </div>
+      </Section>
+
+      <RulesManager />
+
+      <CustomFieldsManager />
+
+      <Section title="Privacy &amp; Data" subtitle="MMM is local-first by design.">
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '4px 0' }}>
+          <ShieldCheck size={20} style={{ color: 'var(--m-green)', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 13, color: 'var(--m-ink-2)', lineHeight: 1.55 }}>
+            Your accounts, transactions, budgets, and goals live in a local SQLite database on this device.
+            Nothing is sent to the cloud. The AI coach runs on a local model by default; it only reaches Anthropic
+            if you explicitly turn on Claude and provide your own API key.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0 4px', borderTop: '1px solid var(--m-border)', marginTop: 8 }}>
+          <Database size={20} style={{ color: 'var(--m-muted)', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: 'var(--m-ink-2)', lineHeight: 1.55, marginBottom: 12 }}>
+              Save everything to a single file, or restore from one. Import replaces your current data.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="m-btn m-btn-secondary m-btn-sm" onClick={exportData}>
+                <Download size={14} style={{ marginRight: 6 }} /> Export backup
+              </button>
+              <button className="m-btn m-btn-secondary m-btn-sm" onClick={() => fileRef.current?.click()}>
+                <Upload size={14} style={{ marginRight: 6 }} /> Import backup
+              </button>
+              <input ref={fileRef} type="file" accept="application/json,.json" onChange={onImportFile} style={{ display: 'none' }} />
+            </div>
+            {backupMsg && (
+              <div style={{ fontSize: 12, marginTop: 10, color: backupMsg.ok ? 'var(--m-green)' : 'var(--m-red)' }}>
+                {backupMsg.text}
+              </div>
+            )}
+          </div>
+        </div>
+      </Section>
+    </div>
+  );
+}

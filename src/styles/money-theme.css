@@ -3,24 +3,26 @@
    Design inspiration: Apple, Monarch, Google Copilot — calm, friendly, guidance-forward */
 
 .money-hub {
-  /* Color tokens — light palette */
-  --m-bg: #f6f7f9;
-  --m-surface: #ffffff;
-  --m-surface-2: #f1f3f5;
-  --m-ink: #0b1220;
-  --m-ink-2: #475569;
-  --m-muted: #94a3b8;
-  --m-border: #e6e8ec;
-  --m-accent: #0071e3;
-  --m-accent-soft: #e8f1fd;
-  --m-green: #15a34a;
-  --m-green-bg: rgba(21, 163, 74, 0.1);
-  --m-red: #dc2626;
-  --m-red-bg: rgba(220, 38, 38, 0.05);
-  --m-amber: #d97706;
-  --m-amber-bg: rgba(217, 119, 6, 0.05);
+  /* Color tokens — now sourced from the MMM 2.0 semantic token system
+     (src/styles/theme.css), so the whole Money UI is theme-aware (dark/light/
+     accent) without changing component markup. Light values are unchanged. */
+  --m-bg: var(--bg);
+  --m-surface: var(--surface);
+  --m-surface-2: var(--surface-2);
+  --m-ink: var(--ink);
+  --m-ink-2: var(--ink-2);
+  --m-muted: var(--muted);
+  --m-border: var(--border);
+  --m-accent: var(--accent);
+  --m-accent-soft: var(--accent-soft);
+  --m-green: var(--positive);
+  --m-green-bg: color-mix(in srgb, var(--positive) 10%, transparent);
+  --m-red: var(--negative);
+  --m-red-bg: color-mix(in srgb, var(--negative) 6%, transparent);
+  --m-amber: var(--warning);
+  --m-amber-bg: color-mix(in srgb, var(--warning) 8%, transparent);
   --m-radius: 16px;
-  --m-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.05);
+  --m-shadow: var(--shadow-card);
   --m-shadow-md: 0 2px 8px rgba(16, 24, 40, 0.1);
   --m-shadow-lg: 0 10px 32px rgba(16, 24, 40, 0.12);
 

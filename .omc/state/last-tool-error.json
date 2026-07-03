@@ -1,0 +1,7 @@
+{
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"C:\\\\Users\\\\aaron\\\\projects\\\\Finance agent\\\\mmm-app\\\\server\"}",
+  "error": "EISDIR: illegal operation on a directory, read 'C:\\Users\\aaron\\projects\\Finance agent\\mmm-app\\server'",
+  "timestamp": "2026-07-03T17:12:21.661Z",
+  "retry_count": 3
+}

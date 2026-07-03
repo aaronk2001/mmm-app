@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import {
+  LayoutDashboard,
   Wallet,
   Receipt,
   PiggyBank,
@@ -17,6 +18,7 @@ import Card from './shared/Card';
 import ComingSoon from './shared/ComingSoon';
 
 // Live sections (lazy)
+const Overview = lazy(() => import('./sections/Overview'));
 const AccountsNetWorth = lazy(() => import('./sections/AccountsNetWorth'));
 const Transactions = lazy(() => import('./sections/Transactions'));
 const Budget = lazy(() => import('./sections/Budget'));
@@ -25,8 +27,12 @@ const Goals = lazy(() => import('./sections/Goals'));
 const Debt = lazy(() => import('./sections/Debt'));
 const Tax = lazy(() => import('./sections/Tax'));
 const Advisor = lazy(() => import('./sections/Advisor'));
+const SettingsSection = lazy(() => import('./sections/Settings'));
+const Investments = lazy(() => import('./sections/Investments'));
+const Reports = lazy(() => import('./sections/Reports'));
 
 const SECTIONS = [
+  { id: 'overview',     label: 'Overview',             icon: LayoutDashboard },
   { id: 'accounts',     label: 'Accounts & Net Worth', icon: Wallet },
   { id: 'transactions', label: 'Transactions',         icon: Receipt },
   { id: 'budget',       label: 'Budget',               icon: PiggyBank },
@@ -49,7 +55,7 @@ function SectionLoader() {
 }
 
 export default function MoneyHub() {
-  const [activeSection, setActiveSection] = useState('accounts');
+  const [activeSection, setActiveSection] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [isEmpty, setIsEmpty] = useState(false);
   const [seeding, setSeeding] = useState(false);
@@ -90,6 +96,7 @@ export default function MoneyHub() {
 
   const renderSection = () => {
     switch (activeSection) {
+      case 'overview':     return <Overview />;
       case 'accounts':     return <AccountsNetWorth />;
       case 'transactions': return <Transactions />;
       case 'budget':       return <Budget />;
@@ -98,9 +105,9 @@ export default function MoneyHub() {
       case 'debt':         return <Debt />;
       case 'tax':          return <Tax />;
       case 'advisor':      return <Advisor />;
-      case 'investments':  return <ComingSoon title="Investments" description="Real holdings, asset allocation, performance, and retirement projections. Coming in the next pass." />;
-      case 'reports':      return <ComingSoon title="Reports" description="Net-worth, spending, and cash-flow reports with CSV / PDF export. Coming soon." />;
-      case 'settings':     return <ComingSoon title="Settings & Privacy" description="Your data lives on this device. Backup, export, and reset options are coming soon." />;
+      case 'investments':  return <Investments />;
+      case 'reports':      return <Reports />;
+      case 'settings':     return <SettingsSection />;
       default:             return null;
     }
   };

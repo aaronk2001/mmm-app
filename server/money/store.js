@@ -1,50 +1,27 @@
 const fs = require('fs');
-const path = require('path');
-
-const MONEY_DIR = path.join(__dirname, '..', 'store', 'money');
-const DATA_FILE = path.join(MONEY_DIR, 'data.json');
+const { db } = require('../db/connection');
+const repo = require('../db/repo');
 
 // ────────────────────────────────────────────────────────────────────────────
-// File I/O
+// Data I/O — SQLite-backed (see server/db/). readData()/writeData() round-trip
+// the full data blob via the repo, so every function below keeps the exact same
+// shape it had under the old JSON store. Drop-in: routes.js is unchanged.
 // ────────────────────────────────────────────────────────────────────────────
 
 function readData() {
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch {
-    return getEmptyData();
-  }
+  return repo.readAll(db());
 }
 
 function writeData(data) {
-  fs.mkdirSync(MONEY_DIR, { recursive: true });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  repo.writeAll(db(), data);
 }
 
 function getEmptyData() {
-  return {
-    accounts: [],
-    transactions: [],
-    categories: getDefaultCategories(),
-    budgets: [],
-    networth_snapshots: [],
-  };
+  return repo.emptyData();
 }
 
 function getDefaultCategories() {
-  return [
-    { id: 'inc', name: 'Income', group: 'income', color: '#10b981', icon: 'plus' },
-    { id: 'hou', name: 'Housing', group: 'expenses', color: '#f59e0b', icon: 'home' },
-    { id: 'fod', name: 'Food & Dining', group: 'expenses', color: '#ef4444', icon: 'utensils' },
-    { id: 'tra', name: 'Transportation', group: 'expenses', color: '#3b82f6', icon: 'car' },
-    { id: 'sho', name: 'Shopping', group: 'expenses', color: '#8b5cf6', icon: 'bag' },
-    { id: 'uti', name: 'Utilities', group: 'expenses', color: '#ec4899', icon: 'zap' },
-    { id: 'ent', name: 'Entertainment', group: 'expenses', color: '#06b6d4', icon: 'film' },
-    { id: 'hea', name: 'Health', group: 'expenses', color: '#06b6d4', icon: 'heart' },
-    { id: 'sav', name: 'Savings', group: 'transfers', color: '#14b8a6', icon: 'piggy-bank' },
-    { id: 'sub', name: 'Subscriptions', group: 'expenses', color: '#a78bfa', icon: 'layers' },
-    { id: 'oth', name: 'Other', group: 'expenses', color: '#6b7280', icon: 'circle' },
-  ];
+  return repo.defaultCategories();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -135,12 +112,33 @@ function autoCategorize(payee, amount) {
 // Net worth calculation
 // ────────────────────────────────────────────────────────────────────────────
 
-function computeNetWorth(accounts) {
+// Multi-currency. fxRates are "value of 1 unit in USD" (USD per unit). Convert an
+// amount in `currency` to `baseCurrency`: amount * (rate[currency] / rate[base]).
+const DEFAULT_FX_RATES = { USD: 1, EUR: 1.08, GBP: 1.27, JPY: 0.0064, CAD: 0.73, CHF: 1.12, AUD: 0.66, NZD: 0.60 };
+const AVAILABLE_CURRENCIES = Object.keys(DEFAULT_FX_RATES);
+
+function getCurrencyConfig() {
+  const s = repo.getSettings(db()) || {};
+  return {
+    baseCurrency: s.baseCurrency || 'USD',
+    fxRates: { ...DEFAULT_FX_RATES, ...(s.fxRates || {}) },
+    availableCurrencies: AVAILABLE_CURRENCIES,
+  };
+}
+
+function convertAmount(amount, currency, baseCurrency, fxRates) {
+  if (!fxRates || !currency || currency === baseCurrency) return amount;
+  const rc = fxRates[currency] || 1;
+  const rb = fxRates[baseCurrency] || 1;
+  return amount * (rc / rb);
+}
+
+function computeNetWorth(accounts, baseCurrency = 'USD', fxRates = null) {
   let assets = 0;
   let liabilities = 0;
 
   accounts.forEach(acc => {
-    const balance = parseFloat(acc.balance) || 0;
+    const balance = convertAmount(parseFloat(acc.balance) || 0, acc.currency, baseCurrency, fxRates);
     const type = acc.type;
 
     if (type === 'loan' || type === 'credit') {
@@ -363,7 +361,7 @@ function getGoals() {
   return data.goals || [];
 }
 
-function createGoal(name, target, current = 0, linked_account_id = null, target_date = null, template = null, monthly_contribution = null) {
+function createGoal(name, target, current = 0, linked_account_id = null, target_date = null, template = null, monthly_contribution = null, custom = {}) {
   if (!name || !target) throw new Error('name and target required');
 
   const data = readData();
@@ -378,6 +376,7 @@ function createGoal(name, target, current = 0, linked_account_id = null, target_
     target_date,
     template,
     monthly_contribution: monthly_contribution ? parseFloat(monthly_contribution) : null,
+    custom: custom && typeof custom === 'object' ? custom : {},
   };
 
   data.goals.push(goal);
@@ -661,7 +660,7 @@ function getAccounts() {
   return readData().accounts;
 }
 
-function createAccount(name, type, balance, institution, currency = 'USD', status = 'active') {
+function createAccount(name, type, balance, institution, currency = 'USD', status = 'active', custom = {}) {
   if (!name || !type) throw new Error('name and type required');
 
   const data = readData();
@@ -674,6 +673,7 @@ function createAccount(name, type, balance, institution, currency = 'USD', statu
     currency,
     status,
     created_at: new Date().toISOString(),
+    custom: custom && typeof custom === 'object' ? custom : {},
   };
 
   data.accounts.push(account);
@@ -697,9 +697,93 @@ function deleteAccount(id) {
   if (idx === -1) throw new Error('Account not found');
 
   data.accounts.splice(idx, 1);
-  // Also remove any transactions for this account
+  // Also remove any transactions + holdings for this account
   data.transactions = data.transactions.filter(t => t.account_id !== id);
+  data.holdings = (data.holdings || []).filter(h => h.account_id !== id);
   writeData(data);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Holdings (investments). Market value is tracked here and shown in the
+// Investments section; it is NOT re-summed into net worth (the investment
+// account's balance already represents its value, so that would double-count).
+// ────────────────────────────────────────────────────────────────────────────
+
+function getHoldings(account_id = null) {
+  const data = readData();
+  const all = data.holdings || [];
+  return account_id ? all.filter(h => h.account_id === account_id) : all;
+}
+
+function createHolding(account_id, symbol, shares, cost_basis, current_price) {
+  if (!symbol) throw new Error('symbol required');
+  const data = readData();
+  if (!Array.isArray(data.holdings)) data.holdings = [];
+  const holding = {
+    id: 'h_' + Math.random().toString(36).slice(2, 10),
+    account_id: account_id || null,
+    symbol: String(symbol).toUpperCase().trim(),
+    shares: parseFloat(shares) || 0,
+    cost_basis: parseFloat(cost_basis) || 0,
+    current_price: parseFloat(current_price) || 0,
+    price_source: 'manual',
+    updated_at: new Date().toISOString().slice(0, 10),
+  };
+  data.holdings.push(holding);
+  writeData(data);
+  return holding;
+}
+
+function updateHolding(id, updates) {
+  const data = readData();
+  const h = (data.holdings || []).find(x => x.id === id);
+  if (!h) throw new Error('Holding not found');
+  for (const k of ['symbol', 'shares', 'cost_basis', 'current_price', 'account_id']) {
+    if (updates[k] !== undefined) {
+      h[k] = (k === 'symbol') ? String(updates[k]).toUpperCase().trim()
+        : (k === 'account_id') ? updates[k]
+        : (parseFloat(updates[k]) || 0);
+    }
+  }
+  h.updated_at = new Date().toISOString().slice(0, 10);
+  writeData(data);
+  return h;
+}
+
+function deleteHolding(id) {
+  const data = readData();
+  const before = (data.holdings || []).length;
+  data.holdings = (data.holdings || []).filter(h => h.id !== id);
+  if (data.holdings.length === before) throw new Error('Holding not found');
+  writeData(data);
+}
+
+function computeInvestmentMetrics(holdings) {
+  const list = holdings || [];
+  let marketValue = 0;
+  let costTotal = 0;
+  const bySymbol = {};
+  for (const h of list) {
+    const mv = (parseFloat(h.shares) || 0) * (parseFloat(h.current_price) || 0);
+    const cb = (parseFloat(h.shares) || 0) * (parseFloat(h.cost_basis) || 0);
+    marketValue += mv;
+    costTotal += cb;
+    bySymbol[h.symbol] = (bySymbol[h.symbol] || 0) + mv;
+  }
+  const gain = marketValue - costTotal;
+  const round = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  return {
+    marketValue: round(marketValue),
+    costBasis: round(costTotal),
+    gain: round(gain),
+    gainPct: costTotal > 0 ? round((gain / costTotal) * 100) : 0,
+    holdingsCount: list.length,
+    allocation: Object.entries(bySymbol).map(([symbol, value]) => ({
+      symbol,
+      value: round(value),
+      pct: marketValue > 0 ? round((value / marketValue) * 100) : 0,
+    })).sort((a, b) => b.value - a.value),
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -726,7 +810,7 @@ function getTransactions(filters = {}) {
   return txns.sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
-function createTransaction(account_id, date, amount, payee, category_id, tags = [], note = '', source = 'manual', cleared = false) {
+function createTransaction(account_id, date, amount, payee, category_id, tags = [], note = '', source = 'manual', cleared = false, custom = {}) {
   if (!account_id || !date || amount === undefined) {
     throw new Error('account_id, date, amount required');
   }
@@ -748,6 +832,7 @@ function createTransaction(account_id, date, amount, payee, category_id, tags = 
     note: note || '',
     source,
     cleared: cleared || false,
+    custom: custom && typeof custom === 'object' ? custom : {},
   };
 
   // Update account balance
@@ -793,6 +878,46 @@ function deleteTransaction(id) {
 
   data.transactions.splice(idx, 1);
   writeData(data);
+}
+
+function updateTransactionsBulk(ids, updates) {
+  if (!Array.isArray(ids) || !ids.length || !updates || typeof updates !== 'object') return 0;
+  const data = readData();
+  const idset = new Set(ids);
+  let count = 0;
+  for (const t of data.transactions) {
+    if (!idset.has(t.id)) continue;
+    if (updates.amount !== undefined && t.amount !== updates.amount) {
+      const account = data.accounts.find(a => a.id === t.account_id);
+      if (account) {
+        const diff = parseFloat(updates.amount) - t.amount;
+        account.balance = Math.round((account.balance + diff) * 100) / 100;
+      }
+    }
+    Object.assign(t, updates, { id: t.id });
+    count++;
+  }
+  if (count) writeData(data);
+  return count;
+}
+
+function deleteTransactionsBulk(ids) {
+  if (!Array.isArray(ids) || !ids.length) return 0;
+  const data = readData();
+  const idset = new Set(ids);
+  const keep = [];
+  let count = 0;
+  for (const t of data.transactions) {
+    if (idset.has(t.id)) {
+      const account = data.accounts.find(a => a.id === t.account_id);
+      if (account) account.balance = Math.round((account.balance - t.amount) * 100) / 100;
+      count++;
+    } else {
+      keep.push(t);
+    }
+  }
+  if (count) { data.transactions = keep; writeData(data); }
+  return count;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -924,6 +1049,147 @@ function importTransactions(account_id, rows, csvText, mapping) {
   return { imported: imported.length, sample };
 }
 
+// ── OFX / QIF import (hand-rolled parsers, no deps) ──────────────────────────
+function normalizeQifDate(s) {
+  s = String(s).trim().replace(/'/g, '/');
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/);
+  if (m) {
+    let [, mo, d, y] = m;
+    if (y.length === 2) y = (parseInt(y, 10) > 50 ? '19' : '20') + y;
+    return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+function parseQIF(content) {
+  const rows = [];
+  let cur = {};
+  const flush = () => { if (cur.date || cur.amount !== undefined || cur.payee) rows.push(cur); cur = {}; };
+  for (const raw of String(content).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('!')) continue;
+    const code = line[0];
+    const val = line.slice(1).trim();
+    if (code === '^') flush();
+    else if (code === 'D') cur.date = normalizeQifDate(val);
+    else if (code === 'T' || code === 'U') cur.amount = parseFloat(val.replace(/[, ]/g, ''));
+    else if (code === 'P') cur.payee = val;
+    else if (code === 'M') cur.note = val;
+  }
+  flush();
+  return rows;
+}
+
+function parseOFX(content) {
+  const rows = [];
+  const blocks = String(content).split(/<STMTTRN>/i).slice(1);
+  for (const b of blocks) {
+    const block = b.split(/<\/STMTTRN>/i)[0];
+    const tag = (name) => {
+      const m = block.match(new RegExp('<' + name + '>([^<\\r\\n]*)', 'i'));
+      return m ? m[1].trim() : '';
+    };
+    const amt = tag('TRNAMT');
+    if (!amt) continue;
+    const dt = tag('DTPOSTED');
+    const dm = String(dt).match(/^(\d{4})(\d{2})(\d{2})/);
+    rows.push({
+      date: dm ? `${dm[1]}-${dm[2]}-${dm[3]}` : new Date().toISOString().slice(0, 10),
+      amount: parseFloat(amt.replace(/[, ]/g, '')),
+      payee: tag('NAME') || tag('PAYEE'),
+      note: tag('MEMO'),
+    });
+  }
+  return rows;
+}
+
+function importFile(account_id, format, content) {
+  if (!account_id) throw new Error('account_id required');
+  if (!content) throw new Error('file content required');
+  const rows = format === 'ofx' ? parseOFX(content) : format === 'qif' ? parseQIF(content) : [];
+  if (!rows.length) throw new Error(`No transactions found in the ${String(format).toUpperCase()} file`);
+  return importTransactions(account_id, rows);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Metrics — a flat map of named numeric variables for the formula engine
+// (custom-metric widgets). Fractions (savings_rate, debt_to_income) are 0..1.
+// ────────────────────────────────────────────────────────────────────────────
+
+function cfSlug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'field'; }
+function cfValues(field) {
+  if (field.type === 'checkbox') return [{ v: true, s: 'yes' }, { v: false, s: 'no' }];
+  return (field.options || []).map((o) => ({ v: o, s: cfSlug(o) }));
+}
+
+function getMetrics() {
+  const data = readData();
+  const accounts = data.accounts || [];
+  const transactions = data.transactions || [];
+  const cc = getCurrencyConfig();
+  const nw = computeNetWorth(accounts, cc.baseCurrency, cc.fxRates);
+
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const recent = transactions.filter(t => new Date(t.date) >= sixtyDaysAgo);
+  const monthly_income = recent.filter(t => t.amount > 0)
+    .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0) / 2;
+  const monthly_expenses = recent.filter(t => t.amount < 0)
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0) / 2;
+  const liquid_savings = accounts
+    .filter(a => a.type === 'checking' || a.type === 'savings' || a.type === 'cash')
+    .reduce((s, a) => s + (parseFloat(a.balance) || 0), 0);
+
+  const monthly_surplus = monthly_income - monthly_expenses;
+  const annual_income = monthly_income * 12;
+  const annual_expenses = monthly_expenses * 12;
+  const round = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+  // Custom-field aggregates: cf_<slug>_<value>_count / _sum
+  const settings = repo.getSettings(db()) || {};
+  const cf = {};
+  for (const field of settings.customFields || []) {
+    const rows = field.entity === 'transaction' ? transactions
+      : field.entity === 'account' ? accounts
+      : field.entity === 'goal' ? (data.goals || []) : [];
+    const amountOf = field.entity === 'transaction' ? (r) => parseFloat(r.amount) || 0
+      : field.entity === 'account' ? (r) => parseFloat(r.balance) || 0
+      : (r) => parseFloat(r.target) || 0;
+    const fslug = field.slug || cfSlug(field.name);
+    for (const { v, s } of cfValues(field)) {
+      let count = 0, sum = 0;
+      for (const r of rows) {
+        const rv = (r.custom || {})[field.id];
+        const hit = field.type === 'checkbox' ? (!!rv === v) : (String(rv ?? '') === String(v));
+        if (hit) { count++; sum += amountOf(r); }
+      }
+      cf[`cf_${fslug}_${s}_count`] = count;
+      cf[`cf_${fslug}_${s}_sum`] = round(sum);
+    }
+  }
+
+  return {
+    ...cf,
+    net_worth: round(nw.net),
+    assets: round(nw.assets),
+    liabilities: round(nw.liabilities),
+    debt_total: round(nw.liabilities),
+    liquid_savings: round(liquid_savings),
+    monthly_income: round(monthly_income),
+    monthly_expenses: round(monthly_expenses),
+    monthly_surplus: round(monthly_surplus),
+    annual_income: round(annual_income),
+    annual_expenses: round(annual_expenses),
+    savings_rate: round(monthly_income > 0 ? monthly_surplus / monthly_income : 0),
+    runway_months: round(monthly_expenses > 0 ? liquid_savings / monthly_expenses : 0),
+    debt_to_income: round(annual_income > 0 ? nw.liabilities / annual_income : 0),
+    accounts_count: accounts.length,
+    transactions_count: transactions.length,
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Seed & reset
 // ────────────────────────────────────────────────────────────────────────────
@@ -942,6 +1208,26 @@ function seedSample(sampleFile) {
         const d = Date.parse(t.date);
         if (!Number.isNaN(d)) t.date = new Date(d + shift).toISOString().slice(0, 10);
       }
+    }
+    // Synthesize a daily net-worth history over the last 30 days (ending at the
+    // current value) so the trend chart is populated. The overview endpoint surfaces
+    // only the trailing 30 days, so keep the cadence daily with a gentle, realistic
+    // upward drift; assets rise ~6%, debt eases down to current. Demo seed always
+    // regenerates so the series is current and its last point matches the headline.
+    {
+      const nw = computeNetWorth(sample.accounts || []);
+      const days = 30;
+      const now = Date.now();
+      const snaps = [];
+      for (let i = days; i >= 0; i--) {
+        const t = (days - i) / days;                       // 0 → 1 over the window
+        const d = new Date(now - i * 86400000);
+        const wobble = i === 0 ? 0 : Math.sin(i * 1.3) * 0.012;   // ±1.2% deterministic noise
+        const assets = Math.round(nw.assets * (0.94 + 0.06 * t + wobble) * 100) / 100;
+        const liabilities = Math.round(nw.liabilities * (1.04 - 0.04 * t) * 100) / 100;
+        snaps.push({ date: d.toISOString().slice(0, 10), assets, liabilities, net: Math.round((assets - liabilities) * 100) / 100 });
+      }
+      sample.networth_snapshots = snaps;
     }
     writeData(sample);
     return true;
@@ -984,6 +1270,16 @@ module.exports = {
   deleteBudget,
 
   getNetWorthSnapshots,
+  getMetrics,
+  updateTransactionsBulk,
+  deleteTransactionsBulk,
+  getHoldings,
+  createHolding,
+  updateHolding,
+  deleteHolding,
+  computeInvestmentMetrics,
+  importFile,
+  getCurrencyConfig,
   importTransactions,
 
   detectRecurring,
