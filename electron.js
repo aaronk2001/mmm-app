@@ -52,8 +52,14 @@ function killPort(port) {
 
 function startServer() {
   const serverPath = path.join(__dirname, 'server', 'index.js');
+  // Packaged builds keep user data in %APPDATA%\mmm so rebuilding/replacing the
+  // portable exe never touches it. Dev keeps repo-local data (server fallback).
+  const env = { ...process.env, PORT: SERVER_PORT };
+  if (app.isPackaged && !env.MMM_DATA_DIR) {
+    env.MMM_DATA_DIR = path.join(app.getPath('appData'), 'mmm');
+  }
   serverProcess = fork(serverPath, [], {
-    env: { ...process.env, PORT: SERVER_PORT },
+    env,
     silent: false,
   });
   serverProcess.on('error', (err) => console.error('Server process error:', err));
@@ -77,14 +83,14 @@ function createWindow() {
     },
   });
 
-  // Content Security Policy — scoped to MMM's own port plus the AI coach's
-  // upstreams (local Ollama + Anthropic). Nothing else is reachable.
+  // Content Security Policy — scoped to MMM's own local server. Nothing else
+  // is reachable; the app is fully offline.
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' http://127.0.0.1:5006 http://localhost:5006 http://localhost:11434 https://api.anthropic.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none';"
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' http://127.0.0.1:5006 http://localhost:5006; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none';"
         ],
       },
     });

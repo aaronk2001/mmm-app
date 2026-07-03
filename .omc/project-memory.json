@@ -39,8 +39,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "npm run build",
-    "testCommand": null,
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build:portable 2>&1 | tail -8 && ls build/MMM-portable/resources/app/server/store/money/ && cat build/MMM-portable/VERSION.txt",
+    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm test 2>&1 | tail -6",
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -132,21 +132,45 @@
   "hotPaths": [
     {
       "path": "server\\money\\store.js",
-      "accessCount": 32,
-      "lastAccessed": 1783099559837,
+      "accessCount": 37,
+      "lastAccessed": 1783116444465,
       "type": "directory"
     },
     {
       "path": "src\\components\\money\\sections\\Transactions.jsx",
-      "accessCount": 25,
-      "lastAccessed": 1783098891114,
+      "accessCount": 30,
+      "lastAccessed": 1783116327074,
       "type": "file"
     },
     {
       "path": "server\\money\\routes.js",
-      "accessCount": 25,
-      "lastAccessed": 1783099568110,
+      "accessCount": 29,
+      "lastAccessed": 1783116077443,
       "type": "directory"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Settings.jsx",
+      "accessCount": 20,
+      "lastAccessed": 1783116409802,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\MoneyHub.jsx",
+      "accessCount": 19,
+      "lastAccessed": 1783116269280,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\sections\\AccountsNetWorth.jsx",
+      "accessCount": 15,
+      "lastAccessed": 1783116352116,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\widgets\\index.jsx",
+      "accessCount": 14,
+      "lastAccessed": 1783115729210,
+      "type": "file"
     },
     {
       "path": "src\\components\\money\\sections\\Goals.jsx",
@@ -155,33 +179,33 @@
       "type": "file"
     },
     {
-      "path": "src\\components\\money\\sections\\AccountsNetWorth.jsx",
-      "accessCount": 12,
-      "lastAccessed": 1782872411083,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Settings.jsx",
+      "path": "server\\index.js",
       "accessCount": 11,
-      "lastAccessed": 1783098738786,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\MoneyHub.jsx",
-      "accessCount": 10,
-      "lastAccessed": 1783099561145,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\widgets\\index.jsx",
-      "accessCount": 9,
-      "lastAccessed": 1783098729836,
+      "lastAccessed": 1783116058539,
       "type": "file"
     },
     {
       "path": "src\\components\\money\\sections\\Overview.jsx",
+      "accessCount": 10,
+      "lastAccessed": 1783115746557,
+      "type": "file"
+    },
+    {
+      "path": "server\\db\\repo.js",
+      "accessCount": 9,
+      "lastAccessed": 1783115805968,
+      "type": "directory"
+    },
+    {
+      "path": "",
       "accessCount": 8,
-      "lastAccessed": 1783098691756,
+      "lastAccessed": 1783115812847,
+      "type": "directory"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 8,
+      "lastAccessed": 1783116619449,
       "type": "file"
     },
     {
@@ -191,22 +215,10 @@
       "type": "file"
     },
     {
-      "path": "server\\db\\repo.js",
+      "path": "server\\db\\schema.sql",
       "accessCount": 7,
-      "lastAccessed": 1783099560418,
-      "type": "directory"
-    },
-    {
-      "path": "server\\index.js",
-      "accessCount": 6,
-      "lastAccessed": 1783099554647,
+      "lastAccessed": 1783115809154,
       "type": "file"
-    },
-    {
-      "path": "",
-      "accessCount": 5,
-      "lastAccessed": 1783099548242,
-      "type": "directory"
     },
     {
       "path": "src\\lib\\query.js",
@@ -215,9 +227,15 @@
       "type": "file"
     },
     {
-      "path": "server\\db\\schema.sql",
+      "path": "server\\db\\connection.js",
       "accessCount": 5,
-      "lastAccessed": 1783099569033,
+      "lastAccessed": 1783115971633,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Investments.jsx",
+      "accessCount": 4,
+      "lastAccessed": 1783116330350,
       "type": "file"
     },
     {
@@ -293,18 +311,6 @@
       "type": "file"
     },
     {
-      "path": "package.json",
-      "accessCount": 2,
-      "lastAccessed": 1783099545866,
-      "type": "file"
-    },
-    {
-      "path": "server\\db\\connection.js",
-      "accessCount": 2,
-      "lastAccessed": 1783099568820,
-      "type": "file"
-    },
-    {
       "path": "vite.config.mjs",
       "accessCount": 2,
       "lastAccessed": 1783099580855,
@@ -326,12 +332,6 @@
       "path": "server\\settings\\routes.js",
       "accessCount": 1,
       "lastAccessed": 1782831199109,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Investments.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1782833309617,
       "type": "file"
     },
     {

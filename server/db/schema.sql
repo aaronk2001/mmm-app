@@ -71,14 +71,6 @@ CREATE TABLE IF NOT EXISTS rules (
   tag         TEXT
 );
 
-CREATE TABLE IF NOT EXISTS deductions (
-  id       TEXT PRIMARY KEY,
-  category TEXT,
-  amount   REAL,
-  note     TEXT DEFAULT '',
-  date     TEXT
-);
-
 CREATE TABLE IF NOT EXISTS holdings (
   id            TEXT PRIMARY KEY,
   account_id    TEXT,

@@ -8,6 +8,8 @@ const path        = require('path');
 
 const moneyRoutes = require('./money/routes');
 const settingsRoutes = require('./settings/routes');
+const backupRoutes = require('./backup/routes');
+const { startBackupScheduler } = require('./backup/scheduler');
 
 const app  = express();
 const PORT = process.env.PORT || 5006;
@@ -28,25 +30,17 @@ app.use(compression());
 app.use(express.json({ limit: '2mb' })); // larger for settings + CSV/backup import
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
-// General API limiter — 120 req/min. Tight limiter on the AI coach (each call
-// can hit the paid Anthropic API), 10/min is generous for a single-user app.
+// General API limiter — 120 req/min is generous for a single-user app.
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many requests, please slow down.' },
 });
-const coachLimiter = rateLimit({
-  windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false,
-  message: { error: 'AI coach rate limit reached. Wait a moment before asking again.' },
-});
 app.use('/api', apiLimiter);
-app.use('/api/money/coach', coachLimiter);
 
 // ─── Request timeout ─────────────────────────────────────────────────────────
-// Hard-kill any request not finished within 30s. The AI coach is exempt — Claude
-// and the local Ollama fallback can legitimately run longer.
+// Hard-kill any request not finished within 30s.
 const REQUEST_TIMEOUT_MS = 30_000;
 app.use((req, res, next) => {
-  if (req.path === '/api/money/coach') return next();
   const timer = setTimeout(() => {
     if (!res.headersSent) res.status(503).json({ error: 'Request timed out.' });
   }, REQUEST_TIMEOUT_MS);
@@ -60,6 +54,7 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, '..', 'src', 'dist')));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
+app.use('/api/money/backups', backupRoutes);
 app.use('/api/money', moneyRoutes);
 app.use('/api/settings', settingsRoutes);
 
@@ -85,6 +80,7 @@ process.on('unhandledRejection', (reason) =>
 // ─── Server startup ───────────────────────────────────────────────────────────
 const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`MMM server running on http://127.0.0.1:${PORT}`);
+  startBackupScheduler();
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────

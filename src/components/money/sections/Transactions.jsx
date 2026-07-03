@@ -10,6 +10,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
+import { confirmDialog } from '../../../lib/confirm';
+import { toast } from '../../../lib/toast';
 import Card from '../shared/Card';
 import EmptyState from '../shared/EmptyState';
 import Term from '../shared/Term';
@@ -172,7 +174,7 @@ export default function Transactions() {
 
   // Delete transaction
   async function handleDeleteTransaction(txnId) {
-    if (!confirm('Delete this transaction?')) return;
+    if (!(await confirmDialog({ message: 'Delete this transaction?', confirmLabel: 'Delete' }))) return;
 
     try {
       const res = await fetch(`/api/money/transactions/${txnId}`, {
@@ -181,9 +183,12 @@ export default function Transactions() {
 
       if (res.ok) {
         await loadAllData();
+      } else {
+        toast.error('Delete failed.');
       }
     } catch (err) {
       console.error('Delete failed:', err);
+      toast.error(`Delete failed: ${err.message}`);
     }
   }
 
@@ -254,7 +259,7 @@ export default function Transactions() {
   }
   async function bulkDelete() {
     if (!selectedIds.size) return;
-    if (!confirm(`Delete ${selectedIds.size} transaction(s)?`)) return;
+    if (!(await confirmDialog({ message: `Delete ${selectedIds.size} transaction(s)?`, confirmLabel: 'Delete' }))) return;
     await fetch('/api/money/transactions/bulk-delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
