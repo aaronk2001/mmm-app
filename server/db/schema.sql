@@ -1,6 +1,8 @@
--- MMM 2.0 data layer (Phase 0). Normalized tables mirror the legacy data.json
--- blob shape 1:1 so the existing store.js functions keep working unchanged.
--- Reserved words (group, limit) are quoted. Pragmas are set in connection.js.
+-- MMM data layer v2. Money is stored as INTEGER cents (exact math, no float
+-- drift); the repo layer converts to dollars at its boundary so JS/API/UI keep
+-- dollar amounts. Account balances are DERIVED (opening_balance_cents + sum of
+-- transactions), never mutated. Reserved words (group, limit) are quoted.
+-- Pragmas are set in connection.js.
 
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
@@ -8,37 +10,37 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 
 CREATE TABLE IF NOT EXISTS accounts (
-  id          TEXT PRIMARY KEY,
-  name        TEXT,
-  type        TEXT,
-  balance     REAL    DEFAULT 0,
-  institution TEXT    DEFAULT '',
-  currency    TEXT    DEFAULT 'USD',
-  status      TEXT    DEFAULT 'active',
-  created_at  TEXT,
-  custom      TEXT    DEFAULT '{}'
+  id                    TEXT PRIMARY KEY,
+  name                  TEXT    NOT NULL,
+  type                  TEXT    NOT NULL,
+  opening_balance_cents INTEGER NOT NULL DEFAULT 0,
+  institution           TEXT    DEFAULT '',
+  currency              TEXT    DEFAULT 'USD',
+  status                TEXT    DEFAULT 'active',
+  created_at            TEXT,
+  custom                TEXT    DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS categories (
   id      TEXT PRIMARY KEY,
-  name    TEXT,
+  name    TEXT NOT NULL,
   "group" TEXT,
   color   TEXT,
   icon    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
-  id          TEXT PRIMARY KEY,
-  account_id  TEXT,
-  date        TEXT,
-  amount      REAL,
-  payee       TEXT    DEFAULT '',
-  category_id TEXT,
-  tags        TEXT    DEFAULT '[]',  -- JSON array
-  note        TEXT    DEFAULT '',
-  source      TEXT    DEFAULT 'manual',
-  cleared     INTEGER DEFAULT 0,
-  custom      TEXT    DEFAULT '{}'
+  id           TEXT PRIMARY KEY,
+  account_id   TEXT REFERENCES accounts(id) ON DELETE CASCADE,
+  date         TEXT    NOT NULL,           -- YYYY-MM-DD
+  amount_cents INTEGER NOT NULL,
+  payee        TEXT    DEFAULT '',
+  category_id  TEXT,
+  tags         TEXT    DEFAULT '[]',       -- JSON array
+  note         TEXT    DEFAULT '',
+  source       TEXT    DEFAULT 'manual',
+  cleared      INTEGER DEFAULT 0,
+  custom       TEXT    DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_txn_account  ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_txn_category ON transactions(category_id);
@@ -46,46 +48,57 @@ CREATE INDEX IF NOT EXISTS idx_txn_date     ON transactions(date);
 
 CREATE TABLE IF NOT EXISTS budgets (
   id          TEXT PRIMARY KEY,
-  category_id TEXT,
-  period      TEXT,
-  "limit"     REAL,
+  category_id TEXT NOT NULL,
+  period      TEXT NOT NULL,
+  limit_cents INTEGER NOT NULL DEFAULT 0,
   rollover    INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS goals (
-  id                   TEXT PRIMARY KEY,
-  name                 TEXT,
-  target               REAL,
-  current              REAL,
-  linked_account_id    TEXT,
-  target_date          TEXT,
-  template             TEXT,
-  monthly_contribution REAL,
-  custom               TEXT DEFAULT '{}'
+  id                         TEXT PRIMARY KEY,
+  name                       TEXT NOT NULL,
+  target_cents               INTEGER NOT NULL DEFAULT 0,
+  current_cents              INTEGER NOT NULL DEFAULT 0,
+  linked_account_id          TEXT,
+  target_date                TEXT,
+  template                   TEXT,
+  monthly_contribution_cents INTEGER,
+  custom                     TEXT DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS rules (
   id          TEXT PRIMARY KEY,
-  match       TEXT,
-  category_id TEXT,
+  match       TEXT NOT NULL,
+  category_id TEXT NOT NULL,
   tag         TEXT
 );
 
 CREATE TABLE IF NOT EXISTS holdings (
-  id            TEXT PRIMARY KEY,
-  account_id    TEXT,
-  symbol        TEXT,
-  shares        REAL    DEFAULT 0,
-  cost_basis    REAL    DEFAULT 0,
-  current_price REAL    DEFAULT 0,
-  price_source  TEXT    DEFAULT 'manual',
-  updated_at    TEXT
+  id                  TEXT PRIMARY KEY,
+  account_id          TEXT REFERENCES accounts(id) ON DELETE CASCADE,
+  symbol              TEXT NOT NULL,
+  shares              REAL    DEFAULT 0,
+  cost_basis_cents    INTEGER DEFAULT 0,
+  current_price_cents INTEGER DEFAULT 0,
+  price_source        TEXT    DEFAULT 'manual',
+  updated_at          TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
 
 CREATE TABLE IF NOT EXISTS networth_snapshots (
-  date        TEXT PRIMARY KEY,
-  assets      REAL,
-  liabilities REAL,
-  net         REAL
+  date              TEXT PRIMARY KEY,
+  assets_cents      INTEGER NOT NULL DEFAULT 0,
+  liabilities_cents INTEGER NOT NULL DEFAULT 0,
+  net_cents         INTEGER NOT NULL DEFAULT 0
+);
+
+-- Declared recurring income/bills (user-managed; detection merges on top).
+CREATE TABLE IF NOT EXISTS recurring (
+  id           TEXT PRIMARY KEY,
+  payee        TEXT    NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  cadence      TEXT    NOT NULL,            -- monthly | biweekly | weekly
+  kind         TEXT    NOT NULL,            -- income | bill
+  next_date    TEXT,
+  note         TEXT    DEFAULT ''
 );

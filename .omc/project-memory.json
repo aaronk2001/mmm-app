@@ -39,8 +39,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build:portable 2>&1 | tail -8 && ls build/MMM-portable/resources/app/server/store/money/ && cat build/MMM-portable/VERSION.txt",
-    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm test 2>&1 | tail -6",
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build:portable 2>&1 | tail -6",
+    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm test 2>&1 | tail -8",
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -131,9 +131,15 @@
   },
   "hotPaths": [
     {
+      "path": "server\\money\\routes.js",
+      "accessCount": 58,
+      "lastAccessed": 1783199468951,
+      "type": "directory"
+    },
+    {
       "path": "server\\money\\store.js",
-      "accessCount": 37,
-      "lastAccessed": 1783116444465,
+      "accessCount": 56,
+      "lastAccessed": 1783199473281,
       "type": "directory"
     },
     {
@@ -143,9 +149,9 @@
       "type": "file"
     },
     {
-      "path": "server\\money\\routes.js",
-      "accessCount": 29,
-      "lastAccessed": 1783116077443,
+      "path": "server\\db\\repo.js",
+      "accessCount": 30,
+      "lastAccessed": 1783199422686,
       "type": "directory"
     },
     {
@@ -180,8 +186,20 @@
     },
     {
       "path": "server\\index.js",
+      "accessCount": 13,
+      "lastAccessed": 1783198686964,
+      "type": "file"
+    },
+    {
+      "path": "server\\db\\schema.sql",
+      "accessCount": 13,
+      "lastAccessed": 1783199297618,
+      "type": "file"
+    },
+    {
+      "path": "server\\db\\connection.js",
       "accessCount": 11,
-      "lastAccessed": 1783116058539,
+      "lastAccessed": 1783199413327,
       "type": "file"
     },
     {
@@ -191,10 +209,10 @@
       "type": "file"
     },
     {
-      "path": "server\\db\\repo.js",
+      "path": "package.json",
       "accessCount": 9,
-      "lastAccessed": 1783115805968,
-      "type": "directory"
+      "lastAccessed": 1783199198489,
+      "type": "file"
     },
     {
       "path": "",
@@ -203,33 +221,15 @@
       "type": "directory"
     },
     {
-      "path": "package.json",
-      "accessCount": 8,
-      "lastAccessed": 1783116619449,
-      "type": "file"
-    },
-    {
       "path": "src\\components\\money\\widgets\\WidgetSettingsPopover.jsx",
       "accessCount": 7,
       "lastAccessed": 1783098730088,
       "type": "file"
     },
     {
-      "path": "server\\db\\schema.sql",
-      "accessCount": 7,
-      "lastAccessed": 1783115809154,
-      "type": "file"
-    },
-    {
       "path": "src\\lib\\query.js",
       "accessCount": 5,
       "lastAccessed": 1783099567008,
-      "type": "file"
-    },
-    {
-      "path": "server\\db\\connection.js",
-      "accessCount": 5,
-      "lastAccessed": 1783115971633,
       "type": "file"
     },
     {

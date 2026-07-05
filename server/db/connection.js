@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const repo = require('./repo');
 
@@ -14,7 +15,7 @@ const DATA_DIR = process.env.MMM_DATA_DIR || ASSET_DIR;
 const DB_FILE = process.env.MMM_DB_FILE || path.join(DATA_DIR, 'mmm.db');
 const JSON_FILE = path.join(ASSET_DIR, 'data.json');
 const SCHEMA = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-const SCHEMA_VERSION = '1';
+const SCHEMA_VERSION = '2';
 
 let _db = null;
 
@@ -45,22 +46,90 @@ function db() {
   migrateLegacyDb();
   _db = new Database(DB_FILE);
   _db.pragma('journal_mode = WAL');
+  migrateSchema(_db); // may drop/recreate tables — runs before foreign_keys ON
   _db.pragma('foreign_keys = ON');
   _db.exec(SCHEMA);
-  ensureCustomColumns(_db);
   initialize(_db);
+  scheduleMaintenance(_db);
   return _db;
 }
 
-// Idempotent migration: CREATE TABLE IF NOT EXISTS never alters an existing table,
-// so add the `custom` JSON column to older DBs that predate custom fields.
-function ensureCustomColumns(d) {
-  for (const table of ['transactions', 'goals', 'accounts']) {
-    const cols = d.prepare(`PRAGMA table_info(${table})`).all();
-    if (!cols.some((c) => c.name === 'custom')) {
-      d.exec(`ALTER TABLE ${table} ADD COLUMN custom TEXT DEFAULT '{}'`);
-    }
+const toCents = (v) => Math.round((parseFloat(v) || 0) * 100);
+
+// v1 -> v2: money columns move from REAL dollars to INTEGER cents, account
+// balances become derived (opening_balance_cents + SUM of transactions), and
+// declared recurring moves from meta extras into its own table. Reads the old
+// rows, drops the data tables, recreates them from schema.sql, reinserts.
+function migrateSchema(d) {
+  // Brand-new DB: no tables at all yet — nothing to migrate; db() execs the
+  // schema right after this and initialize() stamps v2.
+  const hasMeta = d.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='meta'").get();
+  if (!hasMeta) return;
+  const ver = d.prepare("SELECT value FROM meta WHERE key='schema_version'").get()?.value;
+  if (ver !== '1') return; // already v2
+
+  const old = {};
+  for (const t of ['accounts', 'categories', 'transactions', 'budgets', 'goals', 'rules', 'holdings', 'networth_snapshots']) {
+    try { old[t] = d.prepare(`SELECT * FROM ${t}`).all(); } catch { old[t] = []; }
   }
+  let extras = {};
+  try {
+    const r = d.prepare("SELECT value FROM meta WHERE key='extras'").get();
+    extras = r && r.value ? JSON.parse(r.value) : {};
+  } catch { /* ignore */ }
+  const declared = Array.isArray(extras.recurring) ? extras.recurring : [];
+
+  const run = d.transaction(() => {
+    for (const t of ['transactions', 'holdings', 'accounts', 'categories', 'budgets', 'goals', 'rules', 'networth_snapshots', 'deductions', 'recurring']) {
+      d.exec(`DROP TABLE IF EXISTS ${t}`);
+    }
+    d.exec(SCHEMA);
+
+    // Per-account transaction sums, in cents, matching how balances will derive.
+    const txnSum = {};
+    for (const t of old.transactions) {
+      txnSum[t.account_id] = (txnSum[t.account_id] || 0) + toCents(t.amount);
+    }
+
+    const ins = (sql) => d.prepare(sql);
+    const accIns = ins('INSERT INTO accounts (id, name, type, opening_balance_cents, institution, currency, status, created_at, custom) VALUES (?,?,?,?,?,?,?,?,?)');
+    for (const a of old.accounts) {
+      accIns.run(a.id, a.name, a.type, toCents(a.balance) - (txnSum[a.id] || 0), a.institution || '', a.currency || 'USD', a.status || 'active', a.created_at || null, a.custom || '{}');
+    }
+    const catIns = ins('INSERT INTO categories (id, name, "group", color, icon) VALUES (?,?,?,?,?)');
+    for (const c of old.categories) catIns.run(c.id, c.name, c.group, c.color, c.icon);
+
+    const txnIns = ins('INSERT INTO transactions (id, account_id, date, amount_cents, payee, category_id, tags, note, source, cleared, custom) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+    for (const t of old.transactions) {
+      txnIns.run(t.id, t.account_id, String(t.date).slice(0, 10), toCents(t.amount), t.payee || '', t.category_id || null, t.tags || '[]', t.note || '', t.source || 'manual', t.cleared ? 1 : 0, t.custom || '{}');
+    }
+    const budIns = ins('INSERT INTO budgets (id, category_id, period, limit_cents, rollover) VALUES (?,?,?,?,?)');
+    for (const b of old.budgets) budIns.run(b.id, b.category_id, b.period, toCents(b.limit), b.rollover ? 1 : 0);
+
+    const goalIns = ins('INSERT INTO goals (id, name, target_cents, current_cents, linked_account_id, target_date, template, monthly_contribution_cents, custom) VALUES (?,?,?,?,?,?,?,?,?)');
+    for (const g of old.goals) {
+      goalIns.run(g.id, g.name, toCents(g.target), toCents(g.current), g.linked_account_id || null, g.target_date || null, g.template || null, g.monthly_contribution == null ? null : toCents(g.monthly_contribution), g.custom || '{}');
+    }
+    const ruleIns = ins('INSERT INTO rules (id, match, category_id, tag) VALUES (?,?,?,?)');
+    for (const r of old.rules) ruleIns.run(r.id, r.match, r.category_id, r.tag || null);
+
+    const holdIns = ins('INSERT INTO holdings (id, account_id, symbol, shares, cost_basis_cents, current_price_cents, price_source, updated_at) VALUES (?,?,?,?,?,?,?,?)');
+    for (const h of old.holdings) holdIns.run(h.id, h.account_id || null, h.symbol, h.shares || 0, toCents(h.cost_basis), toCents(h.current_price), h.price_source || 'manual', h.updated_at || null);
+
+    const snapIns = ins('INSERT OR REPLACE INTO networth_snapshots (date, assets_cents, liabilities_cents, net_cents) VALUES (?,?,?,?)');
+    for (const s of old.networth_snapshots) snapIns.run(s.date, toCents(s.assets), toCents(s.liabilities), toCents(s.net));
+
+    const recIns = ins('INSERT INTO recurring (id, payee, amount_cents, cadence, kind, next_date, note) VALUES (?,?,?,?,?,?,?)');
+    for (const r of declared) {
+      recIns.run(r.id || crypto.randomUUID(), r.payee || '', toCents(r.amount), r.cadence || 'monthly', r.kind || 'bill', r.next_date || null, r.note || '');
+    }
+
+    delete extras.recurring;
+    d.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('extras', ?)").run(JSON.stringify(extras));
+    d.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '2')").run();
+  });
+  run();
+  console.log(`[MMM db] migrated schema v1 -> v2 (${old.transactions.length} txns, ${old.accounts.length} accounts, cents + derived balances)`);
 }
 
 // First run only: import the legacy data.json (and back it up), else seed empty.
@@ -83,4 +152,22 @@ function initialize(d) {
   d.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)").run(SCHEMA_VERSION);
 }
 
-module.exports = { db, DATA_DIR, DB_FILE, ASSET_DIR };
+// Merge the WAL back into the main file so it never grows unbounded on a
+// long-running app. Also exposed for the shutdown path in server/index.js.
+function checkpoint(mode = 'RESTART') {
+  try {
+    if (_db) _db.pragma(`wal_checkpoint(${mode})`);
+  } catch (e) {
+    console.warn('[MMM db] checkpoint failed:', e.message);
+  }
+}
+
+function scheduleMaintenance(d) {
+  const timer = setInterval(() => {
+    checkpoint('RESTART');
+    try { d.pragma('optimize'); } catch { /* best effort */ }
+  }, 6 * 60 * 60 * 1000);
+  timer.unref();
+}
+
+module.exports = { db, checkpoint, DATA_DIR, DB_FILE, ASSET_DIR };
