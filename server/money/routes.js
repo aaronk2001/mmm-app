@@ -1,7 +1,15 @@
 const express = require('express');
 const store = require('./store');
+const v = require('../middleware/validators');
 
 const router = express.Router();
+
+// 400 with the validator's field errors; returns true when the request is bad.
+function invalid(res, check) {
+  if (check.valid) return false;
+  res.status(400).json({ error: check.errors.join('; ') });
+  return true;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // GET /api/money/overview
@@ -13,19 +21,15 @@ router.get('/overview', (req, res) => {
     const cc = store.getCurrencyConfig();
     const nw = store.computeNetWorth(data.accounts, cc.baseCurrency, cc.fxRates);
 
-    // Top categories this month
+    // Top categories this month. Month membership is a string-prefix check on
+    // the local calendar month (Date-object comparison drops 1st-of-month
+    // transactions in UTC-negative timezones).
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     const categorySpend = {};
     data.transactions
-      .filter(t => {
-        const tDate = new Date(t.date);
-        return t.amount < 0 &&
-               tDate >= monthStart &&
-               tDate <= monthEnd;
-      })
+      .filter(t => t.amount < 0 && String(t.date).slice(0, 7) === ym)
       .forEach(t => {
         if (!categorySpend[t.category_id]) categorySpend[t.category_id] = 0;
         categorySpend[t.category_id] += Math.abs(t.amount);
@@ -45,11 +49,10 @@ router.get('/overview', (req, res) => {
     // Budget status (only monthly, active)
     const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
 
-    // Recent snapshots (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // Recent snapshots (last 30 days) — string-compared dates.
+    const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     const recentSnapshots = data.networth_snapshots
-      .filter(s => new Date(s.date) >= thirtyDaysAgo)
+      .filter(s => String(s.date) >= cutoff)
       .map(s => ({
         date: s.date,
         net: s.net,
@@ -85,6 +88,7 @@ router.get('/accounts', (req, res) => {
 
 router.post('/accounts', (req, res) => {
   try {
+    if (invalid(res, v.validateAccount(req.body))) return;
     const { name, type, balance, institution, currency, status, custom } = req.body;
     const account = store.createAccount(name, type, balance, institution, currency, status, custom);
     res.status(201).json({ account });
@@ -95,6 +99,7 @@ router.post('/accounts', (req, res) => {
 
 router.put('/accounts/:id', (req, res) => {
   try {
+    if (invalid(res, v.validateAccount(req.body, { partial: true }))) return;
     const account = store.updateAccount(req.params.id, req.body);
     res.json({ account });
   } catch (err) {
@@ -132,6 +137,7 @@ router.get('/transactions', (req, res) => {
 
 router.post('/transactions', (req, res) => {
   try {
+    if (invalid(res, v.validateTransaction(req.body))) return;
     const { account_id, date, amount, payee, category_id, tags, note, source, cleared, custom } = req.body;
     const transaction = store.createTransaction(
       account_id,
@@ -155,6 +161,8 @@ router.post('/transactions', (req, res) => {
 router.post('/transactions/bulk-update', (req, res) => {
   try {
     const { ids, updates } = req.body;
+    if (invalid(res, v.validateBulkIds(req.body))) return;
+    if (invalid(res, v.validateTransaction(updates || {}, { partial: true }))) return;
     const updated = store.updateTransactionsBulk(ids, updates);
     res.json({ updated });
   } catch (err) {
@@ -165,6 +173,7 @@ router.post('/transactions/bulk-update', (req, res) => {
 router.post('/transactions/bulk-delete', (req, res) => {
   try {
     const { ids } = req.body;
+    if (invalid(res, v.validateBulkIds(req.body))) return;
     const deleted = store.deleteTransactionsBulk(ids);
     res.json({ deleted });
   } catch (err) {
@@ -174,6 +183,7 @@ router.post('/transactions/bulk-delete', (req, res) => {
 
 router.put('/transactions/:id', (req, res) => {
   try {
+    if (invalid(res, v.validateTransaction(req.body, { partial: true }))) return;
     const transaction = store.updateTransaction(req.params.id, req.body);
     res.json({ transaction });
   } catch (err) {
@@ -196,6 +206,7 @@ router.delete('/transactions/:id', (req, res) => {
 
 router.post('/transactions/import', (req, res) => {
   try {
+    if (invalid(res, v.validateImport(req.body))) return;
     const { account_id, rows, csv, mapping } = req.body;
     const result = store.importTransactions(account_id, rows, csv, mapping);
     res.json(result);
@@ -207,6 +218,7 @@ router.post('/transactions/import', (req, res) => {
 // OFX / QIF file import (file read as text client-side, posted as JSON — no upload middleware).
 router.post('/transactions/import-file', (req, res) => {
   try {
+    if (invalid(res, v.validateImport(req.body))) return;
     const { account_id, format, content } = req.body;
     res.json(store.importFile(account_id, format, content));
   } catch (err) {
@@ -228,6 +240,7 @@ router.get('/categories', (req, res) => {
 
 router.post('/categories', (req, res) => {
   try {
+    if (invalid(res, v.validateCategory(req.body))) return;
     const { name, group, color, icon } = req.body;
     const category = store.createCategory(name, group, color, icon);
     res.status(201).json({ category });
@@ -250,6 +263,7 @@ router.get('/budgets', (req, res) => {
 
 router.post('/budgets', (req, res) => {
   try {
+    if (invalid(res, v.validateBudget(req.body))) return;
     const { category_id, period, limit, rollover } = req.body;
     const budget = store.createBudget(category_id, period, limit, rollover);
     res.status(201).json({ budget });
@@ -260,6 +274,7 @@ router.post('/budgets', (req, res) => {
 
 router.put('/budgets/:id', (req, res) => {
   try {
+    if (invalid(res, v.validateBudget(req.body, { partial: true }))) return;
     const budget = store.updateBudget(req.params.id, req.body);
     res.json({ budget });
   } catch (err) {
@@ -321,6 +336,7 @@ router.get('/holdings', (req, res) => {
 
 router.post('/holdings', (req, res) => {
   try {
+    if (invalid(res, v.validateHolding(req.body))) return;
     const { account_id, symbol, shares, cost_basis, current_price } = req.body;
     const holding = store.createHolding(account_id, symbol, shares, cost_basis, current_price);
     res.status(201).json({ holding });
@@ -331,6 +347,7 @@ router.post('/holdings', (req, res) => {
 
 router.put('/holdings/:id', (req, res) => {
   try {
+    if (invalid(res, v.validateHolding(req.body, { partial: true }))) return;
     res.json({ holding: store.updateHolding(req.params.id, req.body) });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -361,11 +378,39 @@ router.get('/investments/summary', (req, res) => {
 
 router.get('/recurring', (req, res) => {
   try {
-    const data = store.readData();
-    const recurring = store.detectRecurring(data.transactions, data.recurring);
-    res.json({ recurring });
+    const declared = store.getDeclaredRecurring();
+    const recurring = store.detectRecurring(store.getTransactions(), declared);
+    res.json({ recurring, declared });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/recurring', (req, res) => {
+  try {
+    if (invalid(res, v.validateRecurring(req.body))) return;
+    const { payee, amount, cadence, kind, next_date, note } = req.body;
+    res.status(201).json({ recurring: store.createRecurring({ payee, amount, cadence, kind, next_date, note }) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.put('/recurring/:id', (req, res) => {
+  try {
+    if (invalid(res, v.validateRecurring(req.body, { partial: true }))) return;
+    res.json({ recurring: store.updateRecurring(req.params.id, req.body) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete('/recurring/:id', (req, res) => {
+  try {
+    store.deleteRecurring(req.params.id);
+    res.json({ deleted: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -376,9 +421,8 @@ router.get('/recurring', (req, res) => {
 router.get('/cashflow', (req, res) => {
   try {
     const days = parseInt(req.query.days, 10) || 90;
-    const data = store.readData();
-    const recurring = store.detectRecurring(data.transactions, data.recurring);
-    const projection = store.projectCashflow(data.accounts, recurring, days);
+    const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
+    const projection = store.projectCashflow(store.getAccounts(), recurring, days);
     res.json(projection);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -399,6 +443,7 @@ router.get('/goals', (req, res) => {
 
 router.post('/goals', (req, res) => {
   try {
+    if (invalid(res, v.validateGoal(req.body))) return;
     const { name, target, current, linked_account_id, target_date, template, monthly_contribution, custom } = req.body;
     const goal = store.createGoal(name, target, current, linked_account_id, target_date, template, monthly_contribution, custom);
     res.status(201).json({ goal });
@@ -409,6 +454,7 @@ router.post('/goals', (req, res) => {
 
 router.put('/goals/:id', (req, res) => {
   try {
+    if (invalid(res, v.validateGoal(req.body, { partial: true }))) return;
     const goal = store.updateGoal(req.params.id, req.body);
     res.json({ goal });
   } catch (err) {
@@ -579,6 +625,7 @@ router.get('/rules', (req, res) => {
 
 router.post('/rules', (req, res) => {
   try {
+    if (invalid(res, v.validateRule(req.body))) return;
     const { match, category_id, tag } = req.body;
     const rule = store.createRule(match, category_id, tag);
     res.status(201).json({ rule });
@@ -589,6 +636,7 @@ router.post('/rules', (req, res) => {
 
 router.put('/rules/:id', (req, res) => {
   try {
+    if (invalid(res, v.validateRule(req.body, { partial: true }))) return;
     const rule = store.updateRule(req.params.id, req.body);
     res.json({ rule });
   } catch (err) {
@@ -620,13 +668,16 @@ router.post('/rules/apply', (req, res) => {
 // Glossary
 // ────────────────────────────────────────────────────────────────────────────
 
+let _glossary = null; // static bundled JSON — read once, serve from memory
 router.get('/glossary', (req, res) => {
   try {
-    const path = require('path');
-    const fs = require('fs');
-    const glossaryPath = path.join(__dirname, '..', 'store', 'money', 'glossary.json');
-    const glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf8'));
-    res.json(glossary);
+    if (!_glossary) {
+      const path = require('path');
+      const fs = require('fs');
+      const glossaryPath = path.join(__dirname, '..', 'store', 'money', 'glossary.json');
+      _glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf8'));
+    }
+    res.json(_glossary);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

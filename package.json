@@ -52,6 +52,7 @@
     "helmet": "^8.0.0",
     "lucide-react": "^1.8.0",
     "motion": "^12.38.0",
+    "papaparse": "^5.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-grid-layout": "^1.5.3",

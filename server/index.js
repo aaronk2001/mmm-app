@@ -10,6 +10,7 @@ const moneyRoutes = require('./money/routes');
 const settingsRoutes = require('./settings/routes');
 const backupRoutes = require('./backup/routes');
 const { startBackupScheduler } = require('./backup/scheduler');
+const { checkpoint } = require('./db/connection');
 
 const app  = express();
 const PORT = process.env.PORT || 5006;
@@ -89,6 +90,7 @@ const server = app.listen(PORT, '127.0.0.1', () => {
 const DRAIN_TIMEOUT_MS = 5_000;
 function shutdown(signal) {
   console.log(`[MMM] ${signal} received — shutting down gracefully`);
+  checkpoint('TRUNCATE'); // merge the WAL into mmm.db before exit
   server.close((err) => {
     if (err) { console.error('[MMM] Error during server close:', err); process.exit(1); }
     console.log('[MMM] All connections closed — exiting');

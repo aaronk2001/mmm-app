@@ -24,7 +24,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NM = path.join(ROOT, 'node_modules');
 const OUT = path.join(ROOT, 'build', 'MMM-portable');
 const APP = path.join(OUT, 'resources', 'app');
-const SERVER_DEPS = ['better-sqlite3', 'compression', 'cors', 'dotenv', 'express', 'express-rate-limit', 'helmet'];
+const SERVER_DEPS = ['better-sqlite3', 'compression', 'cors', 'dotenv', 'express', 'express-rate-limit', 'helmet', 'papaparse'];
 
 const run = (cmd, opts = {}) => execSync(cmd, { cwd: ROOT, stdio: 'inherit', ...opts });
 
@@ -110,29 +110,35 @@ let serverLog = '';
 child.stdout.on('data', (d) => (serverLog += d));
 child.stderr.on('data', (d) => (serverLog += d));
 
-function getHealth() {
+function getJson(p) {
   return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${PORT}/api/health`, (res) => {
-      res.resume();
-      resolve(res.statusCode === 200);
+    const req = http.get(`http://127.0.0.1:${PORT}${p}`, (res) => {
+      let body = '';
+      res.on('data', (d) => (body += d));
+      res.on('end', () => resolve({ code: res.statusCode, body }));
     });
-    req.on('error', () => resolve(false));
-    req.setTimeout(500, () => { req.destroy(); resolve(false); });
+    req.on('error', () => resolve(null));
+    req.setTimeout(1000, () => { req.destroy(); resolve(null); });
   });
 }
 
 let healthy = false;
 for (let i = 0; i < 60; i++) {
   // eslint-disable-next-line no-await-in-loop
-  healthy = await getHealth();
+  const h = await getJson('/api/health');
+  healthy = h?.code === 200;
   if (healthy) break;
   // eslint-disable-next-line no-await-in-loop
   await new Promise((r) => setTimeout(r, 500));
 }
+// /api/health never touches SQLite — a data endpoint must also work so a
+// fresh-install DB bootstrap failure can't hide behind a passing health check.
+const overview = healthy ? await getJson('/api/money/overview') : null;
+const dataOk = overview?.code === 200 && overview.body.includes('netWorth');
 child.kill();
 
-if (!healthy) {
-  console.error('SMOKE FAIL — packaged server never became healthy.\n--- server output ---\n' + serverLog);
+if (!healthy || !dataOk) {
+  console.error(`SMOKE FAIL — health=${healthy} dataEndpoint=${dataOk ? 'ok' : (overview && overview.body.slice(0, 200)) || 'unreachable'}\n--- server output ---\n` + serverLog);
   process.exit(1);
 }
 

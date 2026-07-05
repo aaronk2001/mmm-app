@@ -64,6 +64,17 @@ describe('computeBudgetStatus', () => {
     expect(status).toEqual({ budget_id: 'b1', category_id: 'fod', limit: 500, spent: 250, pct: 50 });
   });
 
+  it('counts transactions dated the 1st of the month (UTC/local regression)', () => {
+    // Phase-1 characterization caught this: Date-object comparison dropped
+    // 1st-of-month transactions in UTC-negative timezones. Phase 2 compares
+    // date strings, so the 1st always belongs to its own month.
+    const d = new Date();
+    const firstOfMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    const budgets = [{ id: 'b1', category_id: 'fod', period: 'monthly', limit: 100 }];
+    const [status] = store.computeBudgetStatus(budgets, [{ category_id: 'fod', amount: -10, date: firstOfMonth }]);
+    expect(status.spent).toBe(10);
+  });
+
   it('skips non-monthly budgets and handles zero limits', () => {
     const budgets = [
       { id: 'b1', category_id: 'fod', period: 'weekly', limit: 100 },
