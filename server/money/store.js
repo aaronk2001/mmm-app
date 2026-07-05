@@ -112,6 +112,10 @@ function deleteTransactionsBulk(ids) {
   return repo.deleteTransactionsBulk(db(), ids);
 }
 
+function getPayeeStats(limit = 100) {
+  return repo.getPayeeStats(db(), limit);
+}
+
 // ── categories ────────────────────────────────────────────────────────────────
 
 function getCategories() {
@@ -473,6 +477,7 @@ module.exports = {
   deleteTransaction,
   updateTransactionsBulk,
   deleteTransactionsBulk,
+  getPayeeStats,
 
   getCategories,
   createCategory,

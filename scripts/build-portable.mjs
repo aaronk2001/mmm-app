@@ -123,7 +123,9 @@ function getJson(p) {
 }
 
 let healthy = false;
-for (let i = 0; i < 60; i++) {
+// Generous window: Defender scans the freshly written exe on first launch,
+// which can hold the cold start well past 30s.
+for (let i = 0; i < 240; i++) {
   // eslint-disable-next-line no-await-in-loop
   const h = await getJson('/api/health');
   healthy = h?.code === 200;

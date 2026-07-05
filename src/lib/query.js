@@ -8,8 +8,16 @@ export const queryClient = new QueryClient({
 
 export async function api(path, opts) {
   const res = await fetch('/api/' + String(path).replace(/^\/+/, ''), opts);
-  if (!res.ok) throw new Error(`${path} → ${res.status}`);
   const text = await res.text();
+  if (!res.ok) {
+    // Surface the server's error field (validators return real messages there).
+    let msg = `${path} → ${res.status}`;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.error) msg = parsed.error;
+    } catch { /* keep the status message */ }
+    throw new Error(msg);
+  }
   return text ? JSON.parse(text) : null;
 }
 

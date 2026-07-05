@@ -30,13 +30,15 @@ export default function Overview() {
     }
   }, [settings, layout]);
 
-  function persist(next) {
+  function persist(next, { now = false } = {}) {
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
+    const write = () => {
       const overview = { ...(settings?.dashboards?.overview || {}), layout: next };
       const dashboards = { ...(settings?.dashboards || {}), overview };
       saveSettings({ dashboards }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
-    }, 400);
+    };
+    if (now) write(); // Done button: flush immediately so navigation can't eat the debounce
+    else saveTimer.current = setTimeout(write, 400);
   }
 
   function persistWidgetConfig(id, cfg) {
@@ -99,7 +101,14 @@ export default function Overview() {
               )}
             </>
           )}
-          <button className={`m-btn ${edit ? 'm-btn-primary' : 'm-btn-secondary'}`} onClick={() => { setEdit((v) => !v); setAdding(false); }}>
+          <button
+            className={`m-btn ${edit ? 'm-btn-primary' : 'm-btn-secondary'}`}
+            onClick={() => {
+              if (edit) persist(layout, { now: true }); // Done must save even without a final drag/resize-stop
+              setEdit((v) => !v);
+              setAdding(false);
+            }}
+          >
             {edit ? <><Check size={15} style={{ marginRight: 4 }} /> Done</> : <><Pencil size={15} style={{ marginRight: 4 }} /> Customize</>}
           </button>
         </div>
