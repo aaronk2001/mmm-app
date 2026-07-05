@@ -465,6 +465,20 @@
   flex-shrink: 0;
 }
 
+/* ─── Loading skeletons ────────────────────────────────────────────── */
+@keyframes m-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.25; }
+}
+.money-hub .m-skeleton {
+  background: var(--m-surface-2);
+  border-radius: 10px;
+  animation: m-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .money-hub .m-skeleton { animation: none; }
+}
+
 /* ─── Subtle animations ────────────────────────────────────────────── */
 @keyframes m-fade-in {
   from { opacity: 0; }

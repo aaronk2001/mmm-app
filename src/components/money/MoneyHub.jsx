@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
+import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Wallet,
@@ -16,19 +17,25 @@ import Card from './shared/Card';
 import ErrorBoundary from './shared/ErrorBoundary';
 import Toasts from './shared/Toasts';
 import ConfirmHost from './shared/ConfirmDialog';
+import QuickAdd from './shared/QuickAdd';
 import { toast } from '../../lib/toast';
+import { api } from '../../lib/query';
 
-// Live sections (lazy)
-const Overview = lazy(() => import('./sections/Overview'));
-const AccountsNetWorth = lazy(() => import('./sections/AccountsNetWorth'));
-const Transactions = lazy(() => import('./sections/Transactions'));
-const Budget = lazy(() => import('./sections/Budget'));
-const CashFlow = lazy(() => import('./sections/CashFlow'));
-const Goals = lazy(() => import('./sections/Goals'));
-const Debt = lazy(() => import('./sections/Debt'));
-const SettingsSection = lazy(() => import('./sections/Settings'));
-const Investments = lazy(() => import('./sections/Investments'));
-const Reports = lazy(() => import('./sections/Reports'));
+// Import thunks are kept separately from lazy() so hovering a nav item can
+// prefetch a section's chunk before it's clicked.
+const IMPORTERS = {
+  overview:     () => import('./sections/Overview'),
+  accounts:     () => import('./sections/AccountsNetWorth'),
+  transactions: () => import('./sections/Transactions'),
+  budget:       () => import('./sections/Budget'),
+  cashflow:     () => import('./sections/CashFlow'),
+  goals:        () => import('./sections/Goals'),
+  debt:         () => import('./sections/Debt'),
+  investments:  () => import('./sections/Investments'),
+  reports:      () => import('./sections/Reports'),
+  settings:     () => import('./sections/Settings'),
+};
+const LAZY = Object.fromEntries(Object.entries(IMPORTERS).map(([id, imp]) => [id, lazy(imp)]));
 
 const SECTIONS = [
   { id: 'overview',     label: 'Overview',             icon: LayoutDashboard },
@@ -43,30 +50,32 @@ const SECTIONS = [
   { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },
 ];
 
-function SectionLoader() {
+function SectionSkeleton() {
   return (
-    <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-      <div style={{ color: 'var(--m-muted)', fontSize: '14px' }}>Loading…</div>
+    <div>
+      <div className="m-skeleton" style={{ width: 220, height: 28, marginBottom: 8 }} />
+      <div className="m-skeleton" style={{ width: 320, height: 14, marginBottom: 24 }} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 16 }}>
+        <div className="m-skeleton" style={{ height: 96 }} />
+        <div className="m-skeleton" style={{ height: 96 }} />
+        <div className="m-skeleton" style={{ height: 96 }} />
+      </div>
+      <div className="m-skeleton" style={{ height: 280 }} />
     </div>
   );
 }
 
 export default function MoneyHub() {
-  const [activeSection, setActiveSection] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [isEmpty, setIsEmpty] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const location = useLocation();
 
   async function refreshEmpty() {
     try {
-      const res = await fetch('/api/money/overview');
-      if (res.ok) {
-        const data = await res.json();
-        // overview returns an explicit isEmpty flag (it always has keys otherwise).
-        setIsEmpty(data?.isEmpty === true || (data?.accountsCount ?? 0) === 0);
-      } else {
-        setIsEmpty(true);
-      }
+      const data = await api('money/overview');
+      // overview returns an explicit isEmpty flag (it always has keys otherwise).
+      setIsEmpty(data?.isEmpty === true || (data?.accountsCount ?? 0) === 0);
     } catch (err) {
       console.warn('[MoneyHub] overview check failed:', err.message);
       setIsEmpty(true);
@@ -80,8 +89,7 @@ export default function MoneyHub() {
   const handleSeedSample = async () => {
     setSeeding(true);
     try {
-      const res = await fetch('/api/money/seed-sample', { method: 'POST' });
-      if (!res.ok) throw new Error(`seed failed (${res.status})`);
+      await api('money/seed-sample', { method: 'POST' });
       await refreshEmpty();
       toast.success('Sample data loaded.');
     } catch (err) {
@@ -93,30 +101,13 @@ export default function MoneyHub() {
   const handleReset = async () => {
     setSeeding(true);
     try {
-      const res = await fetch('/api/money/reset', { method: 'POST' });
-      if (!res.ok) throw new Error(`reset failed (${res.status})`);
+      await api('money/reset', { method: 'POST' });
       setIsEmpty(true);
       toast.success('Starting fresh — data cleared.');
     } catch (err) {
       console.error('[MoneyHub] reset failed:', err.message);
       toast.error(`Couldn't reset: ${err.message}`);
     } finally { setSeeding(false); }
-  };
-
-  const renderSection = () => {
-    switch (activeSection) {
-      case 'overview':     return <Overview />;
-      case 'accounts':     return <AccountsNetWorth />;
-      case 'transactions': return <Transactions />;
-      case 'budget':       return <Budget />;
-      case 'cashflow':     return <CashFlow />;
-      case 'goals':        return <Goals />;
-      case 'debt':         return <Debt />;
-      case 'investments':  return <Investments />;
-      case 'reports':      return <Reports />;
-      case 'settings':     return <SettingsSection />;
-      default:             return null;
-    }
   };
 
   return (
@@ -138,14 +129,15 @@ export default function MoneyHub() {
           {SECTIONS.map(section => {
             const Icon = section.icon;
             return (
-              <button
+              <NavLink
                 key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={`m-nav-item ${activeSection === section.id ? 'active' : ''}`}
+                to={`/${section.id}`}
+                onMouseEnter={() => IMPORTERS[section.id]()}
+                className={({ isActive }) => `m-nav-item ${isActive ? 'active' : ''}`}
               >
                 <Icon size={18} className="m-nav-icon" />
                 <span>{section.label}</span>
-              </button>
+              </NavLink>
             );
           })}
         </div>
@@ -186,9 +178,16 @@ export default function MoneyHub() {
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-              <ErrorBoundary key={activeSection}>
-                <Suspense fallback={<SectionLoader />}>
-                  {renderSection()}
+              <ErrorBoundary key={location.pathname}>
+                <Suspense fallback={<SectionSkeleton />}>
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/overview" replace />} />
+                    {SECTIONS.map(({ id }) => {
+                      const Section = LAZY[id];
+                      return <Route key={id} path={`/${id}`} element={<Section />} />;
+                    })}
+                    <Route path="*" element={<Navigate to="/overview" replace />} />
+                  </Routes>
                 </Suspense>
               </ErrorBoundary>
             </div>
@@ -196,6 +195,7 @@ export default function MoneyHub() {
         )}
       </main>
 
+      {!isEmpty && !isLoading && <QuickAdd />}
       <Toasts />
       <ConfirmHost />
     </div>

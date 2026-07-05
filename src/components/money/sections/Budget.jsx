@@ -6,6 +6,8 @@ import Money from '../shared/Money';
 import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
 import { TrendingUp, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
+import { api } from '../../../lib/query';
+import { toast } from '../../../lib/toast';
 
 /**
  * Budget section — Envelope-style monthly budget tracking.
@@ -19,6 +21,7 @@ import { TrendingUp, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 export default function Budget() {
   const [overviewData, setOverviewData] = useState(null);
   const [budgets, setBudgets] = useState(null);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editingCategoryId, setEditingCategoryId] = useState(null);
@@ -27,14 +30,17 @@ export default function Budget() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [overviewRes, budgetsRes] = await Promise.all([
-          fetch('/api/money/overview'),
-          fetch('/api/money/budgets'),
+        const [overview, budgets, cats] = await Promise.all([
+          api('money/overview'),
+          api('money/budgets'),
+          api('money/categories'),
         ]);
-        if (overviewRes.ok) setOverviewData(await overviewRes.json());
-        if (budgetsRes.ok) setBudgets(await budgetsRes.json());
+        setOverviewData(overview);
+        setBudgets(budgets);
+        setCategories(cats.categories || []);
       } catch (err) {
         setError(err.message);
+        toast.error(`Failed to load budget data: ${err.message}`);
       } finally {
         setLoading(false);
       }
@@ -43,6 +49,7 @@ export default function Budget() {
   }, []);
 
   const budgetStatus = overviewData?.budgetStatus || [];
+  const categoryName = (id) => categories.find((c) => c.id === id)?.name || 'Uncategorized';
 
   // Calculate totals
   const totalBudgeted = budgetStatus.reduce((sum, b) => sum + (b.limit || 0), 0);
@@ -60,23 +67,19 @@ export default function Budget() {
       const newLimit = parseFloat(editValue);
       if (isNaN(newLimit) || newLimit < 0) return;
 
-      const res = await fetch(`/api/money/budgets/${categoryId}`, {
+      await api(`money/budgets/${categoryId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ limit: newLimit }),
       });
 
-      if (res.ok) {
-        // Refetch overview to update budgetStatus
-        const overviewRes = await fetch('/api/money/overview');
-        if (overviewRes.ok) {
-          setOverviewData(await overviewRes.json());
-        }
-        setEditingCategoryId(null);
-        setEditValue('');
-      }
+      // Refetch overview to update budgetStatus
+      const overview = await api('money/overview');
+      setOverviewData(overview);
+      setEditingCategoryId(null);
+      setEditValue('');
     } catch (err) {
-      console.error('Failed to update budget:', err);
+      toast.error(`Failed to update budget: ${err.message}`);
     }
   };
 
@@ -126,7 +129,7 @@ export default function Budget() {
           title="No budgets yet"
           message="Set up a budget to track your spending categories and stay on target each month."
           action={
-            <button className="m-btn m-btn-primary m-btn-sm" onClick={() => console.log('Add budget action')}>
+            <button className="m-btn m-btn-primary m-btn-sm" onClick={() => toast.info('Budget setup is coming in a later update — add transactions and edit limits inline for now.')}>
               <Plus size={16} />
               Set up budget
             </button>
@@ -254,7 +257,7 @@ export default function Budget() {
                       {/* Category info */}
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '8px' }}>
-                          {budget.category || 'Uncategorized'}
+                          {categoryName(budget.category_id)}
                         </div>
 
                         {/* Progress bar */}

@@ -200,6 +200,15 @@ router.delete('/transactions/:id', (req, res) => {
   }
 });
 
+// Payees ranked by frequency (quick-add autocomplete + category suggestion).
+router.get('/payees', (req, res) => {
+  try {
+    res.json({ payees: store.getPayeeStats(parseInt(req.query.limit, 10) || 100) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 // Transactions import
 // ────────────────────────────────────────────────────────────────────────────

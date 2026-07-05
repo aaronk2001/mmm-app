@@ -3,7 +3,7 @@ import { Monitor, Sun, Moon, Check, ShieldCheck, RotateCcw, Database, Download, 
 import {
   applyTheme, applyDensity, applyAccent, getTheme, getDensity, getAccent,
 } from '../../../lib/theme';
-import { saveSettings, queryClient, useApi } from '../../../lib/query';
+import { api, saveSettings, queryClient, useApi } from '../../../lib/query';
 import RulesManager from './RulesManager';
 import CustomFieldsManager from './CustomFieldsManager';
 import { confirmDialog } from '../../../lib/confirm';
@@ -128,9 +128,7 @@ export default function Settings() {
   async function backupNow() {
     setBackupBusy(true);
     try {
-      const res = await fetch('/api/money/backups/run', { method: 'POST' });
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error || 'backup failed');
+      const out = await api('money/backups/run', { method: 'POST' });
       toast.success(`Backed up (${out.date}).`);
       queryClient.invalidateQueries({ queryKey: ['money/backups'] });
     } catch (e) {
@@ -145,11 +143,9 @@ export default function Settings() {
       confirmLabel: 'Restore',
     }))) return;
     try {
-      const res = await fetch('/api/money/backups/restore', {
+      const out = await api('money/backups/restore', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date }),
       });
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error || 'restore failed');
       toast.success(`Restored ${out.counts.accounts} accounts and ${out.counts.transactions} transactions from ${date}.`);
       queryClient.invalidateQueries();
     } catch (e) {
@@ -159,7 +155,7 @@ export default function Settings() {
 
   async function exportData() {
     try {
-      const data = await (await fetch('/api/money/export')).json();
+      const data = await api('money/export');
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -179,11 +175,9 @@ export default function Settings() {
     if (!file) return;
     try {
       const data = JSON.parse(await file.text());
-      const res = await fetch('/api/money/import', {
+      const out = await api('money/import', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
       });
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error || 'Invalid backup file');
       setBackupMsg({ ok: true, text: `Imported ${out.counts.accounts} accounts and ${out.counts.transactions} transactions.` });
       queryClient.invalidateQueries();
     } catch (err) {

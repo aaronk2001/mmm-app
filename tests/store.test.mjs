@@ -167,6 +167,19 @@ describe('import pipeline', () => {
   });
 });
 
+describe('payee stats', () => {
+  it('ranks payees by frequency with their most common category', () => {
+    const acc = store.createAccount('C', 'checking', 0);
+    store.createTransaction(acc.id, '2026-07-01', -5, 'Coffee Shop', 'fod');
+    store.createTransaction(acc.id, '2026-07-02', -5, 'Coffee Shop', 'fod');
+    store.createTransaction(acc.id, '2026-07-03', -5, 'Coffee Shop', 'ent');
+    store.createTransaction(acc.id, '2026-07-01', -9, 'One Off', 'sho');
+    const stats = store.getPayeeStats();
+    expect(stats[0]).toMatchObject({ payee: 'Coffee Shop', uses: 3, category_id: 'fod' });
+    expect(stats[1]).toMatchObject({ payee: 'One Off', uses: 1 });
+  });
+});
+
 describe('rules apply atomically', () => {
   it('applyRules re-files matching transactions and returns changed ids', () => {
     const acc = store.createAccount('Checking', 'checking', 0);

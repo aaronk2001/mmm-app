@@ -229,6 +229,23 @@ function deleteTransactionsBulk(d, ids) {
   run();
   return count;
 }
+// Payees ranked by use with their most frequent category — feeds the quick-add
+// autocomplete and category suggestion.
+function getPayeeStats(d, limit = 100) {
+  return d.prepare(`
+    SELECT payee,
+           COUNT(*) AS uses,
+           MAX(date) AS last_date,
+           (SELECT t2.category_id FROM transactions t2
+             WHERE t2.payee = t.payee AND t2.category_id IS NOT NULL
+             GROUP BY t2.category_id ORDER BY COUNT(*) DESC LIMIT 1) AS category_id
+    FROM transactions t
+    WHERE payee != ''
+    GROUP BY payee
+    ORDER BY uses DESC, last_date DESC
+    LIMIT ?`).all(limit);
+}
+
 // applyRules support: set category per id, atomically.
 function setTransactionCategories(d, pairs) {
   const stmt = d.prepare('UPDATE transactions SET category_id = ? WHERE id = ?');
@@ -511,7 +528,7 @@ module.exports = {
   newId, defaultCategories, emptyData, readAll, writeAll, getSettings, setSettings,
   getAccounts, getAccount, createAccount, updateAccount, deleteAccount,
   getTransactions, getTransaction, createTransaction, insertTransactions,
-  updateTransaction, deleteTransaction, updateTransactionsBulk, deleteTransactionsBulk, setTransactionCategories,
+  updateTransaction, deleteTransaction, updateTransactionsBulk, deleteTransactionsBulk, setTransactionCategories, getPayeeStats,
   getCategories, createCategory,
   getBudgets, createBudget, updateBudget, deleteBudget,
   getGoals, createGoal, updateGoal, deleteGoal,

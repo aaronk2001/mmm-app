@@ -14,6 +14,8 @@ import Money from '../shared/Money';
 import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { api } from '../../../lib/query';
+import { toast } from '../../../lib/toast';
 
 /**
  * Cash Flow section — 90/30-day projection + recurring calendar.
@@ -41,21 +43,16 @@ export default function CashFlow() {
         setLoading(true);
         setError(null);
 
-        const [projRes, recurRes] = await Promise.all([
-          fetch(`/api/money/cashflow?days=${days}`),
-          fetch('/api/money/recurring'),
+        const [projection, recurring] = await Promise.all([
+          api(`money/cashflow?days=${days}`),
+          api('money/recurring'),
         ]);
 
-        if (projRes.ok) {
-          const data = await projRes.json();
-          setProjection(data);
-        }
-        if (recurRes.ok) {
-          const data = await recurRes.json();
-          setRecurring(data.recurring || []);
-        }
+        setProjection(projection);
+        setRecurring(recurring.recurring || []);
       } catch (err) {
         setError(err.message);
+        toast.error(`Failed to load cash flow data: ${err.message}`);
       } finally {
         setLoading(false);
       }
@@ -421,7 +418,7 @@ export default function CashFlow() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {recurringIncome.map((r, idx) => (
                   <motion.div
-                    key={r.id || idx}
+                    key={r.id || `${r.payee}-${r.cadence}`}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: 0.25 + idx * 0.05 }}
@@ -469,7 +466,7 @@ export default function CashFlow() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {recurringBills.map((r, idx) => (
                   <motion.div
-                    key={r.id || idx}
+                    key={r.id || `${r.payee}-${r.cadence}`}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: 0.3 + idx * 0.05 }}
