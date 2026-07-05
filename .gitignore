@@ -15,3 +15,6 @@ mmm.db-shm
 
 # Dev-mode automatic backups (packaged app writes to %APPDATA%\mmm\backups)
 server/store/money/backups/
+
+# agent scratch
+temp-esb/
