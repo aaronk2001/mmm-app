@@ -12,40 +12,54 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 :root {
-  /* Light (default) — matches the original palette so light mode is unchanged */
-  --bg: #f6f7f9;
+  /* MMM identity — teal/mint on warm charcoal. Light mode carries the same
+     teal accent (deepened for contrast on white). */
+  --bg: #f5f6f5;
   --surface: #ffffff;
-  --surface-2: #f1f3f5;
-  --ink: #0b1220;
-  --ink-2: #475569;
-  --muted: #94a3b8;
-  --border: #e6e8ec;
-  --accent: #0071e3;
+  --surface-2: #eef1f0;
+  --ink: #0d1512;
+  --ink-2: #495653;
+  --muted: #8b9793;
+  --border: #e3e7e5;
+  --accent: #0d9488;         /* teal-600 — reads on white */
   --accent-ink: #ffffff;
-  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
-  --positive: #15a34a;
-  --negative: #dc2626;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --positive: #059669;       /* emerald-600 */
+  --negative: #e11d48;       /* rose-600 */
   --warning: #d97706;
-  --radius: 16px;
+  --radius: 14px;
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.05);
   --density: 1;
   color-scheme: light;
+
+  /* Categorical chart palette — teal-led, kept distinct for color-blind
+     readers (also always icon/label-paired in the UI). Shared across themes. */
+  --chart-1: #2dd4bf;
+  --chart-2: #60a5fa;
+  --chart-3: #a78bfa;
+  --chart-4: #fbbf24;
+  --chart-5: #fb7185;
+  --chart-6: #4ade80;
+  --chart-7: #f472b6;
+  --chart-8: #94a3b8;
 }
 
 [data-theme="dark"] {
-  --bg: #0b0e14;
-  --surface: #141923;
-  --surface-2: #1b212e;
-  --ink: #e7eaee;
-  --ink-2: #9aa6b6;
-  --muted: #5f6b7c;
-  --border: #232b39;
-  --accent: #2f86ff;
-  --accent-ink: #ffffff;
-  --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
-  --positive: #22c55e;
-  --negative: #ef4444;
-  --warning: #f59e0b;
+  /* Warm charcoal (not pure black) + vibrant teal. Positive is green (kept
+     clearly apart from the teal accent); negative is warm coral. */
+  --bg: #101318;
+  --surface: #181c24;
+  --surface-2: #212630;
+  --ink: #e9ecf1;
+  --ink-2: #9ba7b5;
+  --muted: #616d7e;
+  --border: #29313f;
+  --accent: #2dd4bf;         /* teal-mint 400 */
+  --accent-ink: #06231f;     /* dark ink on teal buttons */
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+  --positive: #4ade80;       /* green-400 — distinct from the teal accent */
+  --negative: #fb7185;       /* coral/rose-400 */
+  --warning: #fbbf24;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.45);
   color-scheme: dark;
 }

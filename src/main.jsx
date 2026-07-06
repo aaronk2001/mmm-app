@@ -5,7 +5,10 @@ import App from './App';
 import { queryClient, fetchSettings } from './lib/query';
 import './styles/theme.css';
 import './styles/money-theme.css';
-import { applyTheme, applyDensity, applyAccent } from './lib/theme';
+import { applyTheme, applyDensity, applyAccent, clearAccent } from './lib/theme';
+
+// Pre-teal accents that must not resurrect the old blue identity.
+const RETIRED_ACCENTS = new Set(['#0071e3', '#2f86ff']);
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -22,5 +25,14 @@ fetchSettings().then((s) => {
   if (!a) return;
   if (!localStorage.getItem('mmm-theme') && a.theme) applyTheme(a.theme);
   if (!localStorage.getItem('mmm-density') && a.density) applyDensity(a.density);
-  if (!localStorage.getItem('mmm-accent') && a.accent) applyAccent(a.accent);
+  if (!localStorage.getItem('mmm-accent') && a.accent) {
+    // Ignore retired blue accents saved by earlier builds so MMM's teal
+    // identity is what shows; also scrub it from the server settings.
+    if (RETIRED_ACCENTS.has(a.accent)) {
+      clearAccent();
+      import('./lib/query').then(({ saveSettings }) => saveSettings({ appearance: { accent: '' } }).catch(() => {}));
+    } else {
+      applyAccent(a.accent);
+    }
+  }
 }).catch(() => {});

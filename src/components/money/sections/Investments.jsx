@@ -11,7 +11,7 @@ import { toast } from '../../../lib/toast';
 const f$ = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
 const fSigned = (n) => (Number(n) >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(Number(n) || 0)).toLocaleString();
 const num = { fontVariantNumeric: 'tabular-nums' };
-const PALETTE = ['#0071e3', '#5856d6', '#0a9396', '#2fb344', '#f59e0b', '#ff2d55', '#7c3aed', '#14b8a6', '#ef4444', '#64748b'];
+const PALETTE = ['var(--m-chart-1)', 'var(--m-chart-2)', 'var(--m-chart-3)', 'var(--m-chart-4)', 'var(--m-chart-5)', 'var(--m-chart-6)', 'var(--m-chart-7)', 'var(--m-chart-8)'];
 
 const BLANK = { account_id: '', symbol: '', shares: '', cost_basis: '', current_price: '' };
 

@@ -250,7 +250,7 @@ function deleteHolding(id) {
 function getNetWorthSnapshots() {
   const d = db();
   const nw = calc.computeNetWorth(repo.getAccounts(d));
-  repo.insertSnapshotIfMissing(d, { date: new Date().toISOString().split('T')[0], ...nw });
+  repo.insertSnapshotIfMissing(d, { date: calc.localDate(), ...nw });
   return repo.getSnapshots(d);
 }
 

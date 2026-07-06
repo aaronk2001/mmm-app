@@ -14,15 +14,26 @@ let serverProcess = null;
 // Defender scans node_modules on a cold cache).
 const SPLASH_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(
   '<!doctype html><meta charset="utf-8"><style>' +
-  'html,body{margin:0;height:100%;background:#f6f7f9;color:#0b1220;' +
+  'html,body{margin:0;height:100%;background:#101318;color:#e9ecf1;' +
   'font-family:Inter,Segoe UI,system-ui,sans-serif;display:flex;align-items:center;' +
-  'justify-content:center;flex-direction:column;gap:14px}' +
-  '.b{font-size:30px;font-weight:800;letter-spacing:.12em;color:#0071e3}' +
-  '.s{font-size:12px;letter-spacing:.18em;color:#475569;text-transform:uppercase}' +
-  '.r{width:30px;height:30px;border:3px solid #e6e8ec;border-top-color:#0071e3;' +
-  'border-radius:50%;animation:s .8s linear infinite;margin-top:6px}' +
+  'justify-content:center;flex-direction:column;gap:16px}' +
+  '.mark{width:56px;height:56px}' +
+  '.b{font-size:26px;font-weight:800;letter-spacing:.06em;' +
+  'background:linear-gradient(120deg,#14b8a6,#4ade80);-webkit-background-clip:text;' +
+  '-webkit-text-fill-color:transparent}' +
+  '.s{font-size:11px;letter-spacing:.2em;color:#616d7e;text-transform:uppercase}' +
+  '.r{width:26px;height:26px;border:3px solid #29313f;border-top-color:#2dd4bf;' +
+  'border-radius:50%;animation:s .8s linear infinite;margin-top:8px}' +
   '@keyframes s{to{transform:rotate(360deg)}}' +
-  '</style><div class="b">MMM</div><div class="s">Making Money Moves</div>' +
+  '</style>' +
+  '<svg class="mark" viewBox="0 0 32 32" fill="none"><defs>' +
+  '<linearGradient id="g" x1="4" y1="26" x2="28" y2="6" gradientUnits="userSpaceOnUse">' +
+  '<stop stop-color="#14b8a6"/><stop offset="1" stop-color="#4ade80"/></linearGradient></defs>' +
+  '<rect x="1" y="1" width="30" height="30" rx="8" fill="#0f1b19" stroke="url(#g)" stroke-opacity="0.35"/>' +
+  '<rect x="8" y="17" width="4" height="7" rx="2" fill="url(#g)"/>' +
+  '<rect x="14" y="12" width="4" height="12" rx="2" fill="url(#g)"/>' +
+  '<rect x="20" y="7" width="4" height="17" rx="2" fill="url(#g)"/></svg>' +
+  '<div class="b">MMM</div><div class="s">Making Money Moves</div>' +
   '<div class="r"></div>'
 );
 
@@ -72,8 +83,9 @@ function createWindow() {
     height: 860,
     minWidth: 980,
     minHeight: 600,
-    backgroundColor: '#f6f7f9',
+    backgroundColor: '#101318',
     title: 'MMM',
+    icon: path.join(__dirname, 'assets', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

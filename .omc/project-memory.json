@@ -39,8 +39,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm test 2>&1 | grep -E \"Test Files|Tests \" && npm run build:portable 2>&1 | tail -3",
-    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm test 2>&1 | grep -E \"Test Files|Tests \" && npm run build:portable 2>&1 | tail -3",
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build:portable 2>&1 | tail -6",
+    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3 && echo \"=== TESTS ===\" && npm test 2>&1 | grep -E \"Test Files|Tests \"",
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -138,8 +138,8 @@
     },
     {
       "path": "server\\money\\store.js",
-      "accessCount": 58,
-      "lastAccessed": 1783221433408,
+      "accessCount": 59,
+      "lastAccessed": 1783294803704,
       "type": "directory"
     },
     {
@@ -156,14 +156,20 @@
     },
     {
       "path": "src\\components\\money\\sections\\Settings.jsx",
-      "accessCount": 24,
-      "lastAccessed": 1783221819885,
+      "accessCount": 28,
+      "lastAccessed": 1783294091385,
       "type": "file"
     },
     {
       "path": "src\\components\\money\\MoneyHub.jsx",
-      "accessCount": 23,
-      "lastAccessed": 1783221795370,
+      "accessCount": 25,
+      "lastAccessed": 1783294518832,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\widgets\\index.jsx",
+      "accessCount": 19,
+      "lastAccessed": 1783294901428,
       "type": "file"
     },
     {
@@ -173,15 +179,15 @@
       "type": "file"
     },
     {
-      "path": "src\\components\\money\\sections\\Goals.jsx",
-      "accessCount": 15,
-      "lastAccessed": 1783221837581,
+      "path": "src\\components\\money\\sections\\Overview.jsx",
+      "accessCount": 17,
+      "lastAccessed": 1783294945759,
       "type": "file"
     },
     {
-      "path": "src\\components\\money\\widgets\\index.jsx",
-      "accessCount": 14,
-      "lastAccessed": 1783115729210,
+      "path": "src\\components\\money\\sections\\Goals.jsx",
+      "accessCount": 15,
+      "lastAccessed": 1783221837581,
       "type": "file"
     },
     {
@@ -200,12 +206,6 @@
       "path": "src\\lib\\query.js",
       "accessCount": 13,
       "lastAccessed": 1783221994854,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Overview.jsx",
-      "accessCount": 13,
-      "lastAccessed": 1783277730334,
       "type": "file"
     },
     {
@@ -251,15 +251,27 @@
       "type": "file"
     },
     {
-      "path": "src\\components\\money\\sections\\Investments.jsx",
-      "accessCount": 4,
-      "lastAccessed": 1783116330350,
+      "path": "src\\styles\\theme.css",
+      "accessCount": 5,
+      "lastAccessed": 1783293729955,
       "type": "file"
     },
     {
-      "path": "src\\styles\\theme.css",
-      "accessCount": 3,
-      "lastAccessed": 1783098736285,
+      "path": "src\\styles\\money-theme.css",
+      "accessCount": 5,
+      "lastAccessed": 1783293806959,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Investments.jsx",
+      "accessCount": 5,
+      "lastAccessed": 1783294106265,
+      "type": "file"
+    },
+    {
+      "path": "src\\main.jsx",
+      "accessCount": 5,
+      "lastAccessed": 1783294308630,
       "type": "file"
     },
     {
@@ -269,9 +281,15 @@
       "type": "file"
     },
     {
-      "path": "src\\styles\\money-theme.css",
+      "path": "src\\index.html",
       "accessCount": 3,
-      "lastAccessed": 1783221581092,
+      "lastAccessed": 1783293903446,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\theme.js",
+      "accessCount": 3,
+      "lastAccessed": 1783293991262,
       "type": "file"
     },
     {
@@ -281,27 +299,9 @@
       "type": "directory"
     },
     {
-      "path": "src\\main.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1783098686591,
-      "type": "file"
-    },
-    {
-      "path": "src\\index.html",
-      "accessCount": 2,
-      "lastAccessed": 1783098691152,
-      "type": "file"
-    },
-    {
       "path": "src\\lib\\customFields.js",
       "accessCount": 2,
       "lastAccessed": 1783098723867,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\theme.js",
-      "accessCount": 2,
-      "lastAccessed": 1783098724012,
       "type": "file"
     },
     {
