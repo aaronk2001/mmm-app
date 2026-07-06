@@ -26,6 +26,8 @@ export default function Investments() {
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(null);
+  const [priceInput, setPriceInput] = useState('');
 
   const accName = (id) => accounts.find((a) => a.id === id)?.name || '—';
 
@@ -55,6 +57,14 @@ export default function Investments() {
     if (!(await confirmDialog({ message: 'Delete this holding?', confirmLabel: 'Delete' }))) return;
     try { await api('money/holdings/' + id, { method: 'DELETE' }); refresh(); }
     catch (err) { console.error(err); toast.error(`Delete failed: ${err.message}`); }
+  }
+  function openPriceEdit(h) { setEditingPrice(h.id); setPriceInput(String(h.current_price)); }
+  async function savePriceEdit(id) {
+    if (!priceInput.trim()) return;
+    try {
+      await api('money/holdings/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_price: Number(priceInput) }) });
+      setEditingPrice(null); setPriceInput(''); refresh();
+    } catch (err) { console.error(err); toast.error(`Price update failed: ${err.message}`); }
   }
 
   if (isLoading) {
@@ -145,7 +155,17 @@ export default function Investments() {
                       <td style={{ padding: '10px 12px', color: 'var(--m-ink)', fontWeight: 600 }}>{h.symbol}<div style={{ fontSize: 11, color: 'var(--m-muted)', fontWeight: 400 }}>{accName(h.account_id)}</div></td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink-2)', ...num }}>{h.shares}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink-2)', ...num }}>{f$(h.cost_basis)}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink-2)', ...num }}>{f$(h.current_price)}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink-2)', ...num }}>
+                        {editingPrice === h.id ? (
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                            <input type="number" step="any" value={priceInput} onChange={(e) => setPriceInput(e.target.value)} className="m-input" style={{ width: 80, padding: '4px 8px', fontSize: 13 }} autoFocus />
+                            <button className="m-btn m-btn-primary m-btn-sm" onClick={() => savePriceEdit(h.id)} style={{ padding: '4px 8px', fontSize: 12 }}>✓</button>
+                            <button className="m-btn m-btn-secondary m-btn-sm" onClick={() => setEditingPrice(null)} style={{ padding: '4px 8px', fontSize: 12 }}>✕</button>
+                          </div>
+                        ) : (
+                          <div onClick={() => openPriceEdit(h)} style={{ cursor: 'default', userSelect: 'none' }}>{f$(h.current_price)}</div>
+                        )}
+                      </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink)', fontWeight: 600, ...num }}>{f$(mv)}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: gain >= 0 ? 'var(--m-green)' : 'var(--m-red)', ...num }}>{fSigned(gain)}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>

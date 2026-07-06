@@ -7,6 +7,8 @@ import {
   DollarSign,
   Calendar,
   Plus,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
 import Card from '../shared/Card';
@@ -16,6 +18,7 @@ import EmptyState from '../shared/EmptyState';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../../../lib/query';
 import { toast } from '../../../lib/toast';
+import { confirmDialog } from '../../../lib/confirm';
 
 /**
  * Cash Flow section — 90/30-day projection + recurring calendar.
@@ -28,7 +31,7 @@ import { toast } from '../../../lib/toast';
  */
 export default function CashFlow() {
   const [projection, setProjection] = useState(null);
-  const [recurring, setRecurring] = useState(null);
+  const [recurringData, setRecurringData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [days, setDays] = useState(90);
@@ -36,6 +39,25 @@ export default function CashFlow() {
   // Scenario adjustments
   const [extraIncome, setExtraIncome] = useState(0);
   const [extraExpense, setExtraExpense] = useState(0);
+
+  // Recurring management form
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [formData, setFormData] = useState({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
+
+  const refetchData = async () => {
+    try {
+      const [projectionRes, recurringRes] = await Promise.all([
+        api(`money/cashflow?days=${days}`),
+        api('money/recurring'),
+      ]);
+      setProjection(projectionRes);
+      setRecurringData(recurringRes);
+    } catch (err) {
+      toast.error(`Failed to refetch data: ${err.message}`);
+    }
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -49,7 +71,7 @@ export default function CashFlow() {
         ]);
 
         setProjection(projection);
-        setRecurring(recurring.recurring || []);
+        setRecurringData(recurring);
       } catch (err) {
         setError(err.message);
         toast.error(`Failed to load cash flow data: ${err.message}`);
@@ -79,9 +101,92 @@ export default function CashFlow() {
     : 0;
   const isLowBalance = lowestBalance < 0 || lowestBalance < 1000; // Arbitrary threshold
 
+  // Extract recurring and declared from response
+  const recurring = recurringData?.recurring || [];
+  const declared = recurringData?.declared || [];
+
   // Separate recurring into income/bills
-  const recurringIncome = recurring?.filter(r => r.kind === 'income') || [];
-  const recurringBills = recurring?.filter(r => r.kind === 'bill') || [];
+  const recurringIncome = recurring.filter(r => r.kind === 'income');
+  const recurringBills = recurring.filter(r => r.kind === 'bill').sort((a, b) => new Date(a.next_date) - new Date(b.next_date));
+
+  const handleAddRecurring = async (e) => {
+    e.preventDefault();
+    if (!formData.payee.trim()) {
+      toast.error('Payee is required');
+      return;
+    }
+    const amount = parseFloat(formData.amount);
+    if (!Number.isFinite(amount)) {
+      toast.error('Amount must be a valid number');
+      return;
+    }
+    try {
+      setFormLoading(true);
+      if (editingId) {
+        await api(`money/recurring/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            payee: formData.payee,
+            amount,
+            cadence: formData.cadence,
+            kind: formData.kind,
+            next_date: formData.next_date || undefined,
+          }),
+        });
+        toast.success('Recurring item updated');
+      } else {
+        await api('money/recurring', {
+          method: 'POST',
+          body: JSON.stringify({
+            payee: formData.payee,
+            amount,
+            cadence: formData.cadence,
+            kind: formData.kind,
+            next_date: formData.next_date || undefined,
+          }),
+        });
+        toast.success('Recurring item added');
+      }
+      setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '' });
+      setEditingId(null);
+      setShowAddForm(false);
+      await refetchData();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteRecurring = async (id) => {
+    const confirmed = await confirmDialog({
+      title: 'Delete recurring item?',
+      message: 'This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+    if (confirmed) {
+      try {
+        await api(`money/recurring/${id}`, { method: 'DELETE' });
+        toast.success('Recurring item deleted');
+        await refetchData();
+      } catch (err) {
+        toast.error(err.message);
+      }
+    }
+  };
+
+  const handleEditRecurring = (item) => {
+    setFormData({
+      payee: item.payee,
+      amount: item.amount.toString(),
+      cadence: item.cadence,
+      kind: item.kind,
+      next_date: item.next_date || '',
+    });
+    setEditingId(item.id);
+    setShowAddForm(true);
+  };
 
   if (loading) {
     return (
@@ -402,6 +507,319 @@ export default function CashFlow() {
               </div>
             </Card>
           </motion.div>
+
+          {/* Recurring Management Panel */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.25 }}
+            style={{ marginBottom: '24px' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--m-ink)' }}>
+                <Calendar size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom' }} />
+                Manage Recurring
+              </h3>
+              {!showAddForm && (
+                <button
+                  onClick={() => {
+                    setShowAddForm(true);
+                    setEditingId(null);
+                    setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '' });
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: 'var(--m-accent)',
+                    color: 'white',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Plus size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-bottom' }} />
+                  Add recurring
+                </button>
+              )}
+            </div>
+
+            {showAddForm && (
+              <Card className="m-card-sm" style={{ marginBottom: '12px' }}>
+                <form onSubmit={handleAddRecurring}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--m-ink-2)', display: 'block', marginBottom: '4px' }}>
+                        Payee
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.payee}
+                        onChange={e => setFormData({ ...formData, payee: e.target.value })}
+                        placeholder="e.g., Rent, Salary"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--m-border)',
+                          background: 'var(--m-surface)',
+                          color: 'var(--m-ink)',
+                          fontSize: '13px',
+                          fontFamily: 'inherit',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--m-ink-2)', display: 'block', marginBottom: '4px' }}>
+                        Amount ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.amount}
+                        onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                        placeholder="0.00"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--m-border)',
+                          background: 'var(--m-surface)',
+                          color: 'var(--m-ink)',
+                          fontSize: '13px',
+                          fontFamily: 'inherit',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--m-ink-2)', display: 'block', marginBottom: '4px' }}>
+                        Cadence
+                      </label>
+                      <select
+                        value={formData.cadence}
+                        onChange={e => setFormData({ ...formData, cadence: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--m-border)',
+                          background: 'var(--m-surface)',
+                          color: 'var(--m-ink)',
+                          fontSize: '13px',
+                          fontFamily: 'inherit',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Biweekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--m-ink-2)', display: 'block', marginBottom: '4px' }}>
+                        Type
+                      </label>
+                      <select
+                        value={formData.kind}
+                        onChange={e => setFormData({ ...formData, kind: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--m-border)',
+                          background: 'var(--m-surface)',
+                          color: 'var(--m-ink)',
+                          fontSize: '13px',
+                          fontFamily: 'inherit',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <option value="bill">Bill</option>
+                        <option value="income">Income</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--m-ink-2)', display: 'block', marginBottom: '4px' }}>
+                      Next Date (optional)
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.next_date}
+                      onChange={e => setFormData({ ...formData, next_date: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--m-border)',
+                        background: 'var(--m-surface)',
+                        color: 'var(--m-ink)',
+                        fontSize: '13px',
+                        fontFamily: 'inherit',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="submit"
+                      disabled={formLoading}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'var(--m-accent)',
+                        color: 'white',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: formLoading ? 'not-allowed' : 'pointer',
+                        opacity: formLoading ? 0.6 : 1,
+                      }}
+                    >
+                      {editingId ? 'Update' : 'Add'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddForm(false);
+                        setEditingId(null);
+                        setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '' });
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--m-border)',
+                        background: 'transparent',
+                        color: 'var(--m-ink-2)',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </Card>
+            )}
+
+            {declared.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {declared.map(item => (
+                  <Card key={item.id} hoverable={false} className="m-card-sm">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '4px' }}>
+                          {item.payee}
+                        </div>
+                        <div style={{ fontSize: '13px', color: 'var(--m-ink-2)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <span style={{ textTransform: 'capitalize' }}>{item.kind}</span>
+                          <span>•</span>
+                          <span style={{ textTransform: 'capitalize' }}>{item.cadence}</span>
+                          {item.next_date && (
+                            <>
+                              <span>•</span>
+                              <span>{new Date(item.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: item.kind === 'income' ? 'var(--m-green)' : 'var(--m-red)', fontVariantNumeric: 'tabular-nums' }}>
+                        <Money value={Math.abs(parseFloat(item.amount))} prefix={item.kind === 'income' ? '+$' : '-$'} decimals={0} />
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => handleEditRecurring(item)}
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid var(--m-border)',
+                            background: 'transparent',
+                            color: 'var(--m-ink-2)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRecurring(item.id)}
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid var(--m-border)',
+                            background: 'transparent',
+                            color: 'var(--m-red)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {!showAddForm && declared.length === 0 && (
+              <Card hoverable={false} className="m-card-sm" style={{ background: 'var(--m-surface-2)', border: 'none', textAlign: 'center' }}>
+                <div style={{ fontSize: '13px', color: 'var(--m-ink-2)' }}>
+                  No recurring items yet. Add one to get started.
+                </div>
+              </Card>
+            )}
+          </motion.div>
+
+          {/* Upcoming Bills */}
+          {recurringBills.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.28 }}
+              style={{ marginBottom: '24px' }}
+            >
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '12px' }}>
+                <AlertTriangle size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom', color: 'var(--m-red)' }} />
+                Upcoming Bills
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {recurringBills.map((bill, idx) => (
+                  <motion.div
+                    key={bill.id || `${bill.payee}-${bill.cadence}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.28 + idx * 0.03 }}
+                  >
+                    <Card hoverable={false} className="m-card-sm">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '4px' }}>
+                            {bill.payee}
+                          </div>
+                          {bill.next_date && (
+                            <div style={{ fontSize: '13px', color: 'var(--m-ink-2)' }}>
+                              Next: {new Date(bill.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--m-red)', fontVariantNumeric: 'tabular-nums' }}>
+                          <Money value={Math.abs(parseFloat(bill.amount))} prefix="-$" decimals={0} />
+                        </div>
+                      </div>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           {/* Recurring Income */}
           {recurringIncome.length > 0 && (

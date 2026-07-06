@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 import SectionHeader from '../shared/SectionHeader';
 import Card from '../shared/Card';
 import Money from '../shared/Money';
@@ -19,6 +20,7 @@ import { toast } from '../../../lib/toast';
  * - Supports edit/set budget UI (POST/PUT to /api/money/budgets)
  */
 export default function Budget() {
+  const navigate = useNavigate();
   const [overviewData, setOverviewData] = useState(null);
   const [budgets, setBudgets] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -26,6 +28,9 @@ export default function Budget() {
   const [error, setError] = useState(null);
   const [editingCategoryId, setEditingCategoryId] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [isCreatingBudget, setIsCreatingBudget] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [limitValue, setLimitValue] = useState('');
 
   useEffect(() => {
     async function loadData() {
@@ -88,6 +93,50 @@ export default function Budget() {
     setEditValue('');
   };
 
+  const categoriesWithBudgets = new Set(budgetStatus.map((b) => b.category_id));
+  const availableCategories = categories.filter((c) => !categoriesWithBudgets.has(c.id));
+
+  const handleCreateBudget = async () => {
+    try {
+      const newLimit = parseFloat(limitValue);
+      if (!selectedCategoryId || isNaN(newLimit) || newLimit < 0) {
+        toast.error('Please select a category and enter a valid limit');
+        return;
+      }
+
+      await api('money/budgets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category_id: selectedCategoryId, period: 'monthly', limit: newLimit }),
+      });
+
+      const overview = await api('money/overview');
+      setOverviewData(overview);
+      setIsCreatingBudget(false);
+      setSelectedCategoryId('');
+      setLimitValue('');
+      toast.success('Budget created');
+    } catch (err) {
+      toast.error(`Failed to create budget: ${err.message}`);
+    }
+  };
+
+  const handleToggleRollover = async (budgetId, currentRollover) => {
+    try {
+      await api(`money/budgets/${budgetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rollover: !currentRollover }),
+      });
+
+      const overview = await api('money/overview');
+      setOverviewData(overview);
+      toast.success(`Rollover ${!currentRollover ? 'enabled' : 'disabled'}`);
+    } catch (err) {
+      toast.error(`Failed to update rollover: ${err.message}`);
+    }
+  };
+
   if (loading) {
     return (
       <div>
@@ -129,7 +178,7 @@ export default function Budget() {
           title="No budgets yet"
           message="Set up a budget to track your spending categories and stay on target each month."
           action={
-            <button className="m-btn m-btn-primary m-btn-sm" onClick={() => toast.info('Budget setup is coming in a later update — add transactions and edit limits inline for now.')}>
+            <button className="m-btn m-btn-primary m-btn-sm" onClick={() => setIsCreatingBudget(true)}>
               <Plus size={16} />
               Set up budget
             </button>
@@ -145,7 +194,7 @@ export default function Budget() {
             style={{ marginBottom: '24px' }}
           >
             <Card className="m-card-sm">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '16px', marginBottom: '20px' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: '12px', color: 'var(--m-muted)', fontWeight: 500, marginBottom: '4px' }}>
                     Total Budgeted
@@ -196,7 +245,7 @@ export default function Budget() {
               </div>
 
               {/* Overall progress bar */}
-              <div style={{ marginTop: '20px' }}>
+              <div style={{ marginBottom: '16px' }}>
                 <div
                   style={{
                     height: '8px',
@@ -218,6 +267,17 @@ export default function Budget() {
                   />
                 </div>
               </div>
+
+              {availableCategories.length > 0 && (
+                <button
+                  className="m-btn m-btn-primary m-btn-sm"
+                  onClick={() => setIsCreatingBudget(true)}
+                  style={{ width: '100%' }}
+                >
+                  <Plus size={16} />
+                  Add budget
+                </button>
+              )}
             </Card>
           </motion.div>
 
@@ -256,8 +316,17 @@ export default function Budget() {
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
                       {/* Category info */}
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '8px' }}>
-                          {categoryName(budget.category_id)}
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{categoryName(budget.category_id)}</span>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 400, color: 'var(--m-ink-2)' }}>
+                            <input
+                              type="checkbox"
+                              checked={budget.rollover || false}
+                              onChange={() => handleToggleRollover(budget.budget_id, budget.rollover)}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            Rollover
+                          </label>
                         </div>
 
                         {/* Progress bar */}
@@ -283,7 +352,7 @@ export default function Budget() {
                         </div>
 
                         {/* Amount row */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                           <div style={{ fontSize: '13px', color: 'var(--m-ink-2)' }}>
                             <Money value={budget.spent} prefix="$" decimals={2} /> of{' '}
                             {isEditing ? (
@@ -331,6 +400,25 @@ export default function Budget() {
                             {statusIcon}
                             {statusLabel}
                           </div>
+                        </div>
+
+                        {/* View spending link */}
+                        <div style={{ marginBottom: isEditing ? '8px' : '0' }}>
+                          <button
+                            onClick={() => navigate(`/transactions?category=${encodeURIComponent(budget.category_id)}`)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--m-accent)',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              textDecoration: 'underline',
+                              padding: 0,
+                            }}
+                          >
+                            View spending
+                          </button>
                         </div>
 
                         {/* Edit controls */}
@@ -394,6 +482,76 @@ export default function Budget() {
               >
                 <div style={{ fontSize: '14px', color: 'var(--m-red)', fontWeight: 500 }}>
                   Heads up — over by <Money value={Math.abs(totalRemaining)} prefix="$" decimals={2} />. No judgment—let's adjust next month.
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* Create budget dialog */}
+          {isCreatingBudget && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ marginTop: '24px' }}
+            >
+              <Card className="m-card-sm">
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '16px' }}>
+                  Create New Budget
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--m-muted)', marginBottom: '4px' }}>
+                    Category
+                  </label>
+                  <select
+                    value={selectedCategoryId}
+                    onChange={(e) => setSelectedCategoryId(e.target.value)}
+                    className="m-input"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px' }}
+                  >
+                    <option value="">Select a category...</option>
+                    {availableCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--m-muted)', marginBottom: '4px' }}>
+                    Monthly Limit ($)
+                  </label>
+                  <input
+                    type="number"
+                    value={limitValue}
+                    onChange={(e) => setLimitValue(e.target.value)}
+                    placeholder="0.00"
+                    className="m-input"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="m-btn m-btn-primary m-btn-sm"
+                    onClick={handleCreateBudget}
+                    style={{ flex: 1 }}
+                  >
+                    Create
+                  </button>
+                  <button
+                    className="m-btn m-btn-secondary m-btn-sm"
+                    onClick={() => {
+                      setIsCreatingBudget(false);
+                      setSelectedCategoryId('');
+                      setLimitValue('');
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    Cancel
+                  </button>
                 </div>
               </Card>
             </motion.div>

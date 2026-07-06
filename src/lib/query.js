@@ -6,8 +6,15 @@ export const queryClient = new QueryClient({
   },
 });
 
-export async function api(path, opts) {
-  const res = await fetch('/api/' + String(path).replace(/^\/+/, ''), opts);
+export async function api(path, opts = {}) {
+  // Default the JSON Content-Type whenever a string body is sent — Express's
+  // json middleware only parses when it's set, so without this a POST/PUT body
+  // is silently dropped and validators 400. Callers can't forget it now.
+  const options = { ...opts };
+  if (typeof options.body === 'string') {
+    options.headers = { 'Content-Type': 'application/json', ...options.headers };
+  }
+  const res = await fetch('/api/' + String(path).replace(/^\/+/, ''), options);
   const text = await res.text();
   if (!res.ok) {
     // Surface the server's error field (validators return real messages there).

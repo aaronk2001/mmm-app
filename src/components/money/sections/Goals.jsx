@@ -23,6 +23,7 @@ import GoalList from './parts/goals/GoalList';
  */
 export default function Goals() {
   const [goals, setGoals] = useState(null);
+  const [accounts, setAccounts] = useState(null);
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -35,20 +36,23 @@ export default function Goals() {
     monthly_contribution: '',
     target_date: '',
     template: '',
+    linked_account_id: null,
     custom: {},
   });
   const [cfFilters, setCfFilters] = useState({});
   const { data: cfSettings } = useApi('settings');
 
-  // Load goals and insights
+  // Load goals, accounts, and insights
   useEffect(() => {
     async function loadData() {
       try {
-        const [goalsData, insightsData] = await Promise.all([
+        const [goalsData, accountsData, insightsData] = await Promise.all([
           api('money/goals'),
+          api('money/accounts'),
           api('money/goals/insights'),
         ]);
         setGoals(goalsData);
+        setAccounts(accountsData);
         setInsights(insightsData);
       } catch (err) {
         setError(err.message);
@@ -70,6 +74,7 @@ export default function Goals() {
         monthly_contribution: formData.monthly_contribution ? parseFloat(formData.monthly_contribution) : null,
         target_date: formData.target_date || null,
         template: formData.template || null,
+        linked_account_id: formData.linked_account_id || null,
         custom: formData.custom || {},
       };
 
@@ -89,7 +94,7 @@ export default function Goals() {
 
       const goalsData = await api('money/goals');
       setGoals(goalsData);
-      setFormData({ name: '', target: '', current: '', monthly_contribution: '', target_date: '', template: '', custom: {} });
+      setFormData({ name: '', target: '', current: '', monthly_contribution: '', target_date: '', template: '', linked_account_id: null, custom: {} });
       setShowAddForm(false);
       setEditingGoalId(null);
       toast.success(editingGoalId ? 'Goal updated' : 'Goal created');
@@ -124,6 +129,7 @@ export default function Goals() {
       monthly_contribution: String(goal.monthly_contribution || ''),
       target_date: goal.target_date || '',
       template: goal.template || '',
+      linked_account_id: goal.linked_account_id || null,
       custom: goal.custom || {},
     });
     setShowAddForm(true);
@@ -132,7 +138,7 @@ export default function Goals() {
   const handleCancel = () => {
     setShowAddForm(false);
     setEditingGoalId(null);
-    setFormData({ name: '', target: '', current: '', monthly_contribution: '', target_date: '', template: '', custom: {} });
+    setFormData({ name: '', target: '', current: '', monthly_contribution: '', target_date: '', template: '', linked_account_id: null, custom: {} });
   };
 
   if (loading) {
@@ -177,6 +183,7 @@ export default function Goals() {
         handleSaveGoal={handleSaveGoal}
         handleCancel={handleCancel}
         cfSettings={cfSettings}
+        accounts={accounts}
       />
 
       {fieldsFor(cfSettings, 'goal').length > 0 && (
@@ -189,6 +196,7 @@ export default function Goals() {
 
       <GoalList
         goalsList={goalsList}
+        accounts={accounts}
         showAddForm={showAddForm}
         setShowAddForm={setShowAddForm}
         handleEditStart={handleEditStart}

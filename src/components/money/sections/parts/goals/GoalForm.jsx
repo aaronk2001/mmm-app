@@ -18,6 +18,7 @@ export default function GoalForm({
   handleSaveGoal,
   handleCancel,
   cfSettings,
+  accounts,
 }) {
   if (!showAddForm) {
     return (
@@ -125,6 +126,19 @@ export default function GoalForm({
                 onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
                 style={{ fontSize: '13px' }}
               />
+              <select
+                className="m-input"
+                value={formData.linked_account_id || ''}
+                onChange={(e) => setFormData({ ...formData, linked_account_id: e.target.value || null })}
+                style={{ fontSize: '13px' }}
+              >
+                <option value="">Track with account (optional)</option>
+                {accounts?.accounts?.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
               <CustomFieldInputs entity="goal" value={formData.custom} onChange={(c) => setFormData({ ...formData, custom: c })} />
             </div>
 

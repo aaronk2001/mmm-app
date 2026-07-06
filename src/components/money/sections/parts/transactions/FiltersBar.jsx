@@ -10,11 +10,13 @@ export default function FiltersBar({
   filterToDate,
   cfFilters,
   settings,
+  search,
   onAccountChange,
   onCategoryChange,
   onFromDateChange,
   onToDateChange,
   onCfFiltersChange,
+  onSearchChange,
 }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
@@ -65,6 +67,17 @@ export default function FiltersBar({
           className="m-input"
           value={filterToDate}
           onChange={e => onToDateChange(e.target.value)}
+        />
+      </div>
+
+      <div>
+        <label className="m-input-label">Search</label>
+        <input
+          type="text"
+          className="m-input"
+          placeholder="Payee, note, or amount"
+          value={search}
+          onChange={e => onSearchChange(e.target.value)}
         />
       </div>
 

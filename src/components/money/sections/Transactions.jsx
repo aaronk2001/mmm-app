@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { TrendingDown, Plus } from 'lucide-react';
+import { TrendingDown, Plus, Download } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
 import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
@@ -14,8 +15,31 @@ import TransactionsTable from './parts/transactions/TransactionsTable';
 import AddForm from './parts/transactions/AddForm';
 import ImportPanel from './parts/transactions/ImportPanel';
 
+// RFC4180-aware split of one CSV line: honours quoted fields (embedded commas,
+// escaped "" quotes) so a file exported by Export CSV re-imports cleanly.
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) {
+      out.push(cur.trim());
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
 export default function Transactions() {
   const { data: settings } = useApi('settings');
+  const [searchParams] = useSearchParams();
   const {
     transactions,
     categories,
@@ -41,6 +65,17 @@ export default function Transactions() {
   const [filterFromDate, setFilterFromDate] = useState('');
   const [filterToDate, setFilterToDate] = useState('');
   const [cfFilters, setCfFilters] = useState({});
+  const [search, setSearch] = useState('');
+
+  // Apply URL filter params — re-runs when the query changes so a drill-down
+  // from Budget/Reports lands even while this section is already mounted
+  // (react-router doesn't remount on same-route query changes).
+  const urlCategory = searchParams.get('category');
+  const urlSearch = searchParams.get('q');
+  useEffect(() => {
+    if (urlCategory) setFilterCategory(urlCategory);
+    if (urlSearch) setSearch(urlSearch);
+  }, [urlCategory, urlSearch]);
 
   // Add form
   const [addForm, setAddForm] = useState({
@@ -80,8 +115,67 @@ export default function Transactions() {
     if (filterFromDate && txn.date < filterFromDate) return false;
     if (filterToDate && txn.date > filterToDate) return false;
     if (!fieldsFor(settings, 'transaction').every(f => matchesFilter(txn, f, cfFilters[f.id]))) return false;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      const payeeMatch = (txn.payee || '').toLowerCase().includes(searchLower);
+      const noteMatch = (txn.note || '').toLowerCase().includes(searchLower);
+      const amountMatch = String(Math.abs(txn.amount || 0)).includes(searchLower);
+      if (!payeeMatch && !noteMatch && !amountMatch) return false;
+    }
     return true;
   });
+
+  // CSV export
+  function exportCSV() {
+    if (filteredTransactions.length === 0) {
+      toast.error('No transactions to export');
+      return;
+    }
+
+    const escapeCSV = (value) => {
+      if (value == null) return '';
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const getCategoryName = (catId) => {
+      const cat = categories.find(c => c.id === catId);
+      return cat ? cat.name : 'Uncategorized';
+    };
+
+    const getAccountName = (accId) => {
+      const acc = accounts.find(a => a.id === accId);
+      return acc ? acc.name : accId;
+    };
+
+    const header = 'Date,Payee,Category,Account,Amount,Note\n';
+    const rows = filteredTransactions.map(txn =>
+      [
+        escapeCSV(txn.date),
+        escapeCSV(txn.payee),
+        escapeCSV(getCategoryName(txn.category_id)),
+        escapeCSV(getAccountName(txn.account_id)),
+        escapeCSV(txn.amount),
+        escapeCSV(txn.note),
+      ].join(',')
+    ).join('\n');
+
+    const csv = header + rows;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const now = new Date().toISOString().split('T')[0];
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mmm-transactions-${now}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${filteredTransactions.length} transaction(s)`);
+  }
 
   // Add transaction handler
   async function handleAdd() {
@@ -198,7 +292,7 @@ export default function Transactions() {
         .split('\n')
         .slice(0, 5)
         .map(line => {
-          const cols = line.split(',').map(c => c.trim());
+          const cols = parseCsvLine(line);
           return {
             date: cols[csvMapping.date] || '',
             amount: cols[csvMapping.amount] || '',
@@ -225,7 +319,7 @@ export default function Transactions() {
         .trim()
         .split('\n')
         .map(line => {
-          const cols = line.split(',').map(c => c.trim());
+          const cols = parseCsvLine(line);
           return {
             date: cols[csvMapping.date],
             amount: parseFloat(cols[csvMapping.amount]),
@@ -346,21 +440,34 @@ export default function Transactions() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>
           {transactions.length > 0 && (
             <Card className="m-card-sm" style={{ marginBottom: '16px' }}>
-              <FiltersBar
-                accounts={accounts}
-                categories={categories}
-                filterAccount={filterAccount}
-                filterCategory={filterCategory}
-                filterFromDate={filterFromDate}
-                filterToDate={filterToDate}
-                cfFilters={cfFilters}
-                settings={settings}
-                onAccountChange={setFilterAccount}
-                onCategoryChange={setFilterCategory}
-                onFromDateChange={setFilterFromDate}
-                onToDateChange={setFilterToDate}
-                onCfFiltersChange={setCfFilters}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <FiltersBar
+                  accounts={accounts}
+                  categories={categories}
+                  filterAccount={filterAccount}
+                  filterCategory={filterCategory}
+                  filterFromDate={filterFromDate}
+                  filterToDate={filterToDate}
+                  cfFilters={cfFilters}
+                  settings={settings}
+                  search={search}
+                  onAccountChange={setFilterAccount}
+                  onCategoryChange={setFilterCategory}
+                  onFromDateChange={setFilterFromDate}
+                  onToDateChange={setFilterToDate}
+                  onCfFiltersChange={setCfFilters}
+                  onSearchChange={setSearch}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    className="m-btn m-btn-secondary m-btn-sm"
+                    onClick={exportCSV}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Download size={14} /> Export CSV
+                  </button>
+                </div>
+              </div>
             </Card>
           )}
 
