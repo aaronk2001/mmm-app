@@ -10,15 +10,16 @@ import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
 
 const ACCENTS = [
-  { name: 'Blue',   hex: '#0071e3' },
-  { name: 'Indigo', hex: '#5856d6' },
-  { name: 'Violet', hex: '#7c3aed' },
-  { name: 'Teal',   hex: '#0a9396' },
-  { name: 'Green',  hex: '#2fb344' },
-  { name: 'Amber',  hex: '#f59e0b' },
-  { name: 'Rose',   hex: '#ff2d55' },
+  { name: 'Teal',   hex: '#2dd4bf' },
+  { name: 'Mint',   hex: '#4ade80' },
+  { name: 'Sky',    hex: '#38bdf8' },
+  { name: 'Indigo', hex: '#818cf8' },
+  { name: 'Violet', hex: '#a78bfa' },
+  { name: 'Amber',  hex: '#fbbf24' },
+  { name: 'Coral',  hex: '#fb7185' },
 ];
-const DEFAULT_ACCENT = '#0071e3';
+// '' = no override → the theme-aware default accent (teal) from theme.css wins.
+const DEFAULT_ACCENT = '';
 
 const THEMES = [
   { id: 'system', label: 'System', Icon: Monitor },
@@ -197,9 +198,23 @@ export default function Settings() {
           <Segmented options={THEMES} value={theme} onChange={pickTheme} />
         </Row>
         <Row label="Accent" hint="Used for highlights, charts, and the active state.">
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              title="Default (adapts to theme)"
+              onClick={() => pickAccent('')}
+              className="m-no-drag"
+              style={{
+                height: 26, padding: '0 10px', borderRadius: 999, cursor: 'pointer',
+                fontSize: 12, fontWeight: 600,
+                background: accent ? 'var(--m-surface-2)' : 'var(--m-accent-soft)',
+                color: accent ? 'var(--m-ink-2)' : 'var(--m-accent)',
+                border: '1px solid var(--m-border)',
+              }}
+            >
+              Auto
+            </button>
             {ACCENTS.map((a) => {
-              const active = a.hex.toLowerCase() === accent.toLowerCase();
+              const active = a.hex.toLowerCase() === (accent || '').toLowerCase();
               return (
                 <button
                   key={a.hex}

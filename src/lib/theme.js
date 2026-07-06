@@ -2,7 +2,7 @@
 // script in index.html; these helpers change it live and persist the choice.
 // Settings & Privacy (Phase 4) will drive these; exposed on window for now.
 
-const BG = { light: '#f6f7f9', dark: '#0b0e14' };
+const BG = { light: '#f5f6f5', dark: '#101318' };
 
 export function resolveTheme(pref) {
   if (pref === 'dark' || pref === 'light') return pref;
@@ -25,9 +25,16 @@ export function applyDensity(density = 'comfortable') {
 }
 
 export function applyAccent(hex) {
-  if (!hex) return;
+  if (!hex) return clearAccent();
   document.documentElement.style.setProperty('--accent', hex);
   try { localStorage.setItem('mmm-accent', hex); } catch {}
+}
+
+// Remove any override so the theme-aware default accent (teal) drives, which
+// lets the accent differ correctly between light and dark.
+export function clearAccent() {
+  document.documentElement.style.removeProperty('--accent');
+  try { localStorage.removeItem('mmm-accent'); } catch {}
 }
 
 export function getTheme() { try { return localStorage.getItem('mmm-theme') || 'system'; } catch { return 'system'; } }

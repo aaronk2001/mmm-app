@@ -21,7 +21,18 @@
   --m-red-bg: color-mix(in srgb, var(--negative) 6%, transparent);
   --m-amber: var(--warning);
   --m-amber-bg: color-mix(in srgb, var(--warning) 8%, transparent);
-  --m-radius: 16px;
+
+  /* Categorical chart palette (see theme.css). Components read these directly. */
+  --m-chart-1: var(--chart-1);
+  --m-chart-2: var(--chart-2);
+  --m-chart-3: var(--chart-3);
+  --m-chart-4: var(--chart-4);
+  --m-chart-5: var(--chart-5);
+  --m-chart-6: var(--chart-6);
+  --m-chart-7: var(--chart-7);
+  --m-chart-8: var(--chart-8);
+
+  --m-radius: 14px;
   --m-shadow: var(--shadow-card);
   --m-shadow-md: 0 2px 8px rgba(16, 24, 40, 0.1);
   --m-shadow-lg: 0 10px 32px rgba(16, 24, 40, 0.12);
@@ -60,7 +71,7 @@
   min-width: 0;
 }
 .money-hub .m-card:hover {
-  border-color: rgba(0, 113, 227, 0.2);
+  border-color: color-mix(in srgb, var(--m-accent) 28%, var(--m-border));
   box-shadow: var(--m-shadow-md);
 }
 .money-hub .m-card-sm {

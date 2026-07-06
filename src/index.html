@@ -16,8 +16,11 @@
         de.setAttribute('data-theme', t);
         de.setAttribute('data-density', localStorage.getItem('mmm-density') || 'comfortable');
         de.style.colorScheme = t;
-        de.style.backgroundColor = (t === 'dark') ? '#0b0e14' : '#f6f7f9';
+        de.style.backgroundColor = (t === 'dark') ? '#101318' : '#f5f6f5';
+        // Retire the pre-teal blue accents so MMM's identity shows; a
+        // deliberately-picked accent still persists.
         var a = localStorage.getItem('mmm-accent');
+        if (a === '#0071e3' || a === '#2f86ff') { localStorage.removeItem('mmm-accent'); a = null; }
         if (a) de.style.setProperty('--accent', a);
       } catch (e) {}
     })();

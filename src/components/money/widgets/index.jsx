@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import {
   Wallet, TrendingUp, Zap, PiggyBank, Target, Landmark, Receipt,
-  Calculator, Pencil, Check, X,
+  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3,
 } from 'lucide-react';
-import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
+import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis, PieChart, Pie, Cell } from 'recharts';
+
+const CHART_COLORS = ['var(--m-chart-1)', 'var(--m-chart-2)', 'var(--m-chart-3)', 'var(--m-chart-4)', 'var(--m-chart-5)', 'var(--m-chart-6)', 'var(--m-chart-7)', 'var(--m-chart-8)'];
 import { useQuery } from '@tanstack/react-query';
 import { useApi, fetchSettings, saveSettings, queryClient } from '../../../lib/query';
 import { evalFormula } from '../../../lib/formula';
@@ -275,6 +277,72 @@ function CustomMetric() {
   );
 }
 
+// Spending-by-category donut for the current month (from /overview).
+function SpendingDonut() {
+  const { data, isLoading } = useApi('money/overview');
+  if (isLoading) return <Loading />;
+  const cats = (data?.topCategoriesThisMonth || []).filter((c) => c.spent > 0);
+  if (!cats.length) return <Empty>No spending categorized yet this month.</Empty>;
+  const total = cats.reduce((s, c) => s + c.spent, 0);
+  return (
+    <div style={{ height: '100%', display: 'flex', gap: 8, alignItems: 'center' }}>
+      <div style={{ position: 'relative', width: 116, height: 116, flexShrink: 0 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={cats} dataKey="spent" nameKey="category" cx="50%" cy="50%" innerRadius={38} outerRadius={56} paddingAngle={2} stroke="none">
+              {cats.map((c, i) => <Cell key={c.category} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+            </Pie>
+            <Tooltip contentStyle={{ background: 'var(--m-surface)', border: '1px solid var(--m-border)', borderRadius: 8, color: 'var(--m-ink)' }} formatter={(v) => f$(v)} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ fontSize: 10, color: 'var(--m-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Spent</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--m-ink)', ...num }}>{f$(total)}</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 5 }}>
+        {cats.slice(0, 5).map((c, i) => (
+          <div key={c.category} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12 }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: CHART_COLORS[i % CHART_COLORS.length], flexShrink: 0 }} />
+            <span style={{ color: 'var(--m-ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{c.category}</span>
+            <span style={{ color: 'var(--m-ink)', fontWeight: 600, ...num, flexShrink: 0 }}>{f$(c.spent)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Income vs. expenses (monthly averages, from /metrics).
+function IncomeExpense() {
+  const { data, isLoading } = useApi('money/metrics');
+  if (isLoading) return <Loading />;
+  const m = data?.metrics || {};
+  const income = m.monthly_income || 0;
+  const expenses = m.monthly_expenses || 0;
+  const surplus = income - expenses;
+  const max = Math.max(income, expenses, 1);
+  const Row = ({ label, value, color }) => (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+        <span style={{ color: 'var(--m-ink-2)' }}>{label}</span>
+        <span style={{ color: 'var(--m-ink)', fontWeight: 600, ...num }}>{f$(value)}</span>
+      </div>
+      <Bar pct={(value / max) * 100} color={color} />
+    </div>
+  );
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <Row label="Income / mo" value={income} color="var(--m-green)" />
+      <Row label="Expenses / mo" value={expenses} color="var(--m-red)" />
+      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--m-border)', paddingTop: 8, fontSize: 13 }}>
+        <span style={{ color: 'var(--m-muted)' }}>{surplus >= 0 ? 'Surplus' : 'Shortfall'}</span>
+        <span style={{ fontWeight: 700, color: surplus >= 0 ? 'var(--m-green)' : 'var(--m-red)', ...num }}>{fSigned(surplus)}</span>
+      </div>
+    </div>
+  );
+}
+
 // ── registry ─────────────────────────────────────────────────────────────────
 // defaultLayout uses a 12-col grid; rowHeight ~80px. `scroll` => content area
 // gets its own overflow; chart widgets fill height instead.
@@ -286,7 +354,31 @@ export const WIDGETS = {
   goals:              { title: 'Goals',                icon: Target,        layout: { w: 4, h: 4, minW: 3, minH: 3 }, Component: Goals, scroll: true },
   accounts:           { title: 'Accounts',             icon: Landmark,      layout: { w: 4, h: 4, minW: 3, minH: 3 }, Component: Accounts, scroll: true },
   recentTransactions: { title: 'Recent Transactions',  icon: Receipt,       layout: { w: 4, h: 5, minW: 3, minH: 3 }, Component: RecentTransactions, scroll: true },
+  spendingDonut:      { title: 'Spending by Category',  icon: PieIcon,       layout: { w: 4, h: 3, minW: 3, minH: 3 }, Component: SpendingDonut },
+  incomeExpense:      { title: 'Income vs. Expenses',   icon: BarChart3,     layout: { w: 4, h: 3, minW: 3, minH: 2 }, Component: IncomeExpense },
   customMetric:       { title: 'Custom Metric',        icon: Calculator,    layout: { w: 4, h: 3, minW: 3, minH: 3 }, Component: CustomMetric, scroll: true },
+};
+
+// Dashboard presets — quick layouts users can apply from the Overview toolbar.
+export const PRESETS = {
+  'Quick glance': [
+    { i: 'netWorth',           x: 0, y: 0, w: 4, h: 2 },
+    { i: 'cashFlow',           x: 4, y: 0, w: 4, h: 2 },
+    { i: 'incomeExpense',      x: 8, y: 0, w: 4, h: 3 },
+    { i: 'netWorthTrend',      x: 0, y: 2, w: 8, h: 4 },
+    { i: 'spendingDonut',      x: 8, y: 3, w: 4, h: 3 },
+  ],
+  'Deep dive': [
+    { i: 'netWorth',           x: 0, y: 0, w: 4, h: 2 },
+    { i: 'cashFlow',           x: 4, y: 0, w: 4, h: 2 },
+    { i: 'incomeExpense',      x: 8, y: 0, w: 4, h: 3 },
+    { i: 'netWorthTrend',      x: 0, y: 2, w: 8, h: 4 },
+    { i: 'spendingDonut',      x: 8, y: 3, w: 4, h: 3 },
+    { i: 'budgets',            x: 0, y: 6, w: 4, h: 4 },
+    { i: 'goals',              x: 4, y: 6, w: 4, h: 4 },
+    { i: 'accounts',           x: 8, y: 6, w: 4, h: 4 },
+    { i: 'recentTransactions', x: 0, y: 10, w: 6, h: 5 },
+  ],
 };
 
 // Default dashboard: which widgets + where (12-col grid).

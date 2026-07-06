@@ -18,6 +18,7 @@ import ErrorBoundary from './shared/ErrorBoundary';
 import Toasts from './shared/Toasts';
 import ConfirmHost from './shared/ConfirmDialog';
 import QuickAdd from './shared/QuickAdd';
+import Logo from './shared/Logo';
 import { toast } from '../../lib/toast';
 import { api } from '../../lib/query';
 
@@ -122,8 +123,8 @@ export default function MoneyHub() {
           flexShrink: 0,
         }}
       >
-        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--m-muted)', textTransform: 'uppercase', paddingLeft: '12px', marginBottom: '16px', letterSpacing: '0.05em' }}>
-          Money Hub
+        <div style={{ marginBottom: '20px' }}>
+          <Logo />
         </div>
         <div className="m-sidebar">
           {SECTIONS.map(section => {

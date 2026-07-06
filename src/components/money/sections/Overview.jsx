@@ -5,7 +5,7 @@ import 'react-resizable/css/styles.css';
 import { Pencil, Check, RotateCcw, Plus, X, GripVertical, Settings } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchSettings, saveSettings, queryClient } from '../../../lib/query';
-import { WIDGETS, DEFAULT_LAYOUT } from '../widgets';
+import { WIDGETS, DEFAULT_LAYOUT, PRESETS } from '../widgets';
 import { WIDGET_SETTINGS } from '../widgets/settings';
 import WidgetSettingsPopover from '../widgets/WidgetSettingsPopover';
 
@@ -62,7 +62,12 @@ export default function Overview() {
     setLayout(next); persist(next);
   }
   function resetLayout() {
-    setLayout(DEFAULT_LAYOUT); persist(DEFAULT_LAYOUT);
+    setLayout(DEFAULT_LAYOUT); persist(DEFAULT_LAYOUT, { now: true });
+  }
+  function applyPreset(name) {
+    const next = PRESETS[name];
+    if (!next) return;
+    setLayout(next); persist(next, { now: true }); setAdding(false);
   }
 
   if (!layout) return <div style={{ color: 'var(--m-muted)', padding: 24 }}>Loading dashboard…</div>;
@@ -81,6 +86,11 @@ export default function Overview() {
         <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
           {edit && (
             <>
+              {Object.keys(PRESETS).map((name) => (
+                <button key={name} className="m-btn m-btn-secondary" onClick={() => applyPreset(name)} title={`Apply the "${name}" layout`}>
+                  {name}
+                </button>
+              ))}
               <button className="m-btn m-btn-secondary" onClick={() => setAdding((v) => !v)} disabled={!available.length}>
                 <Plus size={15} style={{ marginRight: 4 }} /> Add card
               </button>

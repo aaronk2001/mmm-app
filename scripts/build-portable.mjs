@@ -51,6 +51,7 @@ for (const f of ['electron.js', 'preload.js', 'package.json']) {
 }
 fs.cpSync(path.join(ROOT, 'server'), path.join(APP, 'server'), { recursive: true });
 fs.cpSync(path.join(ROOT, 'src', 'dist'), path.join(APP, 'src', 'dist'), { recursive: true });
+fs.cpSync(path.join(ROOT, 'assets'), path.join(APP, 'assets'), { recursive: true }); // icon.ico, tray.png
 // Never ship a database, legacy blob, or backups inside the app folder — user
 // data lives in %APPDATA%\mmm and a fresh install must start empty.
 for (const junk of ['mmm.db', 'mmm.db-wal', 'mmm.db-shm', 'data.json', 'data.json.migrated.bak', 'backups']) {
@@ -92,6 +93,22 @@ if (!fs.existsSync(prebuildBin)) {
 run(`node "${prebuildBin}" -r electron -t ${electronVersion}`, {
   cwd: path.join(APP, 'node_modules', 'better-sqlite3'),
 });
+
+// Best-effort: stamp the MMM.exe file icon (Explorer view). The window/tray
+// icon + shortcut IconLocation already give MMM its identity everywhere the
+// user actually looks, so a failure here (rcedit missing / AV block) is a
+// warning, not a build failure.
+const icoPath = path.join(ROOT, 'assets', 'icon.ico');
+if (fs.existsSync(icoPath)) {
+  try {
+    const mod = await import('rcedit');
+    const rcedit = mod.rcedit || mod.default;
+    await rcedit(path.join(OUT, 'MMM.exe'), { icon: icoPath });
+    log('5/6', 'Stamped MMM.exe icon.');
+  } catch (e) {
+    console.warn('[icon] could not set exe icon (window/tray/shortcut icon still apply):', e.message);
+  }
+}
 
 const rev = (() => {
   try { return execSync('git rev-parse --short HEAD', { cwd: ROOT }).toString().trim(); } catch { return 'unknown'; }
