@@ -18,3 +18,4 @@ server/store/money/backups/
 
 # agent scratch
 temp-esb/
+tmp-esb/
