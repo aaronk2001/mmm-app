@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd \\\"/c/Users/aaron/projects/Finance agent/mmm-app\\\" && MMM_DATA_DIR=\\\"$TEMP/mmm-dbg-$$\\\" PORT=5127 ELECTRON_RUN_AS_NODE=1 \\\"./build/MMM-portable/MMM.exe\\\" \\\"./build/MMM-portable/resources...",
-  "error": "Exit code 143\nCommand timed out after 30s",
-  "timestamp": "2026-07-05T22:57:02.394Z",
-  "retry_count": 1
+  "tool_input_preview": "{\"command\":\"cd \\\"C:/Users/aaron/projects/Finance agent/mmm-app\\\" && sqlite3 ./server/store/money/mmm.db \\\"SELECT id, name, type(id) FROM accounts LIMIT 3;\\\" 2>&1\"}",
+  "error": "Exit code 127\n/usr/bin/bash: line 1: sqlite3: command not found",
+  "timestamp": "2026-07-06T14:17:48.381Z",
+  "retry_count": 2
 }

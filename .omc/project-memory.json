@@ -39,8 +39,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build:portable 2>&1 | tail -6",
-    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3 && echo \"=== TESTS ===\" && npm test 2>&1 | grep -E \"Test Files|Tests \"",
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && for pid in $(netstat -ano | grep -E \":5006\\s.*LISTENING\" | awk '{print $NF}' | sort -u); do taskkill //F //PID $pid 2>/dev/null; done; sleep 1; npm run build:portable 2>&1 | tail -4",
+    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3 && echo \"=TESTS=\" && npm test 2>&1 | grep -E \"Test Files|Tests |FAIL\"",
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -132,38 +132,62 @@
   "hotPaths": [
     {
       "path": "server\\money\\routes.js",
-      "accessCount": 59,
-      "lastAccessed": 1783221435970,
+      "accessCount": 69,
+      "lastAccessed": 1783347555726,
       "type": "directory"
     },
     {
       "path": "server\\money\\store.js",
-      "accessCount": 59,
-      "lastAccessed": 1783294803704,
+      "accessCount": 61,
+      "lastAccessed": 1783347341378,
       "type": "directory"
     },
     {
       "path": "src\\components\\money\\sections\\Transactions.jsx",
-      "accessCount": 39,
-      "lastAccessed": 1783277543115,
+      "accessCount": 57,
+      "lastAccessed": 1783347923107,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Settings.jsx",
+      "accessCount": 37,
+      "lastAccessed": 1783346869771,
       "type": "file"
     },
     {
       "path": "server\\db\\repo.js",
-      "accessCount": 32,
-      "lastAccessed": 1783221428979,
+      "accessCount": 36,
+      "lastAccessed": 1783347486656,
       "type": "directory"
     },
     {
-      "path": "src\\components\\money\\sections\\Settings.jsx",
-      "accessCount": 28,
-      "lastAccessed": 1783294091385,
+      "path": "src\\components\\money\\sections\\Debt.jsx",
+      "accessCount": 30,
+      "lastAccessed": 1783347823443,
       "type": "file"
     },
     {
       "path": "src\\components\\money\\MoneyHub.jsx",
       "accessCount": 25,
       "lastAccessed": 1783294518832,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Budget.jsx",
+      "accessCount": 24,
+      "lastAccessed": 1783347262287,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Goals.jsx",
+      "accessCount": 23,
+      "lastAccessed": 1783347363209,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\query.js",
+      "accessCount": 20,
+      "lastAccessed": 1783347668382,
       "type": "file"
     },
     {
@@ -185,27 +209,33 @@
       "type": "file"
     },
     {
-      "path": "src\\components\\money\\sections\\Goals.jsx",
-      "accessCount": 15,
-      "lastAccessed": 1783221837581,
+      "path": "server\\db\\schema.sql",
+      "accessCount": 16,
+      "lastAccessed": 1783347485947,
       "type": "file"
     },
     {
       "path": "server\\index.js",
-      "accessCount": 13,
-      "lastAccessed": 1783198686964,
+      "accessCount": 15,
+      "lastAccessed": 1783347047289,
       "type": "file"
     },
     {
-      "path": "server\\db\\schema.sql",
-      "accessCount": 13,
-      "lastAccessed": 1783199297618,
+      "path": "",
+      "accessCount": 14,
+      "lastAccessed": 1783347409959,
+      "type": "directory"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Reports.jsx",
+      "accessCount": 14,
+      "lastAccessed": 1783347847873,
       "type": "file"
     },
     {
-      "path": "src\\lib\\query.js",
-      "accessCount": 13,
-      "lastAccessed": 1783221994854,
+      "path": "src\\components\\money\\sections\\Investments.jsx",
+      "accessCount": 12,
+      "lastAccessed": 1783346868364,
       "type": "file"
     },
     {
@@ -215,28 +245,10 @@
       "type": "file"
     },
     {
-      "path": "src\\components\\money\\sections\\Debt.jsx",
-      "accessCount": 11,
-      "lastAccessed": 1783277787415,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Budget.jsx",
-      "accessCount": 10,
-      "lastAccessed": 1783273731867,
-      "type": "file"
-    },
-    {
       "path": "package.json",
       "accessCount": 9,
       "lastAccessed": 1783199198489,
       "type": "file"
-    },
-    {
-      "path": "",
-      "accessCount": 9,
-      "lastAccessed": 1783221754984,
-      "type": "directory"
     },
     {
       "path": "src\\components\\money\\widgets\\WidgetSettingsPopover.jsx",
@@ -263,12 +275,6 @@
       "type": "file"
     },
     {
-      "path": "src\\components\\money\\sections\\Investments.jsx",
-      "accessCount": 5,
-      "lastAccessed": 1783294106265,
-      "type": "file"
-    },
-    {
       "path": "src\\main.jsx",
       "accessCount": 5,
       "lastAccessed": 1783294308630,
@@ -290,6 +296,12 @@
       "path": "src\\lib\\theme.js",
       "accessCount": 3,
       "lastAccessed": 1783293991262,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\shared\\Money.jsx",
+      "accessCount": 3,
+      "lastAccessed": 1783347201446,
       "type": "file"
     },
     {
@@ -344,12 +356,6 @@
       "path": "server\\settings\\routes.js",
       "accessCount": 1,
       "lastAccessed": 1782831199109,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Reports.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1782834953939,
       "type": "file"
     },
     {
@@ -416,12 +422,6 @@
       "path": "src\\components\\money\\shared\\ComingSoon.jsx",
       "accessCount": 1,
       "lastAccessed": 1783098747751,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\shared\\Money.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783098748226,
       "type": "file"
     },
     {

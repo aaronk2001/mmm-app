@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FileText, Download } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import SectionHeader from '../shared/SectionHeader';
@@ -30,20 +31,34 @@ function rangeStart(range) {
 }
 
 export default function Reports() {
+  const navigate = useNavigate();
   const { data: txnRes, isLoading } = useApi('money/transactions');
   const { data: catRes } = useApi('money/categories');
   const { data: nwRes } = useApi('money/networth');
 
   const [reportType, setReportType] = useState('spending');
   const [range, setRange] = useState('90d');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const txns = txnRes?.transactions || [];
   const categories = catRes?.categories || [];
   const snapshots = nwRes?.snapshots || [];
   const catName = (id) => categories.find((c) => c.id === id)?.name || (id ? id : 'Uncategorized');
 
-  const start = rangeStart(range);
-  const inRange = txns.filter((t) => new Date(t.date) >= start);
+  let start, end;
+  if (fromDate && toDate) {
+    start = new Date(fromDate);
+    end = new Date(toDate);
+    end.setDate(end.getDate() + 1);
+  } else {
+    start = rangeStart(range);
+    end = new Date(2099, 0, 1);
+  }
+  const inRange = txns.filter((t) => {
+    const d = new Date(t.date);
+    return d >= start && d < end;
+  });
 
   // Spending by category
   const byCat = {};
@@ -52,7 +67,7 @@ export default function Reports() {
     byCat[id] = (byCat[id] || 0) + Math.abs(t.amount);
   });
   const spendingRows = Object.entries(byCat)
-    .map(([id, total]) => ({ category: catName(id), total: Math.round(total * 100) / 100 }))
+    .map(([id, total]) => ({ id, category: catName(id), total: Math.round(total * 100) / 100 }))
     .sort((a, b) => b.total - a.total);
 
   // Income vs expenses by month
@@ -67,8 +82,8 @@ export default function Reports() {
     .sort((a, b) => a.month.localeCompare(b.month))
     .map((r) => ({ month: r.month, income: Math.round(r.income), expenses: Math.round(r.expenses), net: Math.round(r.income - r.expenses) }));
 
-  // Net worth
-  const nwRows = snapshots.filter((s) => new Date(s.date) >= start)
+  // Net worth — respect BOTH ends of the range (matches the transaction filter).
+  const nwRows = snapshots.filter((s) => { const d = new Date(s.date); return d >= start && d < end; })
     .map((s) => ({ date: s.date, net: s.net, assets: s.assets, liabilities: s.liabilities }));
 
   function exportCSV() {
@@ -108,10 +123,13 @@ export default function Reports() {
             <button key={r.id} onClick={() => setReportType(r.id)} className={`m-btn m-btn-sm ${reportType === r.id ? 'm-btn-primary' : 'm-btn-secondary'}`}>{r.label}</button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <select className="m-input" value={range} onChange={(e) => setRange(e.target.value)} style={{ fontSize: 13, padding: '6px 10px' }}>
             {RANGES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
+          <input type="date" className="m-input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={{ fontSize: 13, padding: '6px 10px' }} />
+          <input type="date" className="m-input" value={toDate} onChange={(e) => setToDate(e.target.value)} style={{ fontSize: 13, padding: '6px 10px' }} />
+          {(fromDate || toDate) && <button className="m-btn m-btn-secondary m-btn-sm" onClick={() => { setFromDate(''); setToDate(''); }}>Clear</button>}
           <button className="m-btn m-btn-secondary m-btn-sm" onClick={exportCSV} disabled={!hasData}><Download size={14} style={{ marginRight: 6 }} /> CSV</button>
         </div>
       </div>
@@ -174,7 +192,15 @@ export default function Reports() {
               <tbody>
                 {reportType === 'spending' && spendingRows.map((r, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--m-border)' }}>
-                    <td style={{ padding: '10px 12px', color: 'var(--m-ink)' }}>{r.category}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--m-ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {r.category}
+                      <button
+                        onClick={() => navigate(`/transactions?category=${encodeURIComponent(r.id)}`)}
+                        style={{ background: 'none', border: 'none', color: 'var(--m-accent)', fontSize: 12, textDecoration: 'underline', padding: 0, cursor: 'pointer' }}
+                      >
+                        View transactions
+                      </button>
+                    </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink)', fontWeight: 600, ...num }}>{f$(r.total)}</td>
                   </tr>
                 ))}

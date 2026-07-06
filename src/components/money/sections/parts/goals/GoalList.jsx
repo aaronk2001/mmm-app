@@ -1,16 +1,58 @@
 import { motion } from 'motion/react';
-import { Calendar, CheckCircle2, Edit2, Trash2, Target, Plus } from 'lucide-react';
+import { Calendar, CheckCircle2, Edit2, Trash2, Target, Plus, AlertCircle } from 'lucide-react';
 import Card from '../../../shared/Card';
 import Money from '../../../shared/Money';
 import EmptyState from '../../../shared/EmptyState';
 
+// Parse YYYY-MM-DD string to {year, month, day}
+const parseDate = (str) => {
+  const [y, m, d] = str.split('-').map(Number);
+  return { year: y, month: m, day: d };
+};
+
+// Calculate months between two YYYY-MM-DD dates (no UTC issues)
+const monthsBetween = (fromStr, toStr) => {
+  const from = parseDate(fromStr);
+  const to = parseDate(toStr);
+  return (to.year - from.year) * 12 + (to.month - from.month);
+};
+
+// Format date to YYYY-MM-DD by adding months
+const addMonths = (dateStr, months) => {
+  const d = parseDate(dateStr);
+  let m = d.month + months;
+  let y = d.year;
+  while (m > 12) {
+    m -= 12;
+    y += 1;
+  }
+  return `${y}-${String(m).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+};
+
+// Get today as YYYY-MM-DD
+const today = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export default function GoalList({
   goalsList,
+  accounts,
   showAddForm,
   setShowAddForm,
   handleEditStart,
   handleDeleteGoal,
 }) {
+  // Build account lookup
+  const accountMap = {};
+  if (accounts?.accounts) {
+    accounts.accounts.forEach(acc => {
+      accountMap[acc.id] = acc;
+    });
+  }
   if (goalsList.length === 0) {
     return (
       <EmptyState
@@ -36,12 +78,36 @@ export default function GoalList({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {goalsList.map((goal, idx) => {
-        const remaining = Math.max(0, goal.target - goal.current);
-        const pct = goal.target > 0 ? (goal.current / goal.target) * 100 : 0;
+        // Get current value: use linked account balance if set, else static current
+        const linkedAccount = goal.linked_account_id ? accountMap[goal.linked_account_id] : null;
+        // Fall back to the goal's stored current if the linked account or its
+        // balance is missing, so progress never renders as NaN.
+        const current = Number.isFinite(linkedAccount?.balance) ? linkedAccount.balance : (goal.current || 0);
+
+        const remaining = Math.max(0, goal.target - current);
+        const pct = goal.target > 0 ? (current / goal.target) * 100 : 0;
+
+        // Projected completion date
         const monthsToTarget =
           goal.monthly_contribution && goal.monthly_contribution > 0
             ? Math.ceil(remaining / goal.monthly_contribution)
             : null;
+        const projectedDate = monthsToTarget ? addMonths(today(), monthsToTarget) : null;
+
+        // Pace indicator
+        let paceStatus = null;
+        if (goal.target_date && goal.monthly_contribution) {
+          const monthsUntilTarget = monthsBetween(today(), goal.target_date);
+          if (monthsUntilTarget > 0) {
+            const neededMonthly = remaining / monthsUntilTarget;
+            if (neededMonthly <= goal.monthly_contribution) {
+              paceStatus = { type: 'on-pace', color: 'var(--m-green)' };
+            } else {
+              const behind = neededMonthly - goal.monthly_contribution;
+              paceStatus = { type: 'behind', amount: behind, color: 'var(--m-amber)' };
+            }
+          }
+        }
 
         return (
           <motion.div
@@ -92,6 +158,13 @@ export default function GoalList({
                     />
                   </div>
 
+                  {/* Tracking hint */}
+                  {linkedAccount && (
+                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginBottom: '6px' }}>
+                      tracking {linkedAccount.name}
+                    </div>
+                  )}
+
                   {/* Amount and timeline */}
                   <div
                     style={{
@@ -103,15 +176,9 @@ export default function GoalList({
                     }}
                   >
                     <div>
-                      <Money value={goal.current} prefix="$" decimals={2} /> of{' '}
+                      <Money value={current} prefix="$" decimals={2} /> of{' '}
                       <Money value={goal.target} prefix="$" decimals={2} />
                     </div>
-                    {monthsToTarget && remaining > 0 && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Calendar size={13} style={{ color: 'var(--m-muted)' }} />
-                        <span>{monthsToTarget} months</span>
-                      </div>
-                    )}
                     {pct >= 100 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--m-green)' }}>
                         <CheckCircle2 size={13} />
@@ -120,10 +187,33 @@ export default function GoalList({
                     )}
                   </div>
 
-                  {/* Monthly contribution */}
-                  {goal.monthly_contribution && (
-                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginTop: '4px' }}>
-                      <Money value={goal.monthly_contribution} prefix="$" decimals={2} /> / month
+                  {/* Monthly contribution and projected date */}
+                  {goal.monthly_contribution ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '12px', marginTop: '6px' }}>
+                      <div>
+                        <div style={{ color: 'var(--m-muted)' }}>
+                          <Money value={goal.monthly_contribution} prefix="$" decimals={2} /> / month
+                        </div>
+                        {projectedDate && remaining > 0 && (
+                          <div style={{ color: 'var(--m-muted)', marginTop: '2px', fontSize: '11px' }}>
+                            {monthsToTarget} months • {projectedDate}
+                          </div>
+                        )}
+                      </div>
+                      {paceStatus && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: paceStatus.color, fontWeight: 600 }}>
+                          <AlertCircle size={12} />
+                          <span>
+                            {paceStatus.type === 'on-pace'
+                              ? 'on pace'
+                              : `behind $${paceStatus.amount.toFixed(0)}/mo`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginTop: '6px' }}>
+                      set a monthly contribution to project a date
                     </div>
                   )}
                 </div>

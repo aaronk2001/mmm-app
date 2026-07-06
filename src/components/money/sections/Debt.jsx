@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   TrendingDown,
@@ -6,6 +6,7 @@ import {
   AlertCircle,
   Plus,
   Percent,
+  Calendar,
 } from 'lucide-react';
 import {
   LineChart,
@@ -48,6 +49,10 @@ export default function Debt() {
   const [strategy, setStrategy] = useState('avalanche');
   const [monthlyExtra, setMonthlyExtra] = useState(0);
   const [payoffResult, setPayoffResult] = useState(null);
+  const [baselineResult, setBaselineResult] = useState(null);
+
+  // Debounce for extra payment input
+  const debounceRef = useRef(null);
 
   // Loan calculator state
   const [showCalculators, setShowCalculators] = useState(false);
@@ -72,24 +77,52 @@ export default function Debt() {
     }
   }
 
-  // Compute payoff strategy when debts, strategy, or monthlyExtra changes
+  // Compute payoff strategy when debts or strategy changes; debounce monthlyExtra
   useEffect(() => {
     if (debts.length > 0) {
-      computePayoff();
+      computePayoff(monthlyExtra);
     }
-  }, [strategy, monthlyExtra, debts]);
+  }, [strategy, debts]);
 
-  async function computePayoff() {
+  // Clear any pending debounce on unmount so it can't fire setState afterward.
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+  // Debounced extra payment handler
+  const handleExtraPaymentChange = (value) => {
+    setMonthlyExtra(value);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (debts.length > 0) {
+        computePayoff(value);
+      }
+    }, 500);
+  };
+
+  async function computePayoff(extra) {
     try {
-      const result = await api('money/debt/payoff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          strategy,
-          monthly_extra: monthlyExtra,
+      // Compute baseline (0 extra) and current payoff in parallel
+      const [baseline, current] = await Promise.all([
+        api('money/debt/payoff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            strategy,
+            monthly_extra: 0,
+          }),
         }),
-      });
-      setPayoffResult(result);
+        api('money/debt/payoff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            strategy,
+            monthly_extra: extra,
+          }),
+        }),
+      ]);
+
+      setBaselineResult(baseline);
+      setPayoffResult(current);
     } catch (err) {
       toast.error('Failed to compute payoff strategy');
     }
@@ -148,6 +181,34 @@ export default function Debt() {
   // Calculate total debt
   const totalDebt = debts.reduce((sum, d) => sum + d.balance, 0);
   const totalMinPayment = debts.reduce((sum, d) => sum + d.min_payment, 0);
+
+  // Compute payoff months per debt from schedule
+  const getPayoffMonths = (debtName, schedule) => {
+    if (!schedule || schedule.length === 0) return null;
+    for (const point of schedule) {
+      const balance = point.balances.find(b => b.name === debtName);
+      if (balance && balance.remaining < 0.01) {
+        return point.month;
+      }
+    }
+    return null;
+  };
+
+  // Format payoff date from months offset
+  const getPayoffDate = (months) => {
+    if (!months) return null;
+    const d = new Date();
+    d.setMonth(d.getMonth() + months);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+  };
+
+  // Compute savings vs baseline
+  const interestSavings = baselineResult && payoffResult
+    ? baselineResult.totalInterest - payoffResult.totalInterest
+    : 0;
+  const monthsEarlier = baselineResult && payoffResult
+    ? baselineResult.monthsToFree - payoffResult.monthsToFree
+    : 0;
 
   // Chart data: transform schedule for line chart
   const chartData = payoffResult?.schedule?.map(point => ({
@@ -232,57 +293,76 @@ export default function Debt() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {debts.map((debt, idx) => (
-              <motion.div
-                key={debt.account_id}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2, delay: idx * 0.05 }}
-                style={{
-                  padding: '12px',
-                  background: 'var(--m-surface-2)',
-                  borderRadius: '8px',
-                  border: '1px solid var(--m-border)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', minWidth: 0 }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {debt.name}
+            {debts.map((debt, idx) => {
+              const payoffMonths = payoffResult ? getPayoffMonths(debt.name, payoffResult.schedule) : null;
+              const payoffDate = payoffMonths ? getPayoffDate(payoffMonths) : null;
+              const fallbackMonths = Math.ceil(debt.balance / debt.min_payment);
+              return (
+                <motion.div
+                  key={debt.account_id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: idx * 0.05 }}
+                  style={{
+                    padding: '12px',
+                    background: 'var(--m-surface-2)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--m-border)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', minWidth: 0 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {debt.name}
+                      </div>
+                      <div style={{ fontSize: '13px', color: 'var(--m-ink-2)', marginTop: '2px' }}>
+                        {debt.type === 'credit' ? 'Credit Card' : 'Loan'} at <Percent size={12} style={{ display: 'inline' }} /> {(debt.apr * 100).toFixed(1)}% APR
+                      </div>
                     </div>
-                    <div style={{ fontSize: '13px', color: 'var(--m-ink-2)', marginTop: '2px' }}>
-                      {debt.type === 'credit' ? 'Credit Card' : 'Loan'} at <Percent size={12} style={{ display: 'inline' }} /> {(debt.apr * 100).toFixed(1)}% APR
+                    <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--m-ink)', fontVariantNumeric: 'tabular-nums' }}>
+                        <Money value={debt.balance} />
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginTop: '2px' }}>
+                        Min: <Money value={debt.min_payment} decimals={0} />
+                      </div>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
-                    <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--m-ink)', fontVariantNumeric: 'tabular-nums' }}>
-                      <Money value={debt.balance} />
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginTop: '2px' }}>
-                      Min: <Money value={debt.min_payment} decimals={0} />
-                    </div>
-                  </div>
-                </div>
 
-                {/* Progress bar */}
-                <div style={{
-                  width: '100%',
-                  height: '6px',
-                  background: 'var(--m-border)',
-                  borderRadius: '3px',
-                  overflow: 'hidden',
-                }}>
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${Math.min(100, (debt.balance / totalDebt) * 100)}%`,
-                      background: 'var(--m-accent)',
-                      transition: 'width 150ms ease',
-                    }}
-                  />
-                </div>
-              </motion.div>
-            ))}
+                  {/* Progress bar */}
+                  <div style={{
+                    width: '100%',
+                    height: '6px',
+                    background: 'var(--m-border)',
+                    borderRadius: '3px',
+                    overflow: 'hidden',
+                    marginBottom: '8px',
+                  }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.min(100, (debt.balance / totalDebt) * 100)}%`,
+                        background: 'var(--m-accent)',
+                        transition: 'width 150ms ease',
+                      }}
+                    />
+                  </div>
+
+                  {/* Payoff date */}
+                  {payoffDate && (
+                    <div style={{ fontSize: '12px', color: 'var(--m-ink-2)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Calendar size={12} />
+                      Payoff: {payoffDate}
+                    </div>
+                  )}
+                  {!payoffDate && !payoffResult && (
+                    <div style={{ fontSize: '12px', color: 'var(--m-muted)' }}>
+                      Est. {fallbackMonths} months at minimum payment
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
         </Card>
       </motion.div>
@@ -327,30 +407,37 @@ export default function Debt() {
               ))}
             </div>
 
-            {/* Extra monthly payment slider */}
+            {/* Extra monthly payment input */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--m-ink-2)', marginBottom: '8px' }}>
-                Extra Monthly Payment: <Money value={monthlyExtra} prefix="" />
+                Extra Monthly Payment
               </label>
               <input
-                type="range"
+                type="number"
                 min="0"
-                max="2000"
+                max={Math.round(totalDebt)}
                 step="50"
                 value={monthlyExtra}
-                onChange={e => setMonthlyExtra(Number(e.target.value))}
+                onChange={e => handleExtraPaymentChange(Math.max(0, Math.min(Math.round(totalDebt), Number(e.target.value) || 0)))}
                 style={{
                   width: '100%',
-                  height: '6px',
-                  borderRadius: '3px',
-                  background: 'var(--m-border)',
-                  outline: 'none',
-                  accentColor: 'var(--m-accent)',
-                  cursor: 'pointer',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--m-border)',
+                  background: 'var(--m-surface)',
+                  color: 'var(--m-ink)',
+                  fontSize: '14px',
+                  fontVariantNumeric: 'tabular-nums',
                 }}
+                placeholder="Enter any amount"
               />
+              {interestSavings > 0 && monthsEarlier > 0 && (
+                <div style={{ fontSize: '12px', color: 'var(--m-accent)', marginTop: '8px', fontWeight: 500 }}>
+                  ✓ vs. no extra: save <Money value={interestSavings} prefix="" /> interest, debt-free {monthsEarlier} month{monthsEarlier !== 1 ? 's' : ''} earlier
+                </div>
+              )}
               <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginTop: '6px' }}>
-                Adjust the slider to see how extra payments speed up debt freedom.
+                Enter any amount to see how extra payments accelerate debt freedom.
               </div>
             </div>
           </div>

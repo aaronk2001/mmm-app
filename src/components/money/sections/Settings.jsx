@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Monitor, Sun, Moon, Check, ShieldCheck, RotateCcw, Database, Download, Upload, Globe, History } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Monitor, Sun, Moon, Check, ShieldCheck, RotateCcw, Database, Download, Upload, Globe, History, MonitorSmartphone } from 'lucide-react';
 import {
   applyTheme, applyDensity, applyAccent, getTheme, getDensity, getAccent,
 } from '../../../lib/theme';
@@ -84,6 +84,27 @@ function Segmented({ options, value, onChange }) {
   );
 }
 
+function Toggle({ on, disabled, onChange }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onChange}
+      className="m-no-drag"
+      style={{
+        width: 40, height: 23, borderRadius: 999, padding: 2, border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1,
+        background: on ? 'var(--m-accent)' : 'var(--m-surface-2)',
+        transition: 'background 150ms ease', display: 'flex',
+        justifyContent: on ? 'flex-end' : 'flex-start', alignItems: 'center',
+      }}
+    >
+      <span style={{ width: 19, height: 19, borderRadius: 999, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.3)' }} />
+    </button>
+  );
+}
+
 export default function Settings() {
   const [theme, setTheme] = useState(getTheme);
   const [density, setDensity] = useState(getDensity);
@@ -120,6 +141,25 @@ export default function Settings() {
 
   const fileRef = useRef(null);
   const [backupMsg, setBackupMsg] = useState(null);
+
+  // Desktop prefs (only meaningful inside the Electron shell — window.mmm bridge).
+  const bridge = typeof window !== 'undefined' ? window.mmm : null;
+  const [desktop, setDesktop] = useState(null); // { closeToTray, launchOnBoot, canLaunchOnBoot }
+  useEffect(() => {
+    if (bridge?.getPrefs) bridge.getPrefs().then(setDesktop).catch(() => {});
+  }, [bridge]);
+  async function toggleLaunchOnBoot() {
+    if (!bridge?.setLaunchOnBoot) return;
+    const v = await bridge.setLaunchOnBoot(!desktop.launchOnBoot);
+    setDesktop((d) => ({ ...d, launchOnBoot: v }));
+    toast.success(`Launch on startup ${v ? 'on' : 'off'}.`);
+  }
+  async function toggleCloseToTray() {
+    if (!bridge?.setCloseToTray) return;
+    const v = await bridge.setCloseToTray(!desktop.closeToTray);
+    setDesktop((d) => ({ ...d, closeToTray: v }));
+    toast.success(`Close to tray ${v ? 'on' : 'off'}.`);
+  }
 
   const { data: backupsRes } = useApi('money/backups');
   const backups = backupsRes?.backups || [];
@@ -254,6 +294,17 @@ export default function Settings() {
       <RulesManager />
 
       <CustomFieldsManager />
+
+      {desktop && (
+        <Section title="Desktop" subtitle="How MMM behaves as a desktop app.">
+          <Row label="Launch on startup" hint={desktop.canLaunchOnBoot ? 'Open MMM automatically when you sign in.' : 'Available in the installed app.'}>
+            <Toggle on={!!desktop.launchOnBoot} disabled={!desktop.canLaunchOnBoot} onChange={toggleLaunchOnBoot} />
+          </Row>
+          <Row label="Close to tray" hint="Keep MMM running in the system tray when you close the window.">
+            <Toggle on={!!desktop.closeToTray} onChange={toggleCloseToTray} />
+          </Row>
+        </Section>
+      )}
 
       <Section title="Privacy &amp; Data" subtitle="MMM is local-first by design.">
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '4px 0' }}>

@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const net  = require('net');
 const { fork, execFileSync } = require('child_process');
@@ -8,6 +9,29 @@ const SERVER_PORT = 5006;
 
 let mainWindow = null;
 let serverProcess = null;
+let tray = null;
+let isQuitting = false;
+
+// ─── Daily-driver preferences ────────────────────────────────────────────────
+// Tiny JSON alongside the user data (%APPDATA%\mmm). Governs close-to-tray and
+// launch-on-boot; the renderer reads/writes these over IPC (see preload.js).
+const PREFS_DIR = path.join(app.getPath('appData'), 'mmm');
+const PREFS_FILE = path.join(PREFS_DIR, 'desktop-prefs.json');
+let prefs = { closeToTray: false, launchOnBoot: false };
+
+function loadPrefs() {
+  try { prefs = { ...prefs, ...JSON.parse(fs.readFileSync(PREFS_FILE, 'utf8')) }; } catch { /* defaults */ }
+}
+function savePrefs() {
+  try { fs.mkdirSync(PREFS_DIR, { recursive: true }); fs.writeFileSync(PREFS_FILE, JSON.stringify(prefs)); }
+  catch (e) { console.error('[MMM] could not save prefs:', e.message); }
+}
+function applyLoginItem() {
+  // Only meaningful for the packaged exe (the dev electron.exe path isn't MMM).
+  if (!app.isPackaged) return;
+  try { app.setLoginItemSettings({ openAtLogin: !!prefs.launchOnBoot, path: app.getPath('exe') }); }
+  catch (e) { console.error('[MMM] setLoginItemSettings failed:', e.message); }
+}
 
 // Inline LIGHT splash shown instantly while the local server cold-starts, so the
 // window is never a blank rectangle (first launch can take a while while Windows
@@ -116,6 +140,15 @@ function createWindow() {
   // Show the splash immediately; loadApp() swaps in the real UI once the server
   // answers, so the window is never a blank rectangle.
   mainWindow.loadURL(SPLASH_URL);
+
+  // Close-to-tray: when enabled, closing the window hides it instead of quitting
+  // (the app keeps running in the tray). A real quit sets isQuitting first.
+  mainWindow.on('close', (e) => {
+    if (!isQuitting && prefs.closeToTray && tray) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
 
   // Open external links in the browser, not Electron.
@@ -123,6 +156,37 @@ function createWindow() {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+}
+
+function showWindow() {
+  if (!mainWindow) { createWindow(); startServer(); waitForServer().then(loadApp); return; }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+// System-tray presence so MMM can live in the tray (close-to-tray) and be
+// reopened without a fresh cold start. Best-effort — no tray icon, no tray.
+function createTray() {
+  try {
+    const iconPath = path.join(__dirname, 'assets', 'tray.png');
+    const img = nativeImage.createFromPath(iconPath);
+    if (img.isEmpty()) return; // no asset -> skip; close-to-tray falls back to normal close
+    tray = new Tray(img);
+    tray.setToolTip('MMM — Making Money Moves');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Show MMM', click: showWindow },
+      { label: 'Hide', click: () => mainWindow && mainWindow.hide() },
+      { type: 'separator' },
+      { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
+    ]));
+    tray.on('click', () => {
+      if (mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized()) mainWindow.hide();
+      else showWindow();
+    });
+  } catch (e) {
+    console.error('[MMM] tray init failed:', e.message);
+  }
 }
 
 // Swap the splash for the real app once the server is up; retry if the load
@@ -172,8 +236,11 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
+    loadPrefs();
+    applyLoginItem();
     await killPort(SERVER_PORT);   // clear any stale MMM server (never NEXUS's :5005)
     createWindow();                // show the splash immediately
+    createTray();                  // tray presence (enables close-to-tray)
     startServer();
     await waitForServer();         // wait for the server to bind :5006
     loadApp();                     // swap splash -> real UI
@@ -181,15 +248,28 @@ if (!gotTheLock) {
 }
 
 app.on('window-all-closed', () => {
+  // With close-to-tray the window is hidden (not closed), so this won't fire;
+  // when it does (tray off), quitting is the right call.
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) createWindow();
+  if (mainWindow === null) showWindow();
 });
 
 app.on('before-quit', () => {
+  isQuitting = true;
   if (serverProcess) serverProcess.kill();
 });
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+ipcMain.handle('get-desktop-prefs', () => ({ ...prefs, canLaunchOnBoot: app.isPackaged }));
+ipcMain.handle('set-launch-on-boot', (_e, enabled) => {
+  prefs.launchOnBoot = !!enabled; savePrefs(); applyLoginItem();
+  return prefs.launchOnBoot;
+});
+ipcMain.handle('set-close-to-tray', (_e, enabled) => {
+  prefs.closeToTray = !!enabled; savePrefs();
+  return prefs.closeToTray;
+});
