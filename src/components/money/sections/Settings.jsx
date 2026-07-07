@@ -219,9 +219,13 @@ export default function Settings() {
     try {
       await api('money/backups/run', { method: 'POST' }); // safety snapshot first
       await api('money/reset', { method: 'POST' });
-      toast.success('Data erased — starting fresh.');
+      toast.success('Data erased — add your accounts to begin.');
       queryClient.clear();
-      setTimeout(() => window.location.reload(), 600);
+      // Enter the (now empty) app after reload instead of the welcome card, so
+      // the user can start filling in their own data right away.
+      try { sessionStorage.setItem('mmm-entered', '1'); } catch { /* private mode */ }
+      setTimeout(() => window.location.assign('#/accounts'), 300);
+      setTimeout(() => window.location.reload(), 500);
     } catch (e) {
       toast.error(`Couldn't reset: ${e.message}`);
     }

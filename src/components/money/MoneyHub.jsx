@@ -70,7 +70,23 @@ export default function MoneyHub() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEmpty, setIsEmpty] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  // Once the user has chosen to start fresh (here or from Settings), drop them
+  // INTO the app even while it's empty, so they can add accounts/transactions
+  // manually — instead of being stuck on the welcome card. Sticky for the
+  // session (cleared on a real app restart).
+  const [entered, setEntered] = useState(() => {
+    try { return sessionStorage.getItem('mmm-entered') === '1'; } catch { return false; }
+  });
   const location = useLocation();
+
+  function enterApp() {
+    try { sessionStorage.setItem('mmm-entered', '1'); } catch { /* private mode */ }
+    // Set the hash directly (not react-router navigate, which races the route
+    // switch when the welcome gate unmounts) so we reliably land on Accounts —
+    // where the first thing to add lives.
+    window.location.hash = '#/accounts';
+    setEntered(true);
+  }
 
   async function refreshEmpty() {
     try {
@@ -104,7 +120,8 @@ export default function MoneyHub() {
     try {
       await api('money/reset', { method: 'POST' });
       setIsEmpty(true);
-      toast.success('Starting fresh — data cleared.');
+      enterApp(); // drop into the empty app so they can add their own data
+      toast.success('Starting fresh — add your accounts to begin.');
     } catch (err) {
       console.error('[MoneyHub] reset failed:', err.message);
       toast.error(`Couldn't reset: ${err.message}`);
@@ -149,7 +166,7 @@ export default function MoneyHub() {
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ color: 'var(--m-muted)' }}>Loading Money Hub…</div>
           </div>
-        ) : isEmpty ? (
+        ) : (isEmpty && !entered) ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
             <Card className="m-card-sm" style={{ maxWidth: '480px' }}>
               <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -166,7 +183,7 @@ export default function MoneyHub() {
                   {seeding ? 'Loading…' : 'Load Sample Data'}
                 </button>
                 <button onClick={handleReset} disabled={seeding} className="m-btn m-btn-secondary" style={{ width: '100%' }}>
-                  {seeding ? 'Processing…' : 'Start Fresh (Empty)'}
+                  {seeding ? 'Processing…' : 'Start fresh — add my own'}
                 </button>
               </div>
               <div style={{ marginTop: '16px', padding: '12px', background: 'var(--m-surface-2)', borderRadius: '8px', fontSize: '12px', color: 'var(--m-ink-2)', lineHeight: '1.5' }}>
@@ -196,7 +213,7 @@ export default function MoneyHub() {
         )}
       </main>
 
-      {!isEmpty && !isLoading && <QuickAdd />}
+      {(entered || !isEmpty) && !isLoading && <QuickAdd />}
       <Toasts />
       <ConfirmHost />
     </div>
