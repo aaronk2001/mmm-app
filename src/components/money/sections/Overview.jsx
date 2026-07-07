@@ -30,6 +30,16 @@ export default function Overview() {
     }
   }, [settings, layout]);
 
+  // Once the grid has rendered, nudge react-grid-layout's WidthProvider to
+  // re-measure the container. On a fresh app load that lands directly on the
+  // dashboard, the grid can otherwise mount before the flex layout has its
+  // width and collapse every widget into the left column.
+  useEffect(() => {
+    if (!layout) return;
+    const id = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    return () => cancelAnimationFrame(id);
+  }, [layout]);
+
   function persist(next, { now = false } = {}) {
     clearTimeout(saveTimer.current);
     const write = () => {
@@ -126,6 +136,7 @@ export default function Overview() {
 
       <Grid
         className="layout"
+        measureBeforeMount
         layouts={{ lg: layout }}
         breakpoints={{ lg: 1100, md: 860, sm: 640, xs: 480, xxs: 0 }}
         cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }}
