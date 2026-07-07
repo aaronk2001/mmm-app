@@ -1,7 +1,7 @@
 {
-  "tool_name": "mcp__claude-in-chrome__computer",
-  "tool_input_preview": "{\"action\":\"screenshot\",\"tabId\":2109313566}",
-  "error": "Error capturing screenshot: CDP sendCommand \"Page.captureScreenshot\" timed out after 30000ms on tab 2109313566. The renderer may be frozen or unresponsive.",
-  "timestamp": "2026-07-07T02:56:56.574Z",
+  "tool_name": "mcp__codegraph__codegraph_search",
+  "tool_input_preview": "{\"query\":\"metrics insights savings rate runway DTI budget status\"}",
+  "error": "MCP server \"codegraph\" tool \"codegraph_search\" timed out after 60s",
+  "timestamp": "2026-07-07T15:07:50.856Z",
   "retry_count": 1
 }

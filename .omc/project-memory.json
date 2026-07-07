@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1782795372980,
+  "lastScanned": 1783436763051,
   "projectRoot": "C:\\Users\\aaron\\projects\\Finance agent\\mmm-app",
   "techStack": {
     "languages": [
@@ -33,14 +33,19 @@
         "name": "vite",
         "version": "5.0.0",
         "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "3.0.0",
+        "category": "testing"
       }
     ],
     "packageManager": "npm",
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -2",
-    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm test 2>&1 | grep -E \"Test Files|Tests |FAIL\"",
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3 && echo \"=== TESTS ===\" && npx vitest run 2>&1 | tail -6",
+    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3 && echo \"=== TESTS ===\" && npx vitest run 2>&1 | tail -6",
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -49,6 +54,9 @@
       "dev:electron": "wait-on http://localhost:5173 && electron .",
       "build": "vite build src -c vite.config.mjs",
       "start": "electron .",
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "build:portable": "node scripts/build-portable.mjs",
       "package": "npm run build && electron-builder"
     }
   },
@@ -62,18 +70,39 @@
     "isMonorepo": false,
     "workspaces": [],
     "mainDirectories": [
+      "assets",
       "docs",
-      "src"
+      "scripts",
+      "src",
+      "tests"
     ],
     "gitBranches": null
   },
   "customNotes": [],
   "directoryMap": {
+    "assets": {
+      "path": "assets",
+      "purpose": "Static assets",
+      "fileCount": 3,
+      "lastAccessed": 1783436762687,
+      "keyFiles": [
+        "icon-256.png",
+        "icon.ico",
+        "tray.png"
+      ]
+    },
+    "build": {
+      "path": "build",
+      "purpose": "Build output",
+      "fileCount": 0,
+      "lastAccessed": 1783436762692,
+      "keyFiles": []
+    },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 6,
-      "lastAccessed": 1782795372310,
+      "lastAccessed": 1783436762805,
       "keyFiles": [
         "EXTRACTION_PLAN.md",
         "MONEY-HUB-PLAN.md",
@@ -82,11 +111,21 @@
         "MONEY_HUB_QUICK_API.md"
       ]
     },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 2,
+      "lastAccessed": 1783436762832,
+      "keyFiles": [
+        "build-portable.mjs",
+        "make-icon.mjs"
+      ]
+    },
     "server": {
       "path": "server",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1782795372479,
+      "lastAccessed": 1783436762858,
       "keyFiles": [
         "index.js"
       ]
@@ -95,25 +134,47 @@
       "path": "src",
       "purpose": "Source code",
       "fileCount": 3,
-      "lastAccessed": 1782795372486,
+      "lastAccessed": 1783436762878,
       "keyFiles": [
         "App.jsx",
         "index.html",
         "main.jsx"
       ]
     },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 6,
+      "lastAccessed": 1783436762885,
+      "keyFiles": [
+        "calc.test.mjs",
+        "formula.test.mjs",
+        "parsers.test.mjs",
+        "setup.mjs",
+        "store.test.mjs"
+      ]
+    },
+    "server\\middleware": {
+      "path": "server\\middleware",
+      "purpose": "Middleware",
+      "fileCount": 1,
+      "lastAccessed": 1783436762922,
+      "keyFiles": [
+        "validators.js"
+      ]
+    },
     "src\\components": {
       "path": "src\\components",
       "purpose": "UI components",
       "fileCount": 0,
-      "lastAccessed": 1782795372496,
+      "lastAccessed": 1783436762946,
       "keyFiles": []
     },
     "src\\dist": {
       "path": "src\\dist",
       "purpose": "Distribution/build output",
       "fileCount": 1,
-      "lastAccessed": 1782795372501,
+      "lastAccessed": 1783436762962,
       "keyFiles": [
         "index.html"
       ]
@@ -121,313 +182,98 @@
     "src\\lib": {
       "path": "src\\lib",
       "purpose": "Library code",
-      "fileCount": 2,
-      "lastAccessed": 1782795372509,
+      "fileCount": 6,
+      "lastAccessed": 1783436762970,
       "keyFiles": [
-        "query.js",
-        "theme.js"
+        "confirm.js",
+        "customFields.js",
+        "formula.js"
       ]
     }
   },
   "hotPaths": [
     {
-      "path": "server\\money\\routes.js",
-      "accessCount": 69,
-      "lastAccessed": 1783347555726,
-      "type": "directory"
-    },
-    {
-      "path": "server\\money\\store.js",
-      "accessCount": 61,
-      "lastAccessed": 1783347341378,
-      "type": "directory"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Transactions.jsx",
-      "accessCount": 57,
-      "lastAccessed": 1783347923107,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Settings.jsx",
-      "accessCount": 42,
-      "lastAccessed": 1783433818855,
-      "type": "file"
-    },
-    {
-      "path": "server\\db\\repo.js",
-      "accessCount": 36,
-      "lastAccessed": 1783347486656,
-      "type": "directory"
-    },
-    {
-      "path": "src\\components\\money\\MoneyHub.jsx",
-      "accessCount": 33,
-      "lastAccessed": 1783434420943,
-      "type": "file"
-    },
-    {
       "path": "src\\components\\money\\sections\\Debt.jsx",
-      "accessCount": 30,
-      "lastAccessed": 1783347823443,
-      "type": "file"
+      "accessCount": 5,
+      "lastAccessed": 1783439182196,
+      "type": "directory"
     },
     {
-      "path": "src\\components\\money\\sections\\Overview.jsx",
-      "accessCount": 28,
-      "lastAccessed": 1783392757988,
+      "path": "src\\components\\money\\widgets\\index.jsx",
+      "accessCount": 4,
+      "lastAccessed": 1783438967053,
       "type": "file"
     },
     {
       "path": "src\\components\\money\\sections\\Budget.jsx",
-      "accessCount": 24,
-      "lastAccessed": 1783347262287,
-      "type": "file"
+      "accessCount": 4,
+      "lastAccessed": 1783439107420,
+      "type": "directory"
+    },
+    {
+      "path": "src\\components\\money\\sections\\CashFlow.jsx",
+      "accessCount": 4,
+      "lastAccessed": 1783439237076,
+      "type": "directory"
     },
     {
       "path": "src\\components\\money\\sections\\Goals.jsx",
-      "accessCount": 23,
-      "lastAccessed": 1783347363209,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\query.js",
-      "accessCount": 20,
-      "lastAccessed": 1783347668382,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\widgets\\index.jsx",
-      "accessCount": 19,
-      "lastAccessed": 1783294901428,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\AccountsNetWorth.jsx",
-      "accessCount": 18,
-      "lastAccessed": 1783221896868,
-      "type": "file"
-    },
-    {
-      "path": "server\\db\\schema.sql",
-      "accessCount": 16,
-      "lastAccessed": 1783347485947,
-      "type": "file"
-    },
-    {
-      "path": "server\\index.js",
-      "accessCount": 15,
-      "lastAccessed": 1783347047289,
-      "type": "file"
-    },
-    {
-      "path": "",
-      "accessCount": 14,
-      "lastAccessed": 1783347409959,
+      "accessCount": 4,
+      "lastAccessed": 1783439289471,
       "type": "directory"
     },
     {
-      "path": "src\\components\\money\\sections\\Reports.jsx",
-      "accessCount": 14,
-      "lastAccessed": 1783347847873,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Investments.jsx",
-      "accessCount": 12,
-      "lastAccessed": 1783346868364,
-      "type": "file"
-    },
-    {
-      "path": "server\\db\\connection.js",
-      "accessCount": 11,
-      "lastAccessed": 1783199413327,
-      "type": "file"
-    },
-    {
-      "path": "package.json",
-      "accessCount": 9,
-      "lastAccessed": 1783199198489,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\widgets\\WidgetSettingsPopover.jsx",
-      "accessCount": 7,
-      "lastAccessed": 1783098730088,
-      "type": "file"
-    },
-    {
-      "path": "src\\styles\\money-theme.css",
-      "accessCount": 6,
-      "lastAccessed": 1783391319202,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\parts\\CustomFieldInputs.jsx",
-      "accessCount": 5,
-      "lastAccessed": 1783221770954,
-      "type": "file"
-    },
-    {
-      "path": "src\\styles\\theme.css",
-      "accessCount": 5,
-      "lastAccessed": 1783293729955,
-      "type": "file"
-    },
-    {
-      "path": "src\\main.jsx",
-      "accessCount": 5,
-      "lastAccessed": 1783294308630,
-      "type": "file"
-    },
-    {
-      "path": "src\\App.jsx",
-      "accessCount": 3,
-      "lastAccessed": 1783221518049,
-      "type": "file"
-    },
-    {
-      "path": "src\\index.html",
-      "accessCount": 3,
-      "lastAccessed": 1783293903446,
-      "type": "file"
-    },
-    {
-      "path": "src\\lib\\theme.js",
-      "accessCount": 3,
-      "lastAccessed": 1783293991262,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\shared\\Money.jsx",
-      "accessCount": 3,
-      "lastAccessed": 1783347201446,
-      "type": "file"
-    },
-    {
-      "path": "server\\money",
+      "path": "server\\money\\routes.js",
       "accessCount": 2,
-      "lastAccessed": 1782796602879,
+      "lastAccessed": 1783438776865,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Overview.jsx",
+      "accessCount": 2,
+      "lastAccessed": 1783439026278,
+      "type": "file"
+    },
+    {
+      "path": "server",
+      "accessCount": 1,
+      "lastAccessed": 1783436914865,
       "type": "directory"
     },
     {
-      "path": "src\\lib\\customFields.js",
-      "accessCount": 2,
-      "lastAccessed": 1783098723867,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\widgets\\settings.js",
-      "accessCount": 2,
-      "lastAccessed": 1783098729395,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\RulesManager.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1783098740221,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\parts\\CustomFieldFilters.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1783098740306,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\CustomFieldsManager.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1783098740426,
-      "type": "file"
-    },
-    {
-      "path": "vite.config.mjs",
-      "accessCount": 2,
-      "lastAccessed": 1783099580855,
-      "type": "file"
-    },
-    {
-      "path": "docs\\MONEY-HUB-PLAN.md",
+      "path": "server\\money\\calc.js",
       "accessCount": 1,
-      "lastAccessed": 1782830472904,
+      "lastAccessed": 1783436931150,
+      "type": "directory"
+    },
+    {
+      "path": "tests\\calc.test.mjs",
+      "accessCount": 1,
+      "lastAccessed": 1783438641009,
       "type": "file"
     },
     {
-      "path": "server\\settings\\routes.js",
+      "path": "server\\money\\advice.js",
       "accessCount": 1,
-      "lastAccessed": 1782831199109,
+      "lastAccessed": 1783438728513,
       "type": "file"
     },
     {
-      "path": "scripts\\bench-coach-models.mjs",
+      "path": "tests\\advice.test.mjs",
       "accessCount": 1,
-      "lastAccessed": 1782835363257,
+      "lastAccessed": 1783438812195,
       "type": "file"
     },
     {
-      "path": "src\\components\\money\\sections\\Tax.jsx",
+      "path": "src\\components\\money\\widgets\\InsightsWidget.jsx",
       "accessCount": 1,
-      "lastAccessed": 1783098723965,
+      "lastAccessed": 1783438898053,
       "type": "file"
     },
     {
-      "path": "src\\lib\\formula.js",
+      "path": "src\\components\\money\\shared\\AdviceTip.jsx",
       "accessCount": 1,
-      "lastAccessed": 1783098724252,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Advisor.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783098724981,
-      "type": "file"
-    },
-    {
-      "path": "docs\\superpowers\\plans\\2026-06-30-phase1-custom-fields-widget-settings.md",
-      "accessCount": 1,
-      "lastAccessed": 1783098730895,
-      "type": "file"
-    },
-    {
-      "path": "docs\\superpowers\\specs\\2026-06-30-phase1-custom-fields-widget-settings-design.md",
-      "accessCount": 1,
-      "lastAccessed": 1783098731345,
-      "type": "file"
-    },
-    {
-      "path": "server\\store\\money\\sample.money.json",
-      "accessCount": 1,
-      "lastAccessed": 1783098744301,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\shared\\Card.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783098745468,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\shared\\BigStat.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783098746116,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\shared\\EmptyState.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783098746833,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\shared\\ComingSoon.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783098747751,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\shared\\Term.jsx",
-      "accessCount": 1,
-      "lastAccessed": 1783098749788,
+      "lastAccessed": 1783439049115,
       "type": "file"
     }
   ],

@@ -363,3 +363,4 @@
 {"t":0,"agent":"ad0dad4","agent_type":"workflow-subagent","event":"agent_stop","success":true,"duration_ms":383504}
 {"t":0,"agent":"a459c60","agent_type":"workflow-subagent","event":"agent_stop","success":true,"duration_ms":424297}
 {"t":0,"agent":"aeaa5e5","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"superpowers:brainstorming"}

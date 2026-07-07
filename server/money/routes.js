@@ -1,5 +1,6 @@
 const express = require('express');
 const store = require('./store');
+const advice = require('./advice');
 const v = require('../middleware/validators');
 
 const router = express.Router();
@@ -670,6 +671,58 @@ router.post('/rules/apply', (req, res) => {
     res.json({ updated: updated.length });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Advice (deterministic coach findings)
+// ────────────────────────────────────────────────────────────────────────────
+
+router.get('/advice', (req, res) => {
+  try {
+    const data = store.readData();
+    const metrics = store.getMetrics();
+    const goalInsights = store.computeGoalInsights(data.accounts, data.transactions);
+    const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
+    const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
+    const cashflow = store.projectCashflow(store.getAccounts(), recurring, 90);
+    const investments = store.computeInvestmentMetrics(store.getHoldings());
+    const debts = data.accounts
+      .filter((a) => a.type === 'loan' || a.type === 'credit')
+      .map((a) => ({
+        name: a.name,
+        balance: Math.abs(parseFloat(a.balance) || 0),
+        apr: a.apr || (a.type === 'credit' ? 0.20 : 0.07),
+      }));
+
+    // Current vs previous full month expense totals (string-prefix month match,
+    // same convention as /overview to avoid UTC drift).
+    const now = new Date();
+    const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastYm = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+    const sumMonth = (ym) => data.transactions
+      .filter((t) => t.amount < 0 && String(t.date).slice(0, 7) === ym)
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+
+    const findings = advice.computeAdvice({
+      metrics,
+      goalInsights,
+      budgetStatus,
+      categories: data.categories,
+      cashflow,
+      debts,
+      goals: data.goals,
+      accounts: data.accounts,
+      recurring,
+      investments,
+      spendThisMonth: sumMonth(thisYm),
+      spendLastMonth: sumMonth(lastYm),
+    });
+
+    res.json({ findings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

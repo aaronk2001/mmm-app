@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import {
   Wallet, TrendingUp, Zap, PiggyBank, Target, Landmark, Receipt,
-  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3,
+  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3, Sparkles,
 } from 'lucide-react';
+import InsightsWidget from './InsightsWidget';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis, PieChart, Pie, Cell } from 'recharts';
 
 const CHART_COLORS = ['var(--m-chart-1)', 'var(--m-chart-2)', 'var(--m-chart-3)', 'var(--m-chart-4)', 'var(--m-chart-5)', 'var(--m-chart-6)', 'var(--m-chart-7)', 'var(--m-chart-8)'];
@@ -347,6 +348,7 @@ function IncomeExpense() {
 // defaultLayout uses a 12-col grid; rowHeight ~80px. `scroll` => content area
 // gets its own overflow; chart widgets fill height instead.
 export const WIDGETS = {
+  insights:           { title: 'Coach Insights',      icon: Sparkles,      layout: { w: 8, h: 4, minW: 4, minH: 3 }, Component: InsightsWidget, scroll: true },
   netWorth:           { title: 'Net Worth',           icon: Wallet,        layout: { w: 4, h: 2, minW: 3, minH: 2 }, Component: NetWorth },
   netWorthTrend:      { title: 'Net Worth Trend',      icon: TrendingUp,    layout: { w: 8, h: 4, minW: 4, minH: 3 }, Component: NetWorthTrend, fill: true },
   cashFlow:           { title: 'Cash Flow',            icon: Zap,           layout: { w: 4, h: 3, minW: 3, minH: 2 }, Component: CashFlow },
@@ -362,32 +364,34 @@ export const WIDGETS = {
 // Dashboard presets — quick layouts users can apply from the Overview toolbar.
 export const PRESETS = {
   'Quick glance': [
-    { i: 'netWorth',           x: 0, y: 0, w: 4, h: 2 },
-    { i: 'cashFlow',           x: 4, y: 0, w: 4, h: 2 },
-    { i: 'incomeExpense',      x: 8, y: 0, w: 4, h: 3 },
-    { i: 'netWorthTrend',      x: 0, y: 2, w: 8, h: 4 },
-    { i: 'spendingDonut',      x: 8, y: 3, w: 4, h: 3 },
+    { i: 'insights',           x: 0, y: 0, w: 8, h: 4 },
+    { i: 'netWorth',           x: 8, y: 0, w: 4, h: 2 },
+    { i: 'cashFlow',           x: 8, y: 2, w: 4, h: 2 },
+    { i: 'netWorthTrend',      x: 0, y: 4, w: 8, h: 4 },
+    { i: 'spendingDonut',      x: 8, y: 4, w: 4, h: 3 },
   ],
   'Deep dive': [
-    { i: 'netWorth',           x: 0, y: 0, w: 4, h: 2 },
-    { i: 'cashFlow',           x: 4, y: 0, w: 4, h: 2 },
-    { i: 'incomeExpense',      x: 8, y: 0, w: 4, h: 3 },
-    { i: 'netWorthTrend',      x: 0, y: 2, w: 8, h: 4 },
-    { i: 'spendingDonut',      x: 8, y: 3, w: 4, h: 3 },
-    { i: 'budgets',            x: 0, y: 6, w: 4, h: 4 },
-    { i: 'goals',              x: 4, y: 6, w: 4, h: 4 },
-    { i: 'accounts',           x: 8, y: 6, w: 4, h: 4 },
-    { i: 'recentTransactions', x: 0, y: 10, w: 6, h: 5 },
+    { i: 'insights',           x: 0, y: 0, w: 8, h: 4 },
+    { i: 'netWorth',           x: 8, y: 0, w: 4, h: 2 },
+    { i: 'cashFlow',           x: 8, y: 2, w: 4, h: 2 },
+    { i: 'incomeExpense',      x: 0, y: 4, w: 4, h: 3 },
+    { i: 'netWorthTrend',      x: 4, y: 4, w: 8, h: 4 },
+    { i: 'spendingDonut',      x: 0, y: 7, w: 4, h: 3 },
+    { i: 'budgets',            x: 0, y: 10, w: 4, h: 4 },
+    { i: 'goals',              x: 4, y: 10, w: 4, h: 4 },
+    { i: 'accounts',           x: 8, y: 8, w: 4, h: 4 },
+    { i: 'recentTransactions', x: 0, y: 14, w: 6, h: 5 },
   ],
 };
 
 // Default dashboard: which widgets + where (12-col grid).
 export const DEFAULT_LAYOUT = [
-  { i: 'netWorth',           x: 0, y: 0, w: 4, h: 2 },
-  { i: 'cashFlow',           x: 4, y: 0, w: 4, h: 2 },
-  { i: 'netWorthTrend',      x: 0, y: 2, w: 8, h: 4 },
+  { i: 'insights',           x: 0, y: 0, w: 8, h: 4 },
+  { i: 'netWorth',           x: 8, y: 0, w: 4, h: 2 },
+  { i: 'cashFlow',           x: 8, y: 2, w: 4, h: 2 },
+  { i: 'netWorthTrend',      x: 0, y: 4, w: 8, h: 4 },
   { i: 'accounts',           x: 8, y: 4, w: 4, h: 4 },
-  { i: 'budgets',            x: 0, y: 6, w: 4, h: 4 },
-  { i: 'goals',              x: 4, y: 6, w: 4, h: 4 },
+  { i: 'budgets',            x: 0, y: 8, w: 4, h: 4 },
+  { i: 'goals',              x: 4, y: 8, w: 4, h: 4 },
   { i: 'recentTransactions', x: 8, y: 8, w: 4, h: 5 },
 ];

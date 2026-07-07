@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import SectionHeader from '../shared/SectionHeader';
+import AdviceTip from '../shared/AdviceTip';
 import Card from '../shared/Card';
 import Money from '../shared/Money';
 import Term from '../shared/Term';
@@ -164,6 +165,8 @@ export default function Budget() {
   return (
     <div>
       <SectionHeader icon={TrendingUp} title="Monthly Budget" subtitle="Envelope-style spending plan" />
+
+      <AdviceTip categories={['budget']} />
 
       {/* Educational explainer */}
       <Card className="m-card-sm" style={{ marginBottom: '24px', background: 'var(--m-accent-soft)', border: 'none' }}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Target } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
+import AdviceTip from '../shared/AdviceTip';
 import Card from '../shared/Card';
 import CustomFieldFilters from './parts/CustomFieldFilters';
 import { api, useApi } from '../../../lib/query';
@@ -170,6 +171,8 @@ export default function Goals() {
   return (
     <div>
       <SectionHeader icon={Target} title="Goals & Savings" subtitle="Track goals and financial milestones" />
+
+      <AdviceTip categories={['goals', 'emergency', 'savings']} />
 
       <EmergencyFundWidget em={em} />
       <FireWidget fr={fr} />
