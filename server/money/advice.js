@@ -290,4 +290,77 @@ function computeAdvice(input = {}) {
   return findings.sort((a, b) => b.impact - a.impact);
 }
 
-module.exports = { computeAdvice };
+// Weekly digest — a once-a-week, opinionated summary of the last 7 days.
+// Pure: the route sums the week's transactions and passes the totals in.
+//   input = {
+//     weekOf,          'YYYY-MM-DD' start of this week
+//     savedThisWeek,   income - expenses over the last 7 days
+//     spendThisWeek, spendLastWeek,
+//     netWorthDelta,   change vs ~7 days ago (null if no history)
+//     topMover,        { category, delta } | null  (biggest category increase)
+//     emergencyFund,   goalInsights.emergencyFund | null
+//     findings,        ranked findings from computeAdvice()
+//   }
+function computeDigest(input = {}) {
+  const {
+    weekOf = '',
+    savedThisWeek = 0,
+    spendThisWeek = 0,
+    spendLastWeek = 0,
+    netWorthDelta = null,
+    topMover = null,
+    emergencyFund = null,
+    findings = [],
+  } = input;
+
+  const saved = Math.round(savedThisWeek);
+  const headline = saved > 0
+    ? `Good week — you saved ${money(saved)}.`
+    : saved < 0
+      ? `Tight week — you spent ${money(-saved)} more than you earned.`
+      : 'You broke even this week.';
+
+  const stats = [];
+  stats.push({ label: 'Saved this week', value: money(saved), tone: saved >= 0 ? 'good' : 'bad' });
+
+  if (spendLastWeek > 0) {
+    const change = (spendThisWeek - spendLastWeek) / spendLastWeek;
+    stats.push({
+      label: 'Spending vs last week',
+      value: money(spendThisWeek),
+      delta: `${change >= 0 ? '+' : ''}${pct(change)}`,
+      tone: change > 0.1 ? 'bad' : change < -0.1 ? 'good' : 'neutral',
+    });
+  } else {
+    stats.push({ label: 'Spent this week', value: money(spendThisWeek), tone: 'neutral' });
+  }
+
+  if (netWorthDelta != null) {
+    stats.push({
+      label: 'Net worth',
+      value: `${netWorthDelta >= 0 ? '+' : ''}${money(netWorthDelta)}`,
+      tone: netWorthDelta >= 0 ? 'good' : 'bad',
+    });
+  }
+
+  if (emergencyFund && emergencyFund.monthlyExpenses > 0) {
+    stats.push({
+      label: 'Emergency fund',
+      value: `${emergencyFund.monthsCovered} mo`,
+      tone: emergencyFund.adequacy === 'good' ? 'good' : emergencyFund.adequacy === 'ok' ? 'neutral' : 'bad',
+    });
+  }
+
+  if (topMover && topMover.delta > 0) {
+    stats.push({ label: `${topMover.category} up`, value: money(topMover.delta), tone: 'bad' });
+  }
+
+  return {
+    weekOf,
+    headline,
+    stats,
+    topFindings: findings.filter((f) => f.severity !== 'good').slice(0, 2),
+  };
+}
+
+module.exports = { computeAdvice, computeDigest };

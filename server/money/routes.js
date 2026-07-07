@@ -678,49 +678,110 @@ router.post('/rules/apply', (req, res) => {
 // Advice (deterministic coach findings)
 // ────────────────────────────────────────────────────────────────────────────
 
+// Gather everything computeAdvice() needs. Shared by /advice and /digest so the
+// finding set is identical in both surfaces.
+function adviceContext() {
+  const data = store.readData();
+  const metrics = store.getMetrics();
+  const goalInsights = store.computeGoalInsights(data.accounts, data.transactions);
+  const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
+  const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
+  const cashflow = store.projectCashflow(store.getAccounts(), recurring, 90);
+  const investments = store.computeInvestmentMetrics(store.getHoldings());
+  const debts = data.accounts
+    .filter((a) => a.type === 'loan' || a.type === 'credit')
+    .map((a) => ({
+      name: a.name,
+      balance: Math.abs(parseFloat(a.balance) || 0),
+      apr: a.apr || (a.type === 'credit' ? 0.20 : 0.07),
+    }));
+
+  // Current vs previous full month expense totals (string-prefix month match,
+  // same convention as /overview to avoid UTC drift).
+  const now = new Date();
+  const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastYm = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const sumMonth = (ym) => data.transactions
+    .filter((t) => t.amount < 0 && String(t.date).slice(0, 7) === ym)
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+
+  const input = {
+    metrics, goalInsights, budgetStatus, categories: data.categories, cashflow,
+    debts, goals: data.goals, accounts: data.accounts, recurring, investments,
+    spendThisMonth: sumMonth(thisYm), spendLastMonth: sumMonth(lastYm),
+  };
+  return { data, metrics, goalInsights, input };
+}
+
 router.get('/advice', (req, res) => {
   try {
-    const data = store.readData();
-    const metrics = store.getMetrics();
-    const goalInsights = store.computeGoalInsights(data.accounts, data.transactions);
-    const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
-    const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
-    const cashflow = store.projectCashflow(store.getAccounts(), recurring, 90);
-    const investments = store.computeInvestmentMetrics(store.getHoldings());
-    const debts = data.accounts
-      .filter((a) => a.type === 'loan' || a.type === 'credit')
-      .map((a) => ({
-        name: a.name,
-        balance: Math.abs(parseFloat(a.balance) || 0),
-        apr: a.apr || (a.type === 'credit' ? 0.20 : 0.07),
-      }));
+    res.json({ findings: advice.computeAdvice(adviceContext().input) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    // Current vs previous full month expense totals (string-prefix month match,
-    // same convention as /overview to avoid UTC drift).
-    const now = new Date();
-    const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastYm = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-    const sumMonth = (ym) => data.transactions
-      .filter((t) => t.amount < 0 && String(t.date).slice(0, 7) === ym)
-      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+router.get('/digest', (req, res) => {
+  try {
+    const { data, metrics, goalInsights, input } = adviceContext();
+    const findings = advice.computeAdvice(input);
 
-    const findings = advice.computeAdvice({
-      metrics,
-      goalInsights,
-      budgetStatus,
-      categories: data.categories,
-      cashflow,
-      debts,
-      goals: data.goals,
-      accounts: data.accounts,
-      recurring,
-      investments,
-      spendThisMonth: sumMonth(thisYm),
-      spendLastMonth: sumMonth(lastYm),
+    // Rolling 7-day windows (local calendar dates, string-compared).
+    const dayStr = (offset) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const today = dayStr(0);
+    const thisStart = dayStr(-6);
+    const lastStart = dayStr(-13);
+    const lastEnd = dayStr(-7);
+    const inRange = (d, a, b) => { const s = String(d).slice(0, 10); return s >= a && s <= b; };
+
+    const tx = data.transactions;
+    const spendIn = (a, b) => tx.filter((t) => t.amount < 0 && inRange(t.date, a, b)).reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+    const incomeIn = (a, b) => tx.filter((t) => t.amount > 0 && inRange(t.date, a, b)).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    const spendThisWeek = spendIn(thisStart, today);
+    const spendLastWeek = spendIn(lastStart, lastEnd);
+    const savedThisWeek = incomeIn(thisStart, today) - spendThisWeek;
+
+    // Net-worth change vs the newest snapshot at least 7 days old.
+    let netWorthDelta = null;
+    const snaps = store.getNetWorthSnapshots();
+    if (Array.isArray(snaps) && snaps.length) {
+      const past = snaps.filter((s) => String(s.date).slice(0, 10) <= lastEnd).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+      if (past && Number.isFinite(Number(past.net))) netWorthDelta = Math.round(((metrics.net_worth || 0) - Number(past.net)) * 100) / 100;
+    }
+
+    // Biggest category increase this week vs last week.
+    let topMover = null;
+    const byCat = {};
+    const bump = (cid, field, amt) => { (byCat[cid] = byCat[cid] || { now: 0, prev: 0 })[field] += amt; };
+    tx.filter((t) => t.amount < 0).forEach((t) => {
+      const amt = Math.abs(parseFloat(t.amount) || 0);
+      if (inRange(t.date, thisStart, today)) bump(t.category_id, 'now', amt);
+      else if (inRange(t.date, lastStart, lastEnd)) bump(t.category_id, 'prev', amt);
+    });
+    Object.entries(byCat).forEach(([cid, v]) => {
+      const delta = v.now - v.prev;
+      if (delta > 0 && (!topMover || delta > topMover.delta)) {
+        const cat = data.categories.find((c) => c.id === cid);
+        topMover = { category: cat?.name || 'Something', delta: Math.round(delta) };
+      }
     });
 
-    res.json({ findings });
+    const digest = advice.computeDigest({
+      weekOf: thisStart,
+      savedThisWeek,
+      spendThisWeek,
+      spendLastWeek,
+      netWorthDelta,
+      topMover,
+      emergencyFund: goalInsights.emergencyFund || null,
+      findings,
+    });
+    res.json(digest);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

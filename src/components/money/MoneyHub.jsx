@@ -19,8 +19,20 @@ import Toasts from './shared/Toasts';
 import ConfirmHost from './shared/ConfirmDialog';
 import QuickAdd from './shared/QuickAdd';
 import Logo from './shared/Logo';
-import { toast } from '../../lib/toast';
-import { api } from '../../lib/query';
+import DigestModal from './shared/DigestModal';
+import { toast, showToast } from '../../lib/toast';
+import { api, saveSettings } from '../../lib/query';
+
+// ISO-8601 week key (e.g. "2026-W27") — the digest fires at most once per week.
+function isoWeek() {
+  const d = new Date();
+  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((target - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${target.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
 
 // Import thunks are kept separately from lazy() so hovering a nav item can
 // prefetch a section's chunk before it's clicked.
@@ -102,6 +114,52 @@ export default function MoneyHub() {
   }
 
   useEffect(() => { refreshEmpty(); }, []);
+
+  // Proactive coach: once per app session, after the hub is usable, pop the
+  // weekly digest (at most once a week) or — on other days — fire the top 1-2
+  // findings as dismissible nudge toasts. Both respect the Settings toggles.
+  const [digest, setDigest] = useState(null);
+  useEffect(() => {
+    if (isLoading || (isEmpty && !entered)) return;
+    try { if (sessionStorage.getItem('mmm-coach-launched') === '1') return; } catch { /* ignore */ }
+    try { sessionStorage.setItem('mmm-coach-launched', '1'); } catch { /* ignore */ }
+    let cancelled = false;
+    (async () => {
+      let settings = {};
+      try { settings = await api('settings'); } catch { /* defaults below */ }
+      const coach = settings.coach || {};
+
+      // Weekly digest first — if it shows, it already lists the top findings, so
+      // we skip the nudge toasts to avoid piling on.
+      const wk = isoWeek();
+      if (coach.digestEnabled !== false && coach.lastDigestWeek !== wk) {
+        try {
+          const d = await api('money/digest');
+          if (!cancelled && d && (d.stats || []).length) {
+            setDigest(d);
+            saveSettings({ coach: { ...coach, lastDigestWeek: wk } }).catch(() => {});
+            return;
+          }
+        } catch { /* ignore */ }
+      }
+      if (cancelled) return;
+
+      const level = coach.nudgeLevel || 'capped';
+      if (coach.nudgesEnabled === false || level === 'off') return;
+      try {
+        const { findings = [] } = await api('money/advice');
+        if (cancelled) return;
+        const wanted = findings.filter((f) =>
+          level === 'critical' ? f.severity === 'critical' : (f.severity === 'critical' || f.severity === 'warn'));
+        wanted.slice(0, 2).forEach((f) =>
+          showToast(`${f.title}. ${f.detail}`, f.severity === 'critical' ? 'error' : 'info', 9000));
+        const crit = wanted.find((f) => f.severity === 'critical');
+        if (crit && window.mmm?.notify) window.mmm.notify({ title: crit.title, body: crit.detail });
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, isEmpty, entered]);
 
   const handleSeedSample = async () => {
     setSeeding(true);
@@ -214,6 +272,7 @@ export default function MoneyHub() {
       </main>
 
       {(entered || !isEmpty) && !isLoading && <QuickAdd />}
+      {digest && <DigestModal digest={digest} onClose={() => setDigest(null)} />}
       <Toasts />
       <ConfirmHost />
     </div>
