@@ -139,6 +139,17 @@ export default function Settings() {
     saveSettings({ appearance: { theme: 'system', density: 'comfortable', accent: DEFAULT_ACCENT } }).catch(() => {});
   }
 
+  // Coach preferences (proactive nudges + weekly digest). Defaults are ON.
+  const { data: allSettings } = useApi('settings');
+  const [coach, setCoach] = useState(null);
+  useEffect(() => { if (allSettings && coach === null) setCoach(allSettings.coach || {}); }, [allSettings, coach]);
+  const c = coach || {};
+  function saveCoach(patch) {
+    const next = { ...(coach || {}), ...patch };
+    setCoach(next);
+    saveSettings({ coach: next }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
+  }
+
   const fileRef = useRef(null);
   const [backupMsg, setBackupMsg] = useState(null);
 
@@ -315,6 +326,38 @@ export default function Settings() {
       <RulesManager />
 
       <CustomFieldsManager />
+
+      <Section title="Coach" subtitle="Proactive nudges and your weekly money digest — all computed locally, no cloud.">
+        <Row label="Proactive nudges" hint="On launch, surface the top 1–2 things worth acting on.">
+          <Toggle on={c.nudgesEnabled !== false} onChange={() => saveCoach({ nudgesEnabled: !(c.nudgesEnabled !== false) })} />
+        </Row>
+        {c.nudgesEnabled !== false && (
+          <Row label="Nudge level" hint="How much the coach speaks up.">
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[['capped', 'Top 1–2'], ['critical', 'Critical only']].map(([val, lbl]) => {
+                const active = (c.nudgeLevel || 'capped') === val;
+                return (
+                  <button
+                    key={val}
+                    onClick={() => saveCoach({ nudgeLevel: val })}
+                    style={{
+                      fontSize: 12, padding: '5px 10px', borderRadius: 7, cursor: 'pointer',
+                      border: '1px solid var(--m-border)',
+                      background: active ? 'var(--m-accent)' : 'var(--m-surface-2)',
+                      color: active ? '#fff' : 'var(--m-ink-2)', fontWeight: active ? 600 : 500,
+                    }}
+                  >
+                    {lbl}
+                  </button>
+                );
+              })}
+            </div>
+          </Row>
+        )}
+        <Row label="Weekly digest" hint="A once-a-week summary of how your money moved.">
+          <Toggle on={c.digestEnabled !== false} onChange={() => saveCoach({ digestEnabled: !(c.digestEnabled !== false) })} />
+        </Row>
+      </Section>
 
       {desktop && (
         <Section title="Desktop" subtitle="How MMM behaves as a desktop app.">

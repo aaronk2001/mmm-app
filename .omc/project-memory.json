@@ -44,8 +44,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3 && echo \"=== TESTS ===\" && npx vitest run 2>&1 | tail -6",
-    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3 && echo \"=== TESTS ===\" && npx vitest run 2>&1 | tail -6",
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npx vitest run tests/advice.test.mjs 2>&1 | tail -4 && echo \"=== BUILD ===\" && npm run build 2>&1 | tail -3",
+    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npx vitest run tests/advice.test.mjs 2>&1 | tail -4 && echo \"=== BUILD ===\" && npm run build 2>&1 | tail -3",
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -193,10 +193,22 @@
   },
   "hotPaths": [
     {
+      "path": "src\\components\\money\\MoneyHub.jsx",
+      "accessCount": 6,
+      "lastAccessed": 1783439872959,
+      "type": "file"
+    },
+    {
       "path": "src\\components\\money\\sections\\Debt.jsx",
       "accessCount": 5,
       "lastAccessed": 1783439182196,
       "type": "directory"
+    },
+    {
+      "path": "src\\components\\money\\sections\\Settings.jsx",
+      "accessCount": 5,
+      "lastAccessed": 1783440093682,
+      "type": "file"
     },
     {
       "path": "src\\components\\money\\widgets\\index.jsx",
@@ -224,14 +236,38 @@
     },
     {
       "path": "server\\money\\routes.js",
-      "accessCount": 2,
-      "lastAccessed": 1783438776865,
+      "accessCount": 4,
+      "lastAccessed": 1783439647052,
       "type": "file"
+    },
+    {
+      "path": "tests\\advice.test.mjs",
+      "accessCount": 3,
+      "lastAccessed": 1783439677789,
+      "type": "file"
+    },
+    {
+      "path": "electron.js",
+      "accessCount": 3,
+      "lastAccessed": 1783439942558,
+      "type": "directory"
     },
     {
       "path": "src\\components\\money\\sections\\Overview.jsx",
       "accessCount": 2,
       "lastAccessed": 1783439026278,
+      "type": "file"
+    },
+    {
+      "path": "server\\money\\advice.js",
+      "accessCount": 2,
+      "lastAccessed": 1783439564312,
+      "type": "file"
+    },
+    {
+      "path": "preload.js",
+      "accessCount": 2,
+      "lastAccessed": 1783439900246,
       "type": "file"
     },
     {
@@ -253,18 +289,6 @@
       "type": "file"
     },
     {
-      "path": "server\\money\\advice.js",
-      "accessCount": 1,
-      "lastAccessed": 1783438728513,
-      "type": "file"
-    },
-    {
-      "path": "tests\\advice.test.mjs",
-      "accessCount": 1,
-      "lastAccessed": 1783438812195,
-      "type": "file"
-    },
-    {
       "path": "src\\components\\money\\widgets\\InsightsWidget.jsx",
       "accessCount": 1,
       "lastAccessed": 1783438898053,
@@ -274,6 +298,24 @@
       "path": "src\\components\\money\\shared\\AdviceTip.jsx",
       "accessCount": 1,
       "lastAccessed": 1783439049115,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\toast.js",
+      "accessCount": 1,
+      "lastAccessed": 1783439710147,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\money\\shared\\DigestModal.jsx",
+      "accessCount": 1,
+      "lastAccessed": 1783439749928,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\query.js",
+      "accessCount": 1,
+      "lastAccessed": 1783440003055,
       "type": "file"
     }
   ],

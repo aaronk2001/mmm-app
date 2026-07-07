@@ -273,3 +273,19 @@ ipcMain.handle('set-close-to-tray', (_e, enabled) => {
   prefs.closeToTray = !!enabled; savePrefs();
   return prefs.closeToTray;
 });
+
+// Native OS notification for a critical coach finding. Clicking it focuses MMM.
+ipcMain.handle('coach-notify', (_e, payload) => {
+  try {
+    const { Notification } = require('electron');
+    if (!Notification.isSupported()) return false;
+    const n = new Notification({
+      title: String(payload?.title || 'MMM').slice(0, 120),
+      body: String(payload?.body || '').slice(0, 240),
+      silent: false,
+    });
+    n.on('click', () => { if (mainWindow) showWindow(); });
+    n.show();
+    return true;
+  } catch { return false; }
+});

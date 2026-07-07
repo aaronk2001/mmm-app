@@ -8,4 +8,7 @@ contextBridge.exposeInMainWorld('mmm', {
   getPrefs: () => ipcRenderer.invoke('get-desktop-prefs'),
   setLaunchOnBoot: (enabled) => ipcRenderer.invoke('set-launch-on-boot', !!enabled),
   setCloseToTray: (enabled) => ipcRenderer.invoke('set-close-to-tray', !!enabled),
+  // Native OS notification for a critical coach finding — reaches the user even
+  // when MMM is minimized to the tray.
+  notify: (payload) => ipcRenderer.invoke('coach-notify', payload),
 });

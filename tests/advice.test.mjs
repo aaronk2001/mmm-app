@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import advice from '../server/money/advice.js';
 
-const { computeAdvice } = advice;
+const { computeAdvice, computeDigest } = advice;
 const ids = (fs) => fs.map((f) => f.id);
 const byId = (fs, id) => fs.find((f) => f.id === id);
 
@@ -125,5 +125,31 @@ describe('computeAdvice', () => {
     const info = fs.findIndex((f) => f.severity === 'info');
     expect(crit).toBeGreaterThanOrEqual(0);
     expect(info).toBeGreaterThan(crit);
+  });
+});
+
+describe('computeDigest', () => {
+  it('leads with a positive headline when the week was net-positive', () => {
+    const d = computeDigest({ weekOf: '2026-07-06', savedThisWeek: 420, spendThisWeek: 300, spendLastWeek: 500 });
+    expect(d.headline).toMatch(/saved/i);
+    expect(d.stats[0]).toMatchObject({ label: 'Saved this week', tone: 'good' });
+  });
+
+  it('calls out a negative week', () => {
+    const d = computeDigest({ weekOf: '2026-07-06', savedThisWeek: -150, spendThisWeek: 900, spendLastWeek: 500 });
+    expect(d.headline).toMatch(/more than you earned/i);
+    expect(d.stats.find((s) => s.label.startsWith('Spending'))).toMatchObject({ tone: 'bad' });
+  });
+
+  it('includes at most two non-good findings', () => {
+    const findings = [
+      { id: 'a', severity: 'critical', title: 'A' },
+      { id: 'b', severity: 'warn', title: 'B' },
+      { id: 'c', severity: 'info', title: 'C' },
+      { id: 'g', severity: 'good', title: 'G' },
+    ];
+    const d = computeDigest({ findings });
+    expect(d.topFindings).toHaveLength(2);
+    expect(d.topFindings.every((f) => f.severity !== 'good')).toBe(true);
   });
 });
