@@ -150,8 +150,8 @@
     },
     {
       "path": "src\\components\\money\\sections\\Settings.jsx",
-      "accessCount": 41,
-      "lastAccessed": 1783391462691,
+      "accessCount": 42,
+      "lastAccessed": 1783433818855,
       "type": "file"
     },
     {
@@ -159,6 +159,12 @@
       "accessCount": 36,
       "lastAccessed": 1783347486656,
       "type": "directory"
+    },
+    {
+      "path": "src\\components\\money\\MoneyHub.jsx",
+      "accessCount": 33,
+      "lastAccessed": 1783434420943,
+      "type": "file"
     },
     {
       "path": "src\\components\\money\\sections\\Debt.jsx",
@@ -170,12 +176,6 @@
       "path": "src\\components\\money\\sections\\Overview.jsx",
       "accessCount": 28,
       "lastAccessed": 1783392757988,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\MoneyHub.jsx",
-      "accessCount": 25,
-      "lastAccessed": 1783294518832,
       "type": "file"
     },
     {
