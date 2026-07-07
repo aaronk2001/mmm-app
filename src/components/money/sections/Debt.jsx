@@ -22,6 +22,7 @@ import {
 import { api } from '../../../lib/query';
 import { toast } from '../../../lib/toast';
 import SectionHeader from '../shared/SectionHeader';
+import AdviceTip from '../shared/AdviceTip';
 import Card from '../shared/Card';
 import Money from '../shared/Money';
 import Term from '../shared/Term';
@@ -224,6 +225,8 @@ export default function Debt() {
         title="Debt Payoff"
         subtitle="Strategy and timeline"
       />
+
+      <AdviceTip categories={['debt']} />
 
       {/* ────────────────────────────────────────────────────────────────────
           Summary cards

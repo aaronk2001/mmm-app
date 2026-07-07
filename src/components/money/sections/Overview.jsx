@@ -45,6 +45,15 @@ export default function Overview() {
       // No layout, or one corrupted by the old restacking bug — reset and heal it.
       setLayout(DEFAULT_LAYOUT);
       if (saved.length) persist(DEFAULT_LAYOUT, { now: true });
+    } else if (!saved.some((l) => l.i === 'insights') && !settings.insightsSeeded) {
+      // One-time: surface the new Coach Insights widget on existing dashboards,
+      // pushing the saved widgets down. The flag means a later removal sticks.
+      const def = WIDGETS.insights.layout;
+      const next = [{ i: 'insights', x: 0, y: 0, w: def.w, h: def.h }, ...saved.map((l) => ({ ...l, y: l.y + def.h }))];
+      setLayout(next);
+      const overview = { ...(settings?.dashboards?.overview || {}), layout: next };
+      const dashboards = { ...(settings?.dashboards || {}), overview };
+      saveSettings({ dashboards, insightsSeeded: true }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
     } else {
       setLayout(saved);
     }

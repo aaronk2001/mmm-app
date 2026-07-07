@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
+import AdviceTip from '../shared/AdviceTip';
 import Card from '../shared/Card';
 import Money from '../shared/Money';
 import Term from '../shared/Term';
@@ -215,6 +216,8 @@ export default function CashFlow() {
   return (
     <div>
       <SectionHeader icon={Zap} title="Cash Flow" subtitle="Forecast your daily balance" />
+
+      <AdviceTip categories={['cashflow', 'subscriptions']} />
 
       {/* Educational explainer */}
       <Card className="m-card-sm" style={{ marginBottom: '24px', background: 'var(--m-accent-soft)', border: 'none' }}>
