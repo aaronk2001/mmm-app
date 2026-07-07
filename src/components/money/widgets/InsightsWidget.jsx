@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertOctagon, AlertTriangle, Info, CheckCircle2, ArrowRight } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Info, CheckCircle2, ArrowRight, MessageCircle, ChevronDown } from 'lucide-react';
 import { useApi } from '../../../lib/query';
+import CoachChat from './CoachChat';
 
 const SEVERITY = {
   critical: { color: 'var(--m-red)', Icon: AlertOctagon },
@@ -24,6 +26,7 @@ function toPath(action) {
 export default function InsightsWidget() {
   const { data, isLoading } = useApi('money/advice');
   const navigate = useNavigate();
+  const [chatOpen, setChatOpen] = useState(false);
   const findings = data?.findings || [];
 
   if (isLoading) {
@@ -93,6 +96,22 @@ export default function InsightsWidget() {
           </div>
         );
       })}
+
+      <div style={{ borderTop: '1px solid var(--m-border)', marginTop: 2, paddingTop: 10 }}>
+        <button
+          className="m-no-drag"
+          onClick={() => setChatOpen((v) => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7, width: '100%',
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            color: 'var(--m-accent)', fontSize: 13, fontWeight: 600,
+          }}
+        >
+          <MessageCircle size={15} /> Ask the coach
+          <ChevronDown size={15} style={{ marginLeft: 'auto', transform: chatOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+        </button>
+        {chatOpen && <CoachChat />}
+      </div>
     </div>
   );
 }

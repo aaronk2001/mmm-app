@@ -141,6 +141,7 @@ export default function Settings() {
 
   // Coach preferences (proactive nudges + weekly digest). Defaults are ON.
   const { data: allSettings } = useApi('settings');
+  const { data: coachStatus } = useApi('money/coach/status', { staleTime: 0 });
   const [coach, setCoach] = useState(null);
   useEffect(() => { if (allSettings && coach === null) setCoach(allSettings.coach || {}); }, [allSettings, coach]);
   const c = coach || {};
@@ -356,6 +357,26 @@ export default function Settings() {
         )}
         <Row label="Weekly digest" hint="A once-a-week summary of how your money moved.">
           <Toggle on={c.digestEnabled !== false} onChange={() => saveCoach({ digestEnabled: !(c.digestEnabled !== false) })} />
+        </Row>
+        <Row
+          label="Chat coach (optional AI)"
+          hint={coachStatus?.available
+            ? `Local Ollama connected${coachStatus.model ? ` — ${coachStatus.model}` : ''}. Chat is available on the dashboard.`
+            : 'Not detected. Install Ollama + qwen2.5:1.5b to chat; your insights work without it.'}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: coachStatus?.available ? 'var(--m-green)' : 'var(--m-muted)' }}>
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: coachStatus?.available ? 'var(--m-green)' : 'var(--m-muted)' }} />
+            {coachStatus?.available ? 'Connected' : 'Not detected'}
+          </span>
+        </Row>
+        <Row label="Model" hint="Ollama model the chat coach uses.">
+          <input
+            className="m-input"
+            key={c.model || 'qwen2.5:1.5b-instruct'}
+            defaultValue={c.model || 'qwen2.5:1.5b-instruct'}
+            onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== (c.model || 'qwen2.5:1.5b-instruct')) saveCoach({ model: v }); }}
+            style={{ width: 220, fontSize: 13 }}
+          />
         </Row>
       </Section>
 
