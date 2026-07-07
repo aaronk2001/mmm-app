@@ -1,6 +1,8 @@
 const express = require('express');
 const store = require('./store');
 const advice = require('./advice');
+const ollama = require('./ollama');
+const { coachSystemPrompt } = require('./coach-persona');
 const v = require('../middleware/validators');
 
 const router = express.Router();
@@ -784,6 +786,60 @@ router.get('/digest', (req, res) => {
     res.json(digest);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Coach chat (grounded local LLM — optional, falls back to rules)
+// ────────────────────────────────────────────────────────────────────────────
+
+router.get('/coach/status', async (req, res) => {
+  try {
+    res.json(await ollama.status(req.query.model));
+  } catch (err) {
+    res.json({ available: false, models: [], model: null, error: err.message });
+  }
+});
+
+router.post('/coach', async (req, res) => {
+  try {
+    const msgs = Array.isArray(req.body && req.body.messages) ? req.body.messages : [];
+    const history = msgs
+      .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+      .slice(-8);
+    if (!history.length) return res.status(400).json({ error: 'messages required' });
+
+    const st = await ollama.status(req.body && req.body.model);
+    if (!st.available) return res.json({ available: false });
+
+    const { data, metrics, goalInsights, input } = adviceContext();
+    const findings = advice.computeAdvice(input);
+    const facts = {
+      netWorth: metrics.net_worth,
+      assets: metrics.assets,
+      liabilities: metrics.liabilities,
+      monthlyIncome: metrics.monthly_income,
+      monthlyExpenses: metrics.monthly_expenses,
+      monthlySurplus: metrics.monthly_surplus,
+      savingsRate: metrics.savings_rate,
+      runwayMonths: metrics.runway_months,
+      liquidSavings: metrics.liquid_savings,
+      emergencyFund: goalInsights.emergencyFund || null,
+      accounts: data.accounts
+        .filter((a) => a.type !== 'loan' && a.type !== 'credit')
+        .slice(0, 12)
+        .map((a) => ({ name: a.name, type: a.type, balance: parseFloat(a.balance) || 0 })),
+      debts: input.debts,
+    };
+    const system = coachSystemPrompt({ facts, findings });
+    const reply = await ollama.chat({
+      model: st.model,
+      messages: [{ role: 'system', content: system }, ...history],
+    });
+    res.json({ available: true, reply, model: st.model });
+  } catch (err) {
+    // Model timeout / crash / OOM → tell the client to fall back to rules.
+    res.json({ available: false, error: err.message });
   }
 });
 

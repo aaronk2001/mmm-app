@@ -1,7 +1,7 @@
 {
-  "tool_name": "mcp__codegraph__codegraph_search",
-  "tool_input_preview": "{\"query\":\"metrics insights savings rate runway DTI budget status\"}",
-  "error": "MCP server \"codegraph\" tool \"codegraph_search\" timed out after 60s",
-  "timestamp": "2026-07-07T15:07:50.856Z",
+  "tool_name": "mcp__claude-in-chrome__browser_batch",
+  "tool_input_preview": "{\"actions\":[{\"name\":\"computer\",\"input\":{\"action\":\"wait\",\"duration\":28,\"tabId\":2109314288}},{\"name\":\"computer\",\"input\":{\"action\":\"scroll\",\"coordinate\":[650,300],\"scroll_direction\":\"down\",\"scroll_amount...",
+  "error": "actions[0] (computer:wait) failed: Failed to execute action: Duration cannot exceed 10 seconds (0 completed, 2 remaining)",
+  "timestamp": "2026-07-07T16:14:18.790Z",
   "retry_count": 1
 }
