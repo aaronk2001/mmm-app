@@ -39,8 +39,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && for pid in $(netstat -ano | grep -E \":5006\\s.*LISTENING\" | awk '{print $NF}' | sort -u); do taskkill //F //PID $pid 2>/dev/null; done; sleep 1; npm run build:portable 2>&1 | tail -4",
-    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3 && echo \"=TESTS=\" && npm test 2>&1 | grep -E \"Test Files|Tests |FAIL\"",
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3",
+    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm test 2>&1 | grep -E \"Test Files|Tests |FAIL\"",
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -150,8 +150,8 @@
     },
     {
       "path": "src\\components\\money\\sections\\Settings.jsx",
-      "accessCount": 37,
-      "lastAccessed": 1783346869771,
+      "accessCount": 41,
+      "lastAccessed": 1783391462691,
       "type": "file"
     },
     {
@@ -185,6 +185,12 @@
       "type": "file"
     },
     {
+      "path": "src\\components\\money\\sections\\Overview.jsx",
+      "accessCount": 21,
+      "lastAccessed": 1783391365353,
+      "type": "file"
+    },
+    {
       "path": "src\\lib\\query.js",
       "accessCount": 20,
       "lastAccessed": 1783347668382,
@@ -200,12 +206,6 @@
       "path": "src\\components\\money\\sections\\AccountsNetWorth.jsx",
       "accessCount": 18,
       "lastAccessed": 1783221896868,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Overview.jsx",
-      "accessCount": 17,
-      "lastAccessed": 1783294945759,
       "type": "file"
     },
     {
@@ -257,6 +257,12 @@
       "type": "file"
     },
     {
+      "path": "src\\styles\\money-theme.css",
+      "accessCount": 6,
+      "lastAccessed": 1783391319202,
+      "type": "file"
+    },
+    {
       "path": "src\\components\\money\\sections\\parts\\CustomFieldInputs.jsx",
       "accessCount": 5,
       "lastAccessed": 1783221770954,
@@ -266,12 +272,6 @@
       "path": "src\\styles\\theme.css",
       "accessCount": 5,
       "lastAccessed": 1783293729955,
-      "type": "file"
-    },
-    {
-      "path": "src\\styles\\money-theme.css",
-      "accessCount": 5,
-      "lastAccessed": 1783293806959,
       "type": "file"
     },
     {

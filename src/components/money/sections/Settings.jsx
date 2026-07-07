@@ -210,6 +210,23 @@ export default function Settings() {
     }
   }
 
+  async function startFresh() {
+    if (!(await confirmDialog({
+      title: 'Erase all data and start fresh?',
+      message: 'This permanently deletes every account, transaction, budget, and goal on this device. A backup is saved first, but this cannot be undone in-app.',
+      confirmLabel: 'Erase everything',
+    }))) return;
+    try {
+      await api('money/backups/run', { method: 'POST' }); // safety snapshot first
+      await api('money/reset', { method: 'POST' });
+      toast.success('Data erased — starting fresh.');
+      queryClient.clear();
+      setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+      toast.error(`Couldn't reset: ${e.message}`);
+    }
+  }
+
   async function onImportFile(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -367,6 +384,22 @@ export default function Settings() {
                 {backupMsg.text}
               </div>
             )}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0 4px', borderTop: '1px solid var(--m-border)', marginTop: 8 }}>
+          <RotateCcw size={20} style={{ color: 'var(--m-red)', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: 'var(--m-ink-2)', lineHeight: 1.55, marginBottom: 12 }}>
+              Clear all accounts, transactions, budgets, and goals to begin with a blank slate.
+              A backup is taken automatically first.
+            </div>
+            <button
+              className="m-btn m-btn-sm"
+              onClick={startFresh}
+              style={{ border: '1px solid var(--m-red)', color: 'var(--m-red)', background: 'transparent' }}
+            >
+              <RotateCcw size={14} style={{ marginRight: 6 }} /> Start fresh (erase all data)
+            </button>
           </div>
         </div>
       </Section>
