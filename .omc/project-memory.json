@@ -39,7 +39,7 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3",
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -2",
     "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm test 2>&1 | grep -E \"Test Files|Tests |FAIL\"",
     "lintCommand": null,
     "devCommand": "npm run dev",
@@ -167,6 +167,12 @@
       "type": "file"
     },
     {
+      "path": "src\\components\\money\\sections\\Overview.jsx",
+      "accessCount": 28,
+      "lastAccessed": 1783392757988,
+      "type": "file"
+    },
+    {
       "path": "src\\components\\money\\MoneyHub.jsx",
       "accessCount": 25,
       "lastAccessed": 1783294518832,
@@ -182,12 +188,6 @@
       "path": "src\\components\\money\\sections\\Goals.jsx",
       "accessCount": 23,
       "lastAccessed": 1783347363209,
-      "type": "file"
-    },
-    {
-      "path": "src\\components\\money\\sections\\Overview.jsx",
-      "accessCount": 21,
-      "lastAccessed": 1783391365353,
       "type": "file"
     },
     {
