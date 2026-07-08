@@ -44,8 +44,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -3",
-    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && git add -A 2>&1 | grep -v warning; git commit -q -F - <<'EOF'\nfeat: Coach Phase B — weekly digest + proactive nudges\n\n- GET /api/money/digest: deterministic week-over-week summary (saved this\n  week, spending vs last week, net-worth delta from snapshots, emergency-fund\n  status, biggest category mover) + the top two findings. computeDigest() is\n  pure and vitest-covered (15 advice tests total).\n- On launch (once per session, after the hub is usable) the coach either pops\n  the weekly digest (at most once per calendar week, tracked via\n  coach.lastDigestWeek + isoWeek) OR — on other days — fires the top 1-2\n  findings as dismissible nudge toasts. If the digest shows it lists the same\n  findings, so the toasts are skipped to avoid piling on.\n- DigestModal: \"your week\" headline + stat grid + what-to-do-about-it.\n- Critical findings also raise a native OS notification (coach-notify IPC +\n  window.mmm.notify) so they reach you when MMM is minimized to the tray.\n- Settings → Coach section: proactive-nudges toggle, nudge level (Top 1-2 /\n  Critical only), weekly-digest toggle. All default ON.\n\nVerified in-app: digest modal renders with real week data, nudge toast fires\non the non-digest path, Settings toggles present.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>\nEOF\ngit log --oneline -1",
+    "buildCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && npm run build 2>&1 | tail -2",
+    "testCommand": "cd \"/c/Users/aaron/projects/Finance agent/mmm-app\" && for pid in $(netstat -ano | grep -E \":5006\\s.*LISTENING\" | awk '{print $NF}' | sort -u); do taskkill //F //PID $pid 2>/dev/null; done; npx vitest run 2>&1 | tail -5",
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -199,6 +199,12 @@
       "type": "file"
     },
     {
+      "path": "src\\components\\money\\widgets\\index.jsx",
+      "accessCount": 7,
+      "lastAccessed": 1783471879135,
+      "type": "file"
+    },
+    {
       "path": "src\\components\\money\\MoneyHub.jsx",
       "accessCount": 6,
       "lastAccessed": 1783439872959,
@@ -215,12 +221,6 @@
       "accessCount": 5,
       "lastAccessed": 1783439182196,
       "type": "directory"
-    },
-    {
-      "path": "src\\components\\money\\widgets\\index.jsx",
-      "accessCount": 4,
-      "lastAccessed": 1783438967053,
-      "type": "file"
     },
     {
       "path": "src\\components\\money\\sections\\Budget.jsx",
@@ -260,8 +260,8 @@
     },
     {
       "path": "src\\components\\money\\sections\\Overview.jsx",
-      "accessCount": 2,
-      "lastAccessed": 1783439026278,
+      "accessCount": 3,
+      "lastAccessed": 1783471898876,
       "type": "file"
     },
     {

@@ -1,7 +1,7 @@
 {
   "tool_name": "mcp__claude-in-chrome__browser_batch",
-  "tool_input_preview": "{\"actions\":[{\"name\":\"computer\",\"input\":{\"action\":\"wait\",\"duration\":28,\"tabId\":2109314288}},{\"name\":\"computer\",\"input\":{\"action\":\"scroll\",\"coordinate\":[650,300],\"scroll_direction\":\"down\",\"scroll_amount...",
-  "error": "actions[0] (computer:wait) failed: Failed to execute action: Duration cannot exceed 10 seconds (0 completed, 2 remaining)",
-  "timestamp": "2026-07-07T16:14:18.790Z",
+  "tool_input_preview": "{\"actions\":[{\"name\":\"navigate\",\"input\":{\"url\":\"http://127.0.0.1:5006/\",\"tabId\":2109314288}},{\"name\":\"computer\",\"input\":{\"action\":\"wait\",\"duration\":6,\"tabId\":2109314288}},{\"name\":\"computer\",\"input\":{\"a...",
+  "error": "Tab 2109314288 no longer exists. Call tabs_context_mcp to get current tabs.",
+  "timestamp": "2026-07-08T00:52:54.194Z",
   "retry_count": 1
 }

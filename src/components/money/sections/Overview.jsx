@@ -53,9 +53,17 @@ export default function Overview() {
       setLayout(next);
       const overview = { ...(settings?.dashboards?.overview || {}), layout: next };
       const dashboards = { ...(settings?.dashboards || {}), overview };
-      saveSettings({ dashboards, insightsSeeded: true }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
+      saveSettings({ dashboards, insightsSeeded: true, insightsGrown: true }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
     } else {
-      setLayout(saved);
+      // One-time: give an existing (short) Insights widget room for the chat.
+      const grow = !settings.insightsGrown && saved.some((l) => l.i === 'insights' && l.h < 6);
+      const next = grow ? saved.map((l) => (l.i === 'insights' && l.h < 6 ? { ...l, h: 6 } : l)) : saved;
+      setLayout(next);
+      if (grow) {
+        const overview = { ...(settings?.dashboards?.overview || {}), layout: next };
+        const dashboards = { ...(settings?.dashboards || {}), overview };
+        saveSettings({ dashboards, insightsGrown: true }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, layout]);
