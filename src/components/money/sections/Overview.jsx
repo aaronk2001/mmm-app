@@ -8,6 +8,7 @@ import { fetchSettings, saveSettings, queryClient } from '../../../lib/query';
 import { WIDGETS, DEFAULT_LAYOUT, PRESETS } from '../widgets';
 import { WIDGET_SETTINGS } from '../widgets/settings';
 import WidgetSettingsPopover from '../widgets/WidgetSettingsPopover';
+import { migrateLayout, inferLegacyVersion, LAYOUT_VERSION } from '../widgets/layoutMigrations';
 
 const Grid = WidthProvider(Responsive);
 // Always 12 columns at every breakpoint. This is a ≥980px desktop app, so we
@@ -42,36 +43,28 @@ export default function Overview() {
     // Drop entries for widgets that no longer exist (e.g. removed from the registry).
     const saved = (settings?.dashboards?.overview?.layout || []).filter((l) => WIDGETS[l.i]);
     if (!saved.length || isCollapsedLayout(saved)) {
-      // No layout, or one corrupted by the old restacking bug — reset and heal it.
       setLayout(DEFAULT_LAYOUT);
-      if (saved.length) persist(DEFAULT_LAYOUT, { now: true });
-    } else if (!saved.some((l) => l.i === 'insights') && !settings.insightsSeeded) {
-      // One-time: surface the new Coach Insights widget on existing dashboards,
-      // pushing the saved widgets down. The flag means a later removal sticks.
-      const def = WIDGETS.insights.layout;
-      const next = [{ i: 'insights', x: 0, y: 0, w: def.w, h: def.h }, ...saved.map((l) => ({ ...l, y: l.y + def.h }))];
-      setLayout(next);
-      const overview = { ...(settings?.dashboards?.overview || {}), layout: next };
-      const dashboards = { ...(settings?.dashboards || {}), overview };
-      saveSettings({ dashboards, insightsSeeded: true, insightsGrown: true }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
-    } else {
-      // One-time: give an existing (short) Insights widget room for the chat.
-      const grow = !settings.insightsGrown && saved.some((l) => l.i === 'insights' && l.h < 6);
-      const next = grow ? saved.map((l) => (l.i === 'insights' && l.h < 6 ? { ...l, h: 6 } : l)) : saved;
-      setLayout(next);
-      if (grow) {
-        const overview = { ...(settings?.dashboards?.overview || {}), layout: next };
-        const dashboards = { ...(settings?.dashboards || {}), overview };
-        saveSettings({ dashboards, insightsGrown: true }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
-      }
+      persistVersioned(DEFAULT_LAYOUT, LAYOUT_VERSION, { now: true });
+      return;
     }
+    const from = inferLegacyVersion(settings);
+    const defs = Object.fromEntries(Object.entries(WIDGETS).map(([id, w]) => [id, w.layout]));
+    const { layout: next, version } = migrateLayout(saved, from, defs);
+    setLayout(next);
+    if (version !== from) persistVersioned(next, version, { now: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, layout]);
+
+  function persistVersioned(next, version, opts) {
+    const overview = { ...(settings?.dashboards?.overview || {}), layout: next, schemaVersion: version };
+    const dashboards = { ...(settings?.dashboards || {}), overview };
+    saveSettings({ dashboards }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
+  }
 
   function persist(next, { now = false } = {}) {
     clearTimeout(saveTimer.current);
     const write = () => {
-      const overview = { ...(settings?.dashboards?.overview || {}), layout: next };
+      const overview = { ...(settings?.dashboards?.overview || {}), layout: next, schemaVersion: LAYOUT_VERSION };
       const dashboards = { ...(settings?.dashboards || {}), overview };
       saveSettings({ dashboards }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
     };
@@ -83,7 +76,7 @@ export default function Overview() {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const prevWc = settings?.dashboards?.overview?.widgetConfig || {};
-      const overview = { ...(settings?.dashboards?.overview || {}), layout, widgetConfig: { ...prevWc, [id]: cfg } };
+      const overview = { ...(settings?.dashboards?.overview || {}), layout, widgetConfig: { ...prevWc, [id]: cfg }, schemaVersion: LAYOUT_VERSION };
       const dashboards = { ...(settings?.dashboards || {}), overview };
       saveSettings({ dashboards }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
     }, 400);
