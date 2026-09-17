@@ -10,6 +10,7 @@ import {
   CreditCard,
   TrendingUp,
   FileText,
+  GraduationCap,
   Settings,
 } from 'lucide-react';
 import '../../styles/money-theme.css';
@@ -46,6 +47,7 @@ const IMPORTERS = {
   debt:         () => import('./sections/Debt'),
   investments:  () => import('./sections/Investments'),
   reports:      () => import('./sections/Reports'),
+  learn:        () => import('./sections/Learn'),
   settings:     () => import('./sections/Settings'),
 };
 const LAZY = Object.fromEntries(Object.entries(IMPORTERS).map(([id, imp]) => [id, lazy(imp)]));
@@ -60,6 +62,7 @@ const SECTIONS = [
   { id: 'investments',  label: 'Investments',          icon: TrendingUp },
   { id: 'transactions', label: 'Transactions',         icon: Receipt },
   { id: 'reports',      label: 'Reports',              icon: FileText },
+  { id: 'learn',        label: 'Learn',                icon: GraduationCap },
   { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },
 ];
 
