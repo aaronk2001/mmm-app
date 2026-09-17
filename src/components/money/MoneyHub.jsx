@@ -103,6 +103,18 @@ export default function MoneyHub() {
   async function refreshEmpty() {
     try {
       const data = await api('money/overview');
+      // "N bills posted while you were away" — once per app session per run.
+      const last = data?.lastAutopost;
+      if (last?.posted > 0) {
+        let shown = null;
+        try { shown = sessionStorage.getItem('mmm-autopost-shown'); } catch { /* private mode */ }
+        if (shown !== last.at) {
+          try { sessionStorage.setItem('mmm-autopost-shown', last.at); } catch { /* ignore */ }
+          const n = last.posted;
+          const extra = last.truncated?.length ? ` ${last.truncated.length} item(s) still have periods due — they post next launch.` : '';
+          showToast(`Posted ${n} recurring ${n === 1 ? 'bill' : 'bills'} while you were away.${extra}`, 'info', 8000);
+        }
+      }
       // overview returns an explicit isEmpty flag (it always has keys otherwise).
       setIsEmpty(data?.isEmpty === true || (data?.accountsCount ?? 0) === 0);
     } catch (err) {

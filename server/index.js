@@ -82,13 +82,17 @@ process.on('unhandledRejection', (reason) =>
 const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`MMM server running on http://127.0.0.1:${PORT}`);
   startBackupScheduler();
-  // Post any recurring items that came due while the app was closed.
-  try {
-    const posted = require('./money/store').postDueRecurring();
-    if (posted) console.log(`[MMM] auto-posted ${posted} recurring transaction(s)`);
-  } catch (e) {
-    console.error('[MMM] recurring auto-post failed:', e.message);
-  }
+  // Post any recurring items that came due while the app was closed — after
+  // /api/health is answerable, so a large catch-up never delays first paint.
+  setImmediate(() => {
+    try {
+      const { posted, truncated } = require('./money/store').postDueRecurring();
+      if (posted) console.log(`[MMM] auto-posted ${posted} recurring transaction(s)`);
+      if (truncated.length) console.warn(`[MMM] ${truncated.length} recurring item(s) still have periods due`);
+    } catch (e) {
+      console.error('[MMM] recurring auto-post failed:', e.message);
+    }
+  });
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
