@@ -452,6 +452,10 @@ router.get('/cashflow', (req, res) => {
   }
 });
 
+router.get('/runway', (req, res) => {
+  try { res.json(store.getRunway()); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 // Goals
 // ────────────────────────────────────────────────────────────────────────────

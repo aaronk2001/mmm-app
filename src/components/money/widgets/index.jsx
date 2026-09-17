@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import {
   Wallet, TrendingUp, Zap, PiggyBank, Target, Landmark, Receipt,
-  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3, Sparkles,
+  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3, Sparkles, Hourglass,
 } from 'lucide-react';
 import InsightsWidget from './InsightsWidget';
+import Grade from '../shared/Grade';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis, PieChart, Pie, Cell } from 'recharts';
 
 const CHART_COLORS = ['var(--m-chart-1)', 'var(--m-chart-2)', 'var(--m-chart-3)', 'var(--m-chart-4)', 'var(--m-chart-5)', 'var(--m-chart-6)', 'var(--m-chart-7)', 'var(--m-chart-8)'];
@@ -344,10 +345,35 @@ function IncomeExpense() {
   );
 }
 
+function Runway() {
+  const { data, isLoading } = useApi('money/runway');
+  if (isLoading) return <Loading />;
+  if (!data || data.band === 'unknown') return <Empty>Add a few expenses or recurring bills and your runway appears here.</Empty>;
+  const color = data.band === 'safe' ? 'var(--m-green)' : data.band === 'tight' ? 'var(--m-amber, #f59e0b)' : 'var(--m-red)';
+  const dateLabel = new Date(...String(data.dateMoneyRunsOut).split('-').map((v, i) => (i === 1 ? Number(v) - 1 : Number(v)))).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontSize: 30, fontWeight: 700, color, ...num }}>{data.months.toFixed(1)} mo</div>
+        <Grade grade={data.grade} />
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--m-ink-2)', marginTop: 4 }}>
+        Cash lasts until <strong style={{ color: 'var(--m-ink)' }}>{dateLabel}</strong> at {f$(data.monthlyBurn)}/mo
+      </div>
+      <div style={{ marginTop: 10 }}><Bar pct={Math.min(100, (data.months / 6) * 100)} color={color} /></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--m-muted)', marginTop: 4 }}>
+        <span>{f$(data.liquid)} liquid</span>
+        <span>{data.largestOutflow ? `Biggest: ${data.largestOutflow.payee}` : ''}</span>
+      </div>
+    </div>
+  );
+}
+
 // ── registry ─────────────────────────────────────────────────────────────────
 // defaultLayout uses a 12-col grid; rowHeight ~80px. `scroll` => content area
 // gets its own overflow; chart widgets fill height instead.
 export const WIDGETS = {
+  runway:             { title: 'Runway',              icon: Hourglass,     layout: { w: 4, h: 2, minW: 3, minH: 2 }, Component: Runway },
   insights:           { title: 'Coach Insights',      icon: Sparkles,      layout: { w: 8, h: 6, minW: 4, minH: 4 }, Component: InsightsWidget, scroll: true },
   netWorth:           { title: 'Net Worth',           icon: Wallet,        layout: { w: 4, h: 2, minW: 3, minH: 2 }, Component: NetWorth },
   netWorthTrend:      { title: 'Net Worth Trend',      icon: TrendingUp,    layout: { w: 8, h: 4, minW: 4, minH: 3 }, Component: NetWorthTrend, fill: true },
@@ -365,21 +391,23 @@ export const WIDGETS = {
 export const PRESETS = {
   'Quick glance': [
     { i: 'insights',           x: 0, y: 0, w: 8, h: 6 },
-    { i: 'netWorth',           x: 8, y: 0, w: 4, h: 2 },
-    { i: 'cashFlow',           x: 8, y: 2, w: 4, h: 2 },
-    { i: 'spendingDonut',      x: 8, y: 4, w: 4, h: 3 },
+    { i: 'runway',             x: 8, y: 0, w: 4, h: 2 },
+    { i: 'netWorth',           x: 8, y: 2, w: 4, h: 2 },
+    { i: 'cashFlow',           x: 8, y: 4, w: 4, h: 2 },
+    { i: 'spendingDonut',      x: 8, y: 6, w: 4, h: 3 },
     { i: 'netWorthTrend',      x: 0, y: 6, w: 8, h: 4 },
   ],
   'Deep dive': [
     { i: 'insights',           x: 0, y: 0, w: 8, h: 6 },
-    { i: 'netWorth',           x: 8, y: 0, w: 4, h: 2 },
-    { i: 'cashFlow',           x: 8, y: 2, w: 4, h: 2 },
-    { i: 'spendingDonut',      x: 8, y: 4, w: 4, h: 3 },
+    { i: 'runway',             x: 8, y: 0, w: 4, h: 2 },
+    { i: 'netWorth',           x: 8, y: 2, w: 4, h: 2 },
+    { i: 'cashFlow',           x: 8, y: 4, w: 4, h: 2 },
+    { i: 'spendingDonut',      x: 8, y: 6, w: 4, h: 3 },
     { i: 'netWorthTrend',      x: 0, y: 6, w: 8, h: 4 },
-    { i: 'incomeExpense',      x: 8, y: 7, w: 4, h: 3 },
+    { i: 'incomeExpense',      x: 8, y: 9, w: 4, h: 3 },
     { i: 'budgets',            x: 0, y: 10, w: 4, h: 4 },
     { i: 'goals',              x: 4, y: 10, w: 4, h: 4 },
-    { i: 'accounts',           x: 8, y: 10, w: 4, h: 4 },
+    { i: 'accounts',           x: 8, y: 12, w: 4, h: 4 },
     { i: 'recentTransactions', x: 0, y: 14, w: 6, h: 5 },
   ],
 };
@@ -387,11 +415,12 @@ export const PRESETS = {
 // Default dashboard: which widgets + where (12-col grid).
 export const DEFAULT_LAYOUT = [
   { i: 'insights',           x: 0, y: 0, w: 8, h: 6 },
-  { i: 'netWorth',           x: 8, y: 0, w: 4, h: 2 },
-  { i: 'cashFlow',           x: 8, y: 2, w: 4, h: 2 },
-  { i: 'accounts',           x: 8, y: 4, w: 4, h: 4 },
+  { i: 'runway',             x: 8, y: 0, w: 4, h: 2 },
+  { i: 'netWorth',           x: 8, y: 2, w: 4, h: 2 },
+  { i: 'cashFlow',           x: 8, y: 4, w: 4, h: 2 },
+  { i: 'accounts',           x: 8, y: 6, w: 4, h: 4 },
   { i: 'netWorthTrend',      x: 0, y: 6, w: 8, h: 4 },
   { i: 'budgets',            x: 0, y: 10, w: 4, h: 4 },
   { i: 'goals',              x: 4, y: 10, w: 4, h: 4 },
-  { i: 'recentTransactions', x: 8, y: 8, w: 4, h: 5 },
+  { i: 'recentTransactions', x: 8, y: 10, w: 4, h: 5 },
 ];
