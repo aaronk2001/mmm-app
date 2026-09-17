@@ -49,6 +49,7 @@ function db() {
   migrateSchema(_db); // may drop/recreate tables — runs before foreign_keys ON
   _db.pragma('foreign_keys = ON');
   _db.exec(SCHEMA);
+  applyAdditiveMigrations(_db);
   initialize(_db);
   scheduleMaintenance(_db);
   return _db;
@@ -130,6 +131,18 @@ function migrateSchema(d) {
   });
   run();
   console.log(`[MMM db] migrated schema v1 -> v2 (${old.transactions.length} txns, ${old.accounts.length} accounts, cents + derived balances)`);
+}
+
+// Additive column adds for already-migrated (v2) DBs. schema.sql uses
+// CREATE TABLE IF NOT EXISTS, so new columns on existing tables must be ALTERed
+// in by hand. Each add is guarded by a table_info check, so this is idempotent.
+function applyAdditiveMigrations(d) {
+  const hasCol = (table, col) =>
+    d.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+  if (!hasCol('recurring', 'account_id')) {
+    d.exec('ALTER TABLE recurring ADD COLUMN account_id TEXT');
+    console.log('[MMM db] added recurring.account_id');
+  }
 }
 
 // First run only: import the legacy data.json (and back it up), else seed empty.

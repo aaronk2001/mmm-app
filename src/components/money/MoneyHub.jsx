@@ -53,12 +53,12 @@ const LAZY = Object.fromEntries(Object.entries(IMPORTERS).map(([id, imp]) => [id
 const SECTIONS = [
   { id: 'overview',     label: 'Overview',             icon: LayoutDashboard },
   { id: 'accounts',     label: 'Accounts & Net Worth', icon: Wallet },
-  { id: 'transactions', label: 'Transactions',         icon: Receipt },
   { id: 'budget',       label: 'Budget',               icon: PiggyBank },
   { id: 'cashflow',     label: 'Cash Flow',            icon: Zap },
   { id: 'goals',        label: 'Goals',                icon: Target },
   { id: 'debt',         label: 'Debt Payoff',          icon: CreditCard },
   { id: 'investments',  label: 'Investments',          icon: TrendingUp },
+  { id: 'transactions', label: 'Transactions',         icon: Receipt },
   { id: 'reports',      label: 'Reports',              icon: FileText },
   { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },
 ];

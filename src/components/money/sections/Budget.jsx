@@ -490,19 +490,28 @@ export default function Budget() {
             </motion.div>
           )}
 
-          {/* Create budget dialog */}
-          {isCreatingBudget && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              style={{ marginTop: '24px' }}
-            >
-              <Card className="m-card-sm">
-                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '16px' }}>
-                  Create New Budget
-                </div>
+        </>
+      )}
 
+      {/* Create budget dialog — rendered in both empty and populated states */}
+      {isCreatingBudget && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          style={{ marginTop: '24px' }}
+        >
+          <Card className="m-card-sm">
+            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '16px' }}>
+              Create New Budget
+            </div>
+
+            {availableCategories.length === 0 ? (
+              <div style={{ fontSize: '13px', color: 'var(--m-ink-2)', marginBottom: '16px' }}>
+                Every category already has a budget. Add a category first from Settings, or edit an existing budget above.
+              </div>
+            ) : (
+              <>
                 <div style={{ marginBottom: '12px' }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--m-muted)', marginBottom: '4px' }}>
                     Category
@@ -535,31 +544,33 @@ export default function Budget() {
                     style={{ width: '100%', padding: '8px', fontSize: '13px' }}
                   />
                 </div>
+              </>
+            )}
 
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    className="m-btn m-btn-primary m-btn-sm"
-                    onClick={handleCreateBudget}
-                    style={{ flex: 1 }}
-                  >
-                    Create
-                  </button>
-                  <button
-                    className="m-btn m-btn-secondary m-btn-sm"
-                    onClick={() => {
-                      setIsCreatingBudget(false);
-                      setSelectedCategoryId('');
-                      setLimitValue('');
-                    }}
-                    style={{ flex: 1 }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </Card>
-            </motion.div>
-          )}
-        </>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {availableCategories.length > 0 && (
+                <button
+                  className="m-btn m-btn-primary m-btn-sm"
+                  onClick={handleCreateBudget}
+                  style={{ flex: 1 }}
+                >
+                  Create
+                </button>
+              )}
+              <button
+                className="m-btn m-btn-secondary m-btn-sm"
+                onClick={() => {
+                  setIsCreatingBudget(false);
+                  setSelectedCategoryId('');
+                  setLimitValue('');
+                }}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </Card>
+        </motion.div>
       )}
     </div>
   );

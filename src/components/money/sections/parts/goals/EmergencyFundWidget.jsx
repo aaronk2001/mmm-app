@@ -7,6 +7,33 @@ import Term from '../../../shared/Term';
 export default function EmergencyFundWidget({ em }) {
   if (!em) return null;
 
+  // No expenses on record (no spending transactions and no recurring bills) —
+  // there's nothing to size a fund against. Show a prompt instead of $X / $0.
+  if (!em.targetAmount) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        style={{ marginBottom: '24px' }}
+      >
+        <Card hoverable={false} className="m-card-sm">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <AlertCircle size={18} style={{ color: 'var(--m-muted)' }} />
+            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)' }}>
+              <Term name="emergency fund">Emergency Fund</Term>
+            </div>
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--m-ink-2)', lineHeight: 1.5 }}>
+            Add your monthly bills (as recurring in Cash Flow) or some spending transactions, and we'll size your emergency-fund target automatically.
+          </div>
+        </Card>
+      </motion.div>
+    );
+  }
+
+  const pct = Math.min((em.currentSaved / em.targetAmount) * 100, 100);
+
   const statusColor =
     em.adequacy === 'good'
       ? 'var(--m-green)'
@@ -59,7 +86,7 @@ export default function EmergencyFundWidget({ em }) {
             >
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${Math.min((em.currentSaved / em.targetAmount) * 100, 100)}%` }}
+                animate={{ width: `${pct}%` }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
                 style={{
                   height: '100%',

@@ -100,5 +100,6 @@ CREATE TABLE IF NOT EXISTS recurring (
   cadence      TEXT    NOT NULL,            -- monthly | biweekly | weekly
   kind         TEXT    NOT NULL,            -- income | bill
   next_date    TEXT,
-  note         TEXT    DEFAULT ''
+  note         TEXT    DEFAULT '',
+  account_id   TEXT                         -- when set, due items auto-post as transactions
 );

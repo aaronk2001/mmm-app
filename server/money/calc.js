@@ -229,12 +229,35 @@ function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary =
   };
 }
 
-function computeGoalInsights(accounts, transactions) {
+function computeGoalInsights(accounts, transactions, recurring = []) {
   const cutoff = localDate(-60);
 
-  const monthlyExpenses = transactions
+  // Actual monthly flow from the last 60 days of transactions.
+  const txnMonthlyExpenses = transactions
     .filter(t => String(t.date).slice(0, 10) >= cutoff && t.amount < 0)
     .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount) || 0), 0) / 2;
+  const txnMonthlyIncome = transactions
+    .filter(t => String(t.date).slice(0, 10) >= cutoff && t.amount > 0)
+    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) / 2;
+
+  // Recurring items normalized to a monthly figure. Most users model bills as
+  // recurring rather than posting every transaction, so fold them in — take the
+  // max so linked (already-posted) recurring isn't double counted.
+  const perMonth = (amt, cadence) => {
+    const a = Math.abs(parseFloat(amt) || 0);
+    if (cadence === 'weekly') return a * 52 / 12;
+    if (cadence === 'biweekly') return a * 26 / 12;
+    return a; // monthly
+  };
+  let recurringBills = 0;
+  let recurringIncome = 0;
+  for (const r of (recurring || [])) {
+    if (r.kind === 'income') recurringIncome += perMonth(r.amount, r.cadence);
+    else recurringBills += perMonth(r.amount, r.cadence);
+  }
+
+  const monthlyExpenses = Math.max(txnMonthlyExpenses, recurringBills);
+  const monthlyIncome = Math.max(txnMonthlyIncome, recurringIncome);
 
   const liquidAssets = accounts
     .filter(a => a.type === 'checking' || a.type === 'savings' || a.type === 'cash')
@@ -242,7 +265,7 @@ function computeGoalInsights(accounts, transactions) {
 
   const emergencyFundMonths = 6;
   const emergencyFundTarget = monthlyExpenses * emergencyFundMonths;
-  const emergencyFundCovered = Math.floor(liquidAssets / (monthlyExpenses || 1));
+  const emergencyFundCovered = monthlyExpenses > 0 ? Math.floor(liquidAssets / monthlyExpenses) : 0;
 
   const emergencyFundAdequacy = liquidAssets >= emergencyFundTarget ? 'good' : liquidAssets >= (monthlyExpenses * 3) ? 'ok' : 'low';
 
@@ -251,10 +274,6 @@ function computeGoalInsights(accounts, transactions) {
   const annualExpenses = monthlyExpenses * 12;
   const fireNumber = annualExpenses * 25;
   const fireProgress = (nw.net / fireNumber) * 100;
-
-  const monthlyIncome = transactions
-    .filter(t => String(t.date).slice(0, 10) >= cutoff && t.amount > 0)
-    .reduce((sum, t) => sum + parseFloat(t.amount) || 0, 0) / 2;
 
   const monthlySavings = monthlyIncome - monthlyExpenses;
   const yearsToFire = monthlySavings > 0 ? (fireNumber - nw.net) / (monthlySavings * 12 * 0.1 + monthlySavings * 12) : null;

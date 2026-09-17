@@ -81,7 +81,7 @@ const rowHolding = (r) => ({
   price_source: r.price_source, updated_at: r.updated_at,
 });
 const rowSnapshot = (r) => ({ date: r.date, assets: toDollars(r.assets_cents), liabilities: toDollars(r.liabilities_cents), net: toDollars(r.net_cents) });
-const rowRecurring = (r) => ({ id: r.id, payee: r.payee, amount: toDollars(r.amount_cents), cadence: r.cadence, kind: r.kind, next_date: r.next_date, note: r.note });
+const rowRecurring = (r) => ({ id: r.id, payee: r.payee, amount: toDollars(r.amount_cents), cadence: r.cadence, kind: r.kind, next_date: r.next_date, note: r.note, account_id: r.account_id || null });
 
 // Derived balance: opening + sum of the account's transactions, in cents.
 const ACCOUNT_SELECT = `
@@ -409,8 +409,8 @@ function getRecurring(d) {
 }
 function createRecurring(d, r) {
   const id = r.id || newId();
-  d.prepare('INSERT INTO recurring (id, payee, amount_cents, cadence, kind, next_date, note) VALUES (?,?,?,?,?,?,?)')
-    .run(id, r.payee, toCents(r.amount), r.cadence, r.kind, r.next_date || null, r.note || '');
+  d.prepare('INSERT INTO recurring (id, payee, amount_cents, cadence, kind, next_date, note, account_id) VALUES (?,?,?,?,?,?,?,?)')
+    .run(id, r.payee, toCents(r.amount), r.cadence, r.kind, r.next_date || null, r.note || '', r.account_id || null);
   return rowRecurring(d.prepare('SELECT * FROM recurring WHERE id = ?').get(id));
 }
 function updateRecurring(d, id, patch) {
@@ -418,8 +418,8 @@ function updateRecurring(d, id, patch) {
   if (!existing) throw new Error('Recurring item not found');
   const sets = [];
   const vals = [];
-  for (const k of ['payee', 'cadence', 'kind', 'next_date', 'note']) {
-    if (patch[k] !== undefined) { sets.push(`${k} = ?`); vals.push(patch[k]); }
+  for (const k of ['payee', 'cadence', 'kind', 'next_date', 'note', 'account_id']) {
+    if (patch[k] !== undefined) { sets.push(`${k} = ?`); vals.push(patch[k] === '' ? null : patch[k]); }
   }
   if (patch.amount !== undefined) { sets.push('amount_cents = ?'); vals.push(toCents(patch.amount)); }
   if (sets.length) d.prepare(`UPDATE recurring SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
