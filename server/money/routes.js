@@ -860,15 +860,22 @@ router.post('/coach', async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────
 
 let _glossary = null; // static bundled JSON — read once, serve from memory
+function loadGlossary() {
+  if (!_glossary) {
+    const path = require('path');
+    const fs = require('fs');
+    _glossary = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'store', 'money', 'glossary.json'), 'utf8'));
+  }
+  return _glossary;
+}
 router.get('/glossary', (req, res) => {
   try {
-    if (!_glossary) {
-      const path = require('path');
-      const fs = require('fs');
-      const glossaryPath = path.join(__dirname, '..', 'store', 'money', 'glossary.json');
-      _glossary = JSON.parse(fs.readFileSync(glossaryPath, 'utf8'));
-    }
-    res.json(_glossary);
+    const g = loadGlossary();
+    const q = String(req.query.term || '').trim().toLowerCase();
+    if (!q) return res.json(g);
+    const hit = (g.terms || []).find(t => String(t.term).toLowerCase() === q);
+    if (!hit) return res.status(404).json({ error: `No glossary entry for "${req.query.term}"` });
+    res.json({ term: hit.term, definition: hit.plain, more: hit.more || '' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,68 +1,38 @@
 import { useState, useEffect } from 'react';
-import { HelpCircle } from 'lucide-react';
 
-// Module-level cache for glossary definitions
-const glossaryCache = new Map();
-let glossaryFetched = false;
-
-async function fetchGlossaryTerm(name) {
-  if (glossaryCache.has(name)) {
-    return glossaryCache.get(name);
+// One fetch per app session; every <Term> looks up client-side.
+let mapPromise = null;
+function glossaryMap() {
+  if (!mapPromise) {
+    mapPromise = fetch('/api/money/glossary')
+      .then(r => (r.ok ? r.json() : { terms: [] }))
+      .then(data => new Map((data.terms || []).map(t => [String(t.term).toLowerCase(), t])))
+      .catch(() => new Map());
   }
-
-  try {
-    const res = await fetch(`/api/money/glossary?term=${encodeURIComponent(name)}`);
-    if (res.ok) {
-      const data = await res.json();
-      glossaryCache.set(name, data.definition || '');
-      return data.definition || '';
-    }
-  } catch (err) {
-    console.warn(`[Term] Failed to fetch glossary for "${name}":`, err.message);
-  }
-  return '';
+  return mapPromise;
 }
 
 export default function Term({ name, children, className = '' }) {
-  const [definition, setDefinition] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [entry, setEntry] = useState(undefined);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (open && !definition && !loading) {
-      setLoading(true);
-      fetchGlossaryTerm(name).then(def => {
-        setDefinition(def);
-        setLoading(false);
-      });
-    }
-  }, [open, definition, loading, name]);
+    if (!open || entry !== undefined) return;
+    glossaryMap().then(m => setEntry(m.get(String(name).toLowerCase()) || null));
+  }, [open, entry, name]);
 
   return (
-    <span
-      className={`m-term ${className}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
+    <span className={`m-term ${className}`} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       {children}
-
-      {/* Tooltip card */}
       {open && (
         <div className="m-term-tooltip">
-          {loading ? (
-            <div style={{ color: 'var(--m-muted)' }}>Loading...</div>
-          ) : definition ? (
+          {entry === undefined ? (
+            <div style={{ color: 'var(--m-muted)' }}>Loading…</div>
+          ) : entry ? (
             <div>
-              <div style={{ marginBottom: '8px' }}>{definition}</div>
-              <a
-                href={`#/money/glossary?term=${encodeURIComponent(name)}`}
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--m-accent)',
-                  textDecoration: 'none',
-                  fontWeight: 600,
-                }}
-              >
+              <div style={{ marginBottom: '6px' }}>{entry.plain}</div>
+              {entry.more && <div style={{ marginBottom: '8px', color: 'var(--m-ink-2)', fontSize: '12px' }}>{entry.more}</div>}
+              <a href={`#/learn?term=${encodeURIComponent(entry.term)}`} style={{ fontSize: '12px', color: 'var(--m-accent)', textDecoration: 'none', fontWeight: 600 }}>
                 Learn more {String.fromCharCode(8594)}
               </a>
             </div>
