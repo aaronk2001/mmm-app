@@ -16,10 +16,15 @@ import Card from '../shared/Card';
 import Money from '../shared/Money';
 import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../../../lib/query';
 import { toast } from '../../../lib/toast';
 import { confirmDialog } from '../../../lib/confirm';
+
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 /**
  * Cash Flow section — 90/30-day projection + recurring calendar.
@@ -33,6 +38,8 @@ import { confirmDialog } from '../../../lib/confirm';
 export default function CashFlow() {
   const [projection, setProjection] = useState(null);
   const [recurringData, setRecurringData] = useState(null);
+  const [txns, setTxns] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [days, setDays] = useState(90);
@@ -41,20 +48,28 @@ export default function CashFlow() {
   const [extraIncome, setExtraIncome] = useState(0);
   const [extraExpense, setExtraExpense] = useState(0);
 
+  // Daily expense quick-entry (saves as a transaction)
+  const [expense, setExpense] = useState({ amount: '', payee: '', account_id: '', date: todayStr() });
+  const [expenseSaving, setExpenseSaving] = useState(false);
+
   // Recurring management form
   const [showAddForm, setShowAddForm] = useState(false);
-  const [formData, setFormData] = useState({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '' });
+  const [formData, setFormData] = useState({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '', account_id: '' });
   const [editingId, setEditingId] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
 
   const refetchData = async () => {
     try {
-      const [projectionRes, recurringRes] = await Promise.all([
+      const [projectionRes, recurringRes, txnRes, acctRes] = await Promise.all([
         api(`money/cashflow?days=${days}`),
         api('money/recurring'),
+        api('money/transactions'),
+        api('money/accounts'),
       ]);
       setProjection(projectionRes);
       setRecurringData(recurringRes);
+      setTxns(txnRes.transactions || []);
+      setAccounts(acctRes.accounts || []);
     } catch (err) {
       toast.error(`Failed to refetch data: ${err.message}`);
     }
@@ -66,13 +81,20 @@ export default function CashFlow() {
         setLoading(true);
         setError(null);
 
-        const [projection, recurring] = await Promise.all([
+        // Post any recurring items due since last open before reading balances.
+        try { await api('money/recurring/post-due', { method: 'POST' }); } catch { /* non-fatal */ }
+
+        const [projection, recurring, txnRes, acctRes] = await Promise.all([
           api(`money/cashflow?days=${days}`),
           api('money/recurring'),
+          api('money/transactions'),
+          api('money/accounts'),
         ]);
 
         setProjection(projection);
         setRecurringData(recurring);
+        setTxns(txnRes.transactions || []);
+        setAccounts(acctRes.accounts || []);
       } catch (err) {
         setError(err.message);
         toast.error(`Failed to load cash flow data: ${err.message}`);
@@ -106,9 +128,96 @@ export default function CashFlow() {
   const recurring = recurringData?.recurring || [];
   const declared = recurringData?.declared || [];
 
+  // Income vs spending by month, COMBINING posted transactions (actuals) with
+  // projected upcoming recurring occurrences. Past/current months come from real
+  // transactions; today-and-forward come from recurring. Linked recurring only
+  // project strictly after today (their due dates already auto-posted).
+  const byMonth = {};
+  const addTo = (m, field, amt) => {
+    if (!byMonth[m]) byMonth[m] = { month: m, income: 0, spending: 0 };
+    byMonth[m][field] += amt;
+  };
+
+  txns.forEach(t => {
+    const m = String(t.date).slice(0, 7);
+    if (t.amount >= 0) addTo(m, 'income', t.amount);
+    else addTo(m, 'spending', Math.abs(t.amount));
+  });
+
+  const advanceDate = (d, cadence) => {
+    const nd = new Date(d);
+    if (cadence === 'weekly') nd.setDate(nd.getDate() + 7);
+    else if (cadence === 'biweekly') nd.setDate(nd.getDate() + 14);
+    else nd.setMonth(nd.getMonth() + 1);
+    return nd;
+  };
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Last day of the 5th month ahead — keeps projected months whole (no partial tail).
+  const horizon = new Date(now.getFullYear(), now.getMonth() + 6, 0);
+  recurring.forEach(r => {
+    if (!r.next_date) return;
+    const amt = Math.abs(parseFloat(r.amount) || 0);
+    if (!amt) return;
+    const field = r.kind === 'income' ? 'income' : 'spending';
+    let d = new Date(`${String(r.next_date).slice(0, 10)}T00:00:00`);
+    let guard = 0;
+    // Skip occurrences already covered: linked items post through today, so
+    // project strictly after today; unlinked start from today.
+    while (d < startOfToday && guard < 500) { d = advanceDate(d, r.cadence); guard++; }
+    if (r.account_id && d.getTime() === startOfToday.getTime()) d = advanceDate(d, r.cadence);
+    guard = 0;
+    while (d <= horizon && guard < 500) {
+      const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      addTo(m, field, amt);
+      d = advanceDate(d, r.cadence);
+      guard++;
+    }
+  });
+
+  // Window: two months of history through the projection horizon.
+  const minD = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+  const minMonth = `${minD.getFullYear()}-${String(minD.getMonth() + 1).padStart(2, '0')}`;
+  const incomeVsSpending = Object.values(byMonth)
+    .filter(r => r.month >= minMonth)
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .map(r => ({ month: r.month, income: Math.round(r.income), spending: Math.round(r.spending) }));
+
+  const totalIncome = incomeVsSpending.reduce((s, r) => s + r.income, 0);
+  const totalSpending = incomeVsSpending.reduce((s, r) => s + r.spending, 0);
+  const totalNet = totalIncome - totalSpending;
+
+  const accountName = (id) => accounts.find(a => a.id === id)?.name || null;
+
   // Separate recurring into income/bills
   const recurringIncome = recurring.filter(r => r.kind === 'income');
   const recurringBills = recurring.filter(r => r.kind === 'bill').sort((a, b) => new Date(a.next_date) - new Date(b.next_date));
+
+  const defaultAccountId = accounts.find(a => a.type === 'checking')?.id || accounts[0]?.id || '';
+
+  const handleAddExpense = async (e) => {
+    e.preventDefault();
+    const amt = Math.abs(parseFloat(expense.amount));
+    const acct = expense.account_id || defaultAccountId;
+    if (!acct) { toast.error('Add an account first (Accounts tab)'); return; }
+    if (!Number.isFinite(amt) || amt === 0) { toast.error('Enter a valid amount'); return; }
+    try {
+      setExpenseSaving(true);
+      await api('money/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: acct, date: expense.date || todayStr(), amount: -amt, payee: expense.payee.trim() }),
+      });
+      toast.success(`${expense.payee.trim() || 'Expense'} saved`);
+      setExpense({ amount: '', payee: '', account_id: acct, date: todayStr() });
+      await refetchData();
+    } catch (err) {
+      toast.error(`Save failed: ${err.message}`);
+    } finally {
+      setExpenseSaving(false);
+    }
+  };
 
   const handleAddRecurring = async (e) => {
     e.preventDefault();
@@ -132,6 +241,7 @@ export default function CashFlow() {
             cadence: formData.cadence,
             kind: formData.kind,
             next_date: formData.next_date || undefined,
+            account_id: formData.account_id || '',
           }),
         });
         toast.success('Recurring item updated');
@@ -144,11 +254,12 @@ export default function CashFlow() {
             cadence: formData.cadence,
             kind: formData.kind,
             next_date: formData.next_date || undefined,
+            account_id: formData.account_id || '',
           }),
         });
         toast.success('Recurring item added');
       }
-      setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '' });
+      setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '', account_id: '' });
       setEditingId(null);
       setShowAddForm(false);
       await refetchData();
@@ -184,6 +295,7 @@ export default function CashFlow() {
       cadence: item.cadence,
       kind: item.kind,
       next_date: item.next_date || '',
+      account_id: item.account_id || '',
     });
     setEditingId(item.id);
     setShowAddForm(true);
@@ -225,6 +337,69 @@ export default function CashFlow() {
           <Term name="cash flow">Cash flow</Term> is the movement of money in and out of your accounts. We project your balance based on <Term name="recurring">recurring</Term> income and bills, plus average <Term name="discretionary">discretionary</Term> spending.
         </div>
       </Card>
+
+      {/* Daily expense quick-entry — saves as a transaction, feeds every view */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        style={{ marginBottom: '24px' }}
+      >
+        <Card className="m-card-sm">
+          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '4px' }}>
+            <Plus size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom' }} />
+            Log a daily expense
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginBottom: '12px' }}>
+            Saved as a transaction — updates your spending, budget, and emergency fund.
+          </div>
+          <form onSubmit={handleAddExpense}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <input
+                className="m-input"
+                type="number"
+                step="0.01"
+                min="0.01"
+                inputMode="decimal"
+                placeholder="Amount"
+                value={expense.amount}
+                onChange={e => setExpense({ ...expense, amount: e.target.value })}
+                style={{ width: '110px', fontVariantNumeric: 'tabular-nums' }}
+              />
+              <input
+                className="m-input"
+                placeholder="What for? (e.g. Coffee)"
+                value={expense.payee}
+                onChange={e => setExpense({ ...expense, payee: e.target.value })}
+                style={{ flex: '1 1 160px', minWidth: 0 }}
+              />
+              <select
+                className="m-input"
+                value={expense.account_id || defaultAccountId}
+                onChange={e => setExpense({ ...expense, account_id: e.target.value })}
+                style={{ flex: '0 1 140px' }}
+              >
+                {accounts.length === 0 && <option value="">No accounts</option>}
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              <input
+                className="m-input"
+                type="date"
+                value={expense.date}
+                onChange={e => setExpense({ ...expense, date: e.target.value })}
+                style={{ width: '150px' }}
+              />
+              <button
+                type="submit"
+                className="m-btn m-btn-primary m-btn-sm"
+                disabled={expenseSaving || accounts.length === 0}
+              >
+                {expenseSaving ? 'Saving…' : 'Add'}
+              </button>
+            </div>
+          </form>
+        </Card>
+      </motion.div>
 
       {isEmpty ? (
         <EmptyState
@@ -293,6 +468,90 @@ export default function CashFlow() {
               </ResponsiveContainer>
             </Card>
           </motion.div>
+
+          {/* Income vs Spending (monthly actuals) */}
+          {incomeVsSpending.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.05 }}
+              style={{ marginBottom: '24px' }}
+            >
+              <Card className="m-card-sm" style={{ padding: '20px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '4px' }}>
+                  <DollarSign size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom' }} />
+                  Income vs Spending
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginBottom: '16px' }}>
+                  Posted transactions + upcoming recurring
+                </div>
+
+                {/* Totals across the shown months */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', fontWeight: 500, marginBottom: '4px' }}>
+                      Total Income
+                    </div>
+                    <div style={{ fontSize: 'clamp(16px, 4vw, 20px)', fontWeight: 700, color: 'var(--m-green)', fontVariantNumeric: 'tabular-nums' }}>
+                      <Money value={totalIncome} prefix="$" decimals={0} />
+                    </div>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', fontWeight: 500, marginBottom: '4px' }}>
+                      Total Spending
+                    </div>
+                    <div style={{ fontSize: 'clamp(16px, 4vw, 20px)', fontWeight: 700, color: 'var(--m-red)', fontVariantNumeric: 'tabular-nums' }}>
+                      <Money value={totalSpending} prefix="$" decimals={0} />
+                    </div>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', fontWeight: 500, marginBottom: '4px' }}>
+                      Net
+                    </div>
+                    <div style={{ fontSize: 'clamp(16px, 4vw, 20px)', fontWeight: 700, color: totalNet >= 0 ? 'var(--m-green)' : 'var(--m-red)', fontVariantNumeric: 'tabular-nums' }}>
+                      <Money value={Math.abs(totalNet)} prefix={totalNet >= 0 ? '$' : '-$'} decimals={0} />
+                    </div>
+                  </div>
+                </div>
+
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={incomeVsSpending}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--m-border)" />
+                    <XAxis
+                      dataKey="month"
+                      stroke="var(--m-muted)"
+                      style={{ fontSize: '12px' }}
+                      tickFormatter={m => {
+                        const [y, mo] = m.split('-');
+                        return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+                      }}
+                    />
+                    <YAxis
+                      stroke="var(--m-muted)"
+                      style={{ fontSize: '12px' }}
+                      tickFormatter={v => `$${(v / 1000).toFixed(0)}k`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--m-surface)',
+                        border: '1px solid var(--m-border)',
+                        borderRadius: '8px',
+                        color: 'var(--m-ink)',
+                      }}
+                      formatter={value => <Money value={value} prefix="$" decimals={0} />}
+                      labelFormatter={m => {
+                        const [y, mo] = String(m).split('-');
+                        return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <Bar dataKey="income" name="Income" fill="var(--m-green)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="spending" name="Spending" fill="var(--m-red)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            </motion.div>
+          )}
 
           {/* Day Toggle & Stats */}
           <motion.div
@@ -528,7 +787,7 @@ export default function CashFlow() {
                   onClick={() => {
                     setShowAddForm(true);
                     setEditingId(null);
-                    setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '' });
+                    setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '', account_id: '' });
                   }}
                   style={{
                     padding: '6px 12px',
@@ -665,6 +924,34 @@ export default function CashFlow() {
                       }}
                     />
                   </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--m-ink-2)', display: 'block', marginBottom: '4px' }}>
+                      Auto-post to account (optional)
+                    </label>
+                    <select
+                      value={formData.account_id}
+                      onChange={e => setFormData({ ...formData, account_id: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--m-border)',
+                        background: 'var(--m-surface)',
+                        color: 'var(--m-ink)',
+                        fontSize: '13px',
+                        fontFamily: 'inherit',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <option value="">Forecast only — don't post transactions</option>
+                      {accounts.map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                    <div style={{ fontSize: '11px', color: 'var(--m-muted)', marginTop: '4px' }}>
+                      When set, each due date auto-creates a transaction on this account.
+                    </div>
+                  </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                       type="submit"
@@ -689,7 +976,7 @@ export default function CashFlow() {
                       onClick={() => {
                         setShowAddForm(false);
                         setEditingId(null);
-                        setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '' });
+                        setFormData({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '', account_id: '' });
                       }}
                       style={{
                         flex: 1,
@@ -727,6 +1014,12 @@ export default function CashFlow() {
                             <>
                               <span>•</span>
                               <span>{new Date(item.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            </>
+                          )}
+                          {accountName(item.account_id) && (
+                            <>
+                              <span>•</span>
+                              <span style={{ color: 'var(--m-accent)', fontWeight: 600 }}>↻ {accountName(item.account_id)}</span>
                             </>
                           )}
                         </div>

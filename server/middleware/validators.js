@@ -141,6 +141,7 @@ function validateRecurring(body, { partial = false } = {}) {
     if (!KINDS.includes(body.kind)) e.push(`kind must be one of: ${KINDS.join(', ')}`);
   }
   if (body.next_date !== undefined && body.next_date !== null && body.next_date !== '' && !isDate(body.next_date)) e.push('next_date must be YYYY-MM-DD');
+  if (body.account_id !== undefined && body.account_id !== null && body.account_id !== '' && !isShortText(String(body.account_id), 100)) e.push('account_id must be a short string');
   return result(e);
 }
 

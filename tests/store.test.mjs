@@ -105,6 +105,63 @@ describe('declared recurring CRUD', () => {
   });
 });
 
+describe('recurring auto-post to transactions', () => {
+  const ymd = (offset = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  it('posts a due bill as a negative transaction and advances next_date', () => {
+    const acc = store.createAccount('Checking', 'checking', 1000);
+    const r = store.createRecurring({ payee: 'Rent', amount: 1200, cadence: 'monthly', kind: 'bill', next_date: ymd(-1), account_id: acc.id });
+
+    const posted = store.postDueRecurring();
+    expect(posted).toBe(1);
+
+    const txns = store.getTransactions();
+    expect(txns).toHaveLength(1);
+    expect(txns[0].amount).toBe(-1200);
+    expect(txns[0].payee).toBe('Rent');
+    expect(store.getAccounts()[0].balance).toBe(-200); // 1000 - 1200
+
+    // next_date advanced past today
+    expect(store.getDeclaredRecurring()[0].next_date > ymd(0)).toBe(true);
+  });
+
+  it('income posts positive; is idempotent on repeat calls', () => {
+    const acc = store.createAccount('Checking', 'checking', 0);
+    store.createRecurring({ payee: 'Salary', amount: 3000, cadence: 'monthly', kind: 'income', next_date: ymd(0), account_id: acc.id });
+
+    expect(store.postDueRecurring()).toBe(1);
+    expect(store.postDueRecurring()).toBe(0); // nothing due now
+    expect(store.getTransactions()).toHaveLength(1);
+    expect(store.getAccounts()[0].balance).toBe(3000);
+  });
+
+  it('catches up multiple missed periods', () => {
+    const acc = store.createAccount('Checking', 'checking', 0);
+    store.createRecurring({ payee: 'Netflix', amount: 15, cadence: 'weekly', kind: 'bill', next_date: ymd(-21), account_id: acc.id });
+
+    const posted = store.postDueRecurring(); // -21, -14, -7, 0 => 4 posts
+    expect(posted).toBe(4);
+    expect(store.getAccounts()[0].balance).toBe(-60);
+  });
+
+  it('skips items with no linked account (forecast-only)', () => {
+    store.createRecurring({ payee: 'Rent', amount: 1200, cadence: 'monthly', kind: 'bill', next_date: ymd(-1) });
+    expect(store.postDueRecurring()).toBe(0);
+    expect(store.getTransactions()).toHaveLength(0);
+  });
+
+  it('does not post items dated in the future', () => {
+    const acc = store.createAccount('Checking', 'checking', 500);
+    store.createRecurring({ payee: 'Rent', amount: 1200, cadence: 'monthly', kind: 'bill', next_date: ymd(5), account_id: acc.id });
+    expect(store.postDueRecurring()).toBe(0);
+    expect(store.getAccounts()[0].balance).toBe(500);
+  });
+});
+
 describe('export / import round-trip', () => {
   it('readData -> writeData -> readData preserves balances and rows', () => {
     const acc = store.createAccount('Checking', 'checking', 250.75);

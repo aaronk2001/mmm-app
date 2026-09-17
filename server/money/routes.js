@@ -401,8 +401,18 @@ router.get('/recurring', (req, res) => {
 router.post('/recurring', (req, res) => {
   try {
     if (invalid(res, v.validateRecurring(req.body))) return;
-    const { payee, amount, cadence, kind, next_date, note } = req.body;
-    res.status(201).json({ recurring: store.createRecurring({ payee, amount, cadence, kind, next_date, note }) });
+    const { payee, amount, cadence, kind, next_date, note, account_id } = req.body;
+    res.status(201).json({ recurring: store.createRecurring({ payee, amount, cadence, kind, next_date, note, account_id }) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Post every due recurring item into transactions (idempotent). Runs on app
+// launch server-side; exposed so the client can trigger + refetch on demand.
+router.post('/recurring/post-due', (req, res) => {
+  try {
+    res.json({ posted: store.postDueRecurring() });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -486,7 +496,8 @@ router.delete('/goals/:id', (req, res) => {
 router.get('/goals/insights', (req, res) => {
   try {
     const data = store.readData();
-    const insights = store.computeGoalInsights(data.accounts, data.transactions);
+    const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
+    const insights = store.computeGoalInsights(data.accounts, data.transactions, recurring);
     res.json(insights);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -685,9 +696,9 @@ router.post('/rules/apply', (req, res) => {
 function adviceContext() {
   const data = store.readData();
   const metrics = store.getMetrics();
-  const goalInsights = store.computeGoalInsights(data.accounts, data.transactions);
-  const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
   const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
+  const goalInsights = store.computeGoalInsights(data.accounts, data.transactions, recurring);
+  const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
   const cashflow = store.projectCashflow(store.getAccounts(), recurring, 90);
   const investments = store.computeInvestmentMetrics(store.getHoldings());
   const debts = data.accounts

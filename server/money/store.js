@@ -272,6 +272,51 @@ function deleteRecurring(id) {
   repo.deleteRecurring(db(), id);
 }
 
+// Local YYYY-MM-DD (matches the string-date convention used elsewhere).
+function ymd(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function advanceDate(dateStr, cadence) {
+  const [y, m, dd] = String(dateStr).slice(0, 10).split('-').map(Number);
+  const d = new Date(y, m - 1, dd);
+  if (cadence === 'weekly') d.setDate(d.getDate() + 7);
+  else if (cadence === 'biweekly') d.setDate(d.getDate() + 14);
+  else d.setMonth(d.getMonth() + 1); // monthly
+  return ymd(d);
+}
+
+// Auto-post every recurring item whose next_date has arrived into a real
+// transaction on its linked account, catching up each missed period. Advancing
+// next_date past today is the idempotency guard — safe to call repeatedly (on
+// each app launch). Items without an account_id are skipped (forecast-only).
+function postDueRecurring() {
+  const today = ymd(new Date());
+  const items = repo.getRecurring(db());
+  let posted = 0;
+
+  for (const r of items) {
+    if (!r.account_id || !r.next_date) continue;
+    if (!repo.getAccount(db(), r.account_id)) continue; // account deleted — skip
+
+    let next = String(r.next_date).slice(0, 10);
+    const original = next;
+    let guard = 0; // cap catch-up so a stale item can't post hundreds of rows
+
+    while (next <= today && guard < 120) {
+      const amount = r.kind === 'income' ? Math.abs(r.amount) : -Math.abs(r.amount);
+      createTransaction(r.account_id, next, amount, r.payee, null, [], 'Auto-posted from recurring', 'recurring');
+      next = advanceDate(next, r.cadence);
+      posted += 1;
+      guard += 1;
+    }
+
+    if (next !== original) repo.updateRecurring(db(), r.id, { next_date: next });
+  }
+
+  return posted;
+}
+
 // ── cashflow ──────────────────────────────────────────────────────────────────
 
 function projectCashflow(accounts, recurring, days = 90) {
@@ -502,6 +547,7 @@ module.exports = {
   createRecurring,
   updateRecurring,
   deleteRecurring,
+  postDueRecurring,
   projectCashflow,
 
   getGoals,
