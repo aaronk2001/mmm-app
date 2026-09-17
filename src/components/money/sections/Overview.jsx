@@ -44,18 +44,18 @@ export default function Overview() {
     const saved = (settings?.dashboards?.overview?.layout || []).filter((l) => WIDGETS[l.i]);
     if (!saved.length || isCollapsedLayout(saved)) {
       setLayout(DEFAULT_LAYOUT);
-      persistVersioned(DEFAULT_LAYOUT, LAYOUT_VERSION, { now: true });
+      persistVersioned(DEFAULT_LAYOUT, LAYOUT_VERSION);
       return;
     }
     const from = inferLegacyVersion(settings);
     const defs = Object.fromEntries(Object.entries(WIDGETS).map(([id, w]) => [id, w.layout]));
     const { layout: next, version } = migrateLayout(saved, from, defs);
     setLayout(next);
-    if (version !== from) persistVersioned(next, version, { now: true });
+    if (version !== from) persistVersioned(next, version);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, layout]);
 
-  function persistVersioned(next, version, opts) {
+  function persistVersioned(next, version) {
     const overview = { ...(settings?.dashboards?.overview || {}), layout: next, schemaVersion: version };
     const dashboards = { ...(settings?.dashboards || {}), overview };
     saveSettings({ dashboards }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
