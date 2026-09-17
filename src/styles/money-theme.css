@@ -32,7 +32,7 @@
   --m-chart-7: var(--chart-7);
   --m-chart-8: var(--chart-8);
 
-  --m-radius: 14px;
+  --m-radius: var(--radius);
   --m-shadow: var(--shadow-card);
   --m-shadow-md: 0 2px 8px rgba(16, 24, 40, 0.1);
   --m-shadow-lg: 0 10px 32px rgba(16, 24, 40, 0.12);
@@ -42,7 +42,7 @@
   min-height: 100%;
 
   /* Typography defaults */
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.5;
   letter-spacing: -0.011em;
@@ -50,9 +50,15 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ─── Display type (v3 tokens) ─────────────────────────────────────── */
+.money-hub h1, .money-hub h2, .money-hub h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
 /* ─── Numeric alignment (tabular numerals) ─────────────────────────── */
 .money-hub .num {
-  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-feature-settings: "tnum" 1;
   font-variant-numeric: tabular-nums;
 }
@@ -90,8 +96,8 @@
   min-width: 0;
 }
 .money-hub .m-stat-big-value {
-  font-size: clamp(24px, 6vw, 36px);
-  font-weight: 700;
+  font-size: clamp(28px, 6vw, var(--text-hero));
+  font-weight: 600;
   line-height: 1.1;
   color: var(--m-ink);
   font-variant-numeric: tabular-nums;

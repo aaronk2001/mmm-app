@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { queryClient, fetchSettings } from './lib/query';
+import '@fontsource-variable/inter';
+import '@fontsource-variable/jetbrains-mono';
+import '@fontsource-variable/space-grotesk';
 import './styles/theme.css';
 import './styles/money-theme.css';
 import { applyTheme, applyDensity, applyAccent, clearAccent } from './lib/theme';
@@ -23,7 +26,8 @@ createRoot(document.getElementById('root')).render(
 fetchSettings().then((s) => {
   const a = s?.appearance;
   if (!a) return;
-  if (!localStorage.getItem('mmm-theme') && a.theme) applyTheme(a.theme);
+  // 'system' was the pre-v3 default; dark is the v3 default, so only honour an explicit pick.
+  if (!localStorage.getItem('mmm-theme') && a.theme && a.theme !== 'system') applyTheme(a.theme);
   if (!localStorage.getItem('mmm-density') && a.density) applyDensity(a.density);
   if (!localStorage.getItem('mmm-accent') && a.accent) {
     // Ignore retired blue accents saved by earlier builds so MMM's teal
