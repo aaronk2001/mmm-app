@@ -2,14 +2,14 @@
 // script in index.html; these helpers change it live and persist the choice.
 // Settings & Privacy (Phase 4) will drive these; exposed on window for now.
 
-const BG = { light: '#f5f6f5', dark: '#101318' };
+const BG = { light: '#f4f5f7', dark: '#0f1115' };
 
 export function resolveTheme(pref) {
   if (pref === 'dark' || pref === 'light') return pref;
   return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-export function applyTheme(pref = 'system') {
+export function applyTheme(pref = 'dark') {
   const t = resolveTheme(pref);
   const de = document.documentElement;
   de.setAttribute('data-theme', t);
@@ -37,7 +37,7 @@ export function clearAccent() {
   try { localStorage.removeItem('mmm-accent'); } catch {}
 }
 
-export function getTheme() { try { return localStorage.getItem('mmm-theme') || 'system'; } catch { return 'system'; } }
+export function getTheme() { try { return localStorage.getItem('mmm-theme') || 'dark'; } catch { return 'dark'; } }
 export function getDensity() { try { return localStorage.getItem('mmm-density') || 'comfortable'; } catch { return 'comfortable'; } }
 export function getAccent() { try { return localStorage.getItem('mmm-accent') || ''; } catch { return ''; } }
 

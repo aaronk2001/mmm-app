@@ -133,10 +133,10 @@ export default function Settings() {
   function pickAccent(hex) { setAccent(hex); applyAccent(hex); persist({ accent: hex }); }
 
   function resetDefaults() {
-    setTheme('system'); applyTheme('system');
+    setTheme('dark'); applyTheme('dark');
     setDensity('comfortable'); applyDensity('comfortable');
     setAccent(DEFAULT_ACCENT); applyAccent(DEFAULT_ACCENT);
-    saveSettings({ appearance: { theme: 'system', density: 'comfortable', accent: DEFAULT_ACCENT } }).catch(() => {});
+    saveSettings({ appearance: { theme: 'dark', density: 'comfortable', accent: DEFAULT_ACCENT } }).catch(() => {});
   }
 
   // Coach preferences (proactive nudges + weekly digest). Defaults are ON.

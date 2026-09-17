@@ -8,7 +8,7 @@
     // No-flash theme boot: set data-theme / data-density + base bg before paint.
     (function () {
       try {
-        var pref = localStorage.getItem('mmm-theme') || 'system';
+        var pref = localStorage.getItem('mmm-theme') || 'dark';
         var t = (pref === 'system')
           ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
           : pref;
@@ -16,7 +16,7 @@
         de.setAttribute('data-theme', t);
         de.setAttribute('data-density', localStorage.getItem('mmm-density') || 'comfortable');
         de.style.colorScheme = t;
-        de.style.backgroundColor = (t === 'dark') ? '#101318' : '#f5f6f5';
+        de.style.backgroundColor = (t === 'dark') ? '#0f1115' : '#f4f5f7';
         // Retire the pre-teal blue accents so MMM's identity shows; a
         // deliberately-picked accent still persists.
         var a = localStorage.getItem('mmm-accent');
@@ -25,9 +25,6 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>html, body { margin: 0; }</style>
 </head>
 <body>
