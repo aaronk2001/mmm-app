@@ -22,12 +22,13 @@ app.use(helmet({ frameguard: false, contentSecurityPolicy: false }));
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 // Scoped to the Vite dev server and the Electron origin only.
-app.use(cors({ origin: ['http://localhost:5006', 'http://localhost:5173', 'http://127.0.0.1:5006', 'file://'] }));
+const ORIGINS = (process.env.MMM_CORS_ORIGINS || 'http://localhost:5006,http://localhost:5173,http://127.0.0.1:5006,file://').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({ origin: ORIGINS }));
 
 // ─── Compression ─────────────────────────────────────────────────────────────
 app.use(compression());
 
-// ─── Body parsing — 10 KB hard cap ───────────────────────────────────────────
+// ─── Body parsing — 2 MB cap (settings + CSV/backup import) ───
 app.use(express.json({ limit: '2mb' })); // larger for settings + CSV/backup import
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
@@ -39,9 +40,12 @@ const apiLimiter = rateLimit({
 app.use('/api', apiLimiter);
 
 // ─── Request timeout ─────────────────────────────────────────────────────────
-// Hard-kill any request not finished within 30s.
+// Hard-kill any request not finished within 30s — except local-LLM routes,
+// which legitimately run longer (ollama.js allows 40s per call).
 const REQUEST_TIMEOUT_MS = 30_000;
+const TIMEOUT_EXEMPT = [/^\/api\/money\/coach/];
 app.use((req, res, next) => {
+  if (TIMEOUT_EXEMPT.some((re) => re.test(req.path))) return next();
   const timer = setTimeout(() => {
     if (!res.headersSent) res.status(503).json({ error: 'Request timed out.' });
   }, REQUEST_TIMEOUT_MS);
