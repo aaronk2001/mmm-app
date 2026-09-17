@@ -19,6 +19,7 @@ server/store/money/backups/
 # agent scratch
 temp-esb/
 tmp-esb/
+.playwright-cli/
 
 # Claude Code / OMC agent state
 .omc/

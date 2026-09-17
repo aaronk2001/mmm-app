@@ -185,6 +185,14 @@ describe('recurring auto-post to transactions', () => {
     expect(last.truncated).toEqual([]);
     expect(typeof last.at).toBe('string');
   });
+
+  it('does not overwrite a real record with a later posted:0 call', () => {
+    const acc = store.createAccount('Checking', 'checking', 0);
+    store.createRecurring({ payee: 'Rent', amount: 10, cadence: 'monthly', kind: 'bill', next_date: ymd(-1), account_id: acc.id });
+    store.postDueRecurring(); // posts the due bill, writes meta
+    expect(store.postDueRecurring().posted).toBe(0); // nothing due now — must not clobber meta
+    expect(store.getLastAutopost().posted).toBe(1);
+  });
 });
 
 describe('export / import round-trip', () => {

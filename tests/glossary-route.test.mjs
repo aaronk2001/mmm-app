@@ -59,7 +59,7 @@ describe('GET /glossary', () => {
 
   it('resolves every <Term name=…> call site in the app', async () => {
     const names = findTermNames();
-    expect(names.length).toBeGreaterThan(0);
+    expect(names.length).toBeGreaterThanOrEqual(15);
     for (const name of names) {
       const res = await fetch(`${base}/glossary?term=${encodeURIComponent(name)}`);
       expect(res.status, `"${name}" should resolve`).toBe(200);

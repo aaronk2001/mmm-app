@@ -331,7 +331,12 @@ function postDueRecurring() {
   }
 
   const result = { posted, truncated };
-  repo.setMeta(db(), 'last_autopost', { at: new Date().toISOString(), ...result });
+  // Only persist when something actually happened — a posted:0 call (e.g. the
+  // Cash Flow mount effect firing with nothing due) must not overwrite a real
+  // earlier record with a fresher, emptier one.
+  if (posted > 0 || truncated.length > 0) {
+    repo.setMeta(db(), 'last_autopost', { at: new Date().toISOString(), ...result });
+  }
   return result;
 }
 
@@ -352,8 +357,8 @@ function projectCashflow(accounts, recurring, days = 90) {
 
 function getRunway() {
   const data = readData();
-  const recurring = calc.detectRecurring(getTransactions(), getDeclaredRecurring());
-  return computeRunway({ accounts: getAccounts(), transactions: data.transactions, recurring });
+  const recurring = calc.detectRecurring(data.transactions, getDeclaredRecurring());
+  return computeRunway({ accounts: data.accounts, transactions: data.transactions, recurring, categories: data.categories });
 }
 
 // ── metrics (formula-engine variables) ────────────────────────────────────────
