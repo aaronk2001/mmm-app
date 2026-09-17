@@ -286,6 +286,11 @@ function advanceDate(dateStr, cadence) {
   return ymd(d);
 }
 
+// Per-item cap on catch-up posts per call. A stale item (e.g. a weekly bill
+// two years old) posts up to this many rows, is reported in `truncated`, and
+// finishes on the next launch instead of silently stopping short.
+const AUTOPOST_CAP = 100;
+
 // Auto-post every recurring item whose next_date has arrived into a real
 // transaction on its linked account, catching up each missed period. Advancing
 // next_date past today is the idempotency guard — safe to call repeatedly (on
@@ -294,6 +299,7 @@ function postDueRecurring() {
   const today = ymd(new Date());
   const items = repo.getRecurring(db());
   let posted = 0;
+  const truncated = [];
 
   for (const r of items) {
     if (!r.account_id || !r.next_date) continue;
@@ -301,20 +307,35 @@ function postDueRecurring() {
 
     let next = String(r.next_date).slice(0, 10);
     const original = next;
-    let guard = 0; // cap catch-up so a stale item can't post hundreds of rows
+    let count = 0;
 
-    while (next <= today && guard < 120) {
+    while (next <= today && count < AUTOPOST_CAP) {
       const amount = r.kind === 'income' ? Math.abs(r.amount) : -Math.abs(r.amount);
       createTransaction(r.account_id, next, amount, r.payee, null, [], 'Auto-posted from recurring', 'recurring');
       next = advanceDate(next, r.cadence);
       posted += 1;
-      guard += 1;
+      count += 1;
+    }
+
+    if (next <= today) {
+      // Count what is still owed without posting it.
+      let remaining = 0;
+      let probe = next;
+      while (probe <= today && remaining < 100000) { probe = advanceDate(probe, r.cadence); remaining += 1; }
+      truncated.push({ id: r.id, payee: r.payee, remaining });
+      console.warn(`[MMM recurring] truncated catch-up for "${r.payee}" — ${remaining} period(s) still due, will continue next launch`);
     }
 
     if (next !== original) repo.updateRecurring(db(), r.id, { next_date: next });
   }
 
-  return posted;
+  const result = { posted, truncated };
+  repo.setMeta(db(), 'last_autopost', { at: new Date().toISOString(), ...result });
+  return result;
+}
+
+function getLastAutopost() {
+  return repo.getMeta(db(), 'last_autopost');
 }
 
 // ── cashflow ──────────────────────────────────────────────────────────────────
@@ -548,6 +569,7 @@ module.exports = {
   updateRecurring,
   deleteRecurring,
   postDueRecurring,
+  getLastAutopost,
   projectCashflow,
 
   getGoals,

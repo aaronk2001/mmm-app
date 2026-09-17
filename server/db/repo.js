@@ -502,6 +502,17 @@ function writeAll(d, blob) {
   run();
 }
 
+// ── generic meta (small JSON blobs keyed by name) ───────────────────────────
+function getMeta(d, key) {
+  const row = d.prepare('SELECT value FROM meta WHERE key = ?').get(key);
+  if (!row) return null;
+  try { return JSON.parse(row.value); } catch { return null; }
+}
+
+function setMeta(d, key, value) {
+  d.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, JSON.stringify(value));
+}
+
 // ── user settings (meta['settings']) ─────────────────────────────────────────
 // Deep merge: nested objects merge recursively, arrays and scalars replace —
 // so a partial PUT can no longer clobber sibling nested keys.
@@ -525,7 +536,7 @@ function setSettings(d, partial) {
 }
 
 module.exports = {
-  newId, defaultCategories, emptyData, readAll, writeAll, getSettings, setSettings,
+  newId, defaultCategories, emptyData, readAll, writeAll, getSettings, setSettings, getMeta, setMeta,
   getAccounts, getAccount, createAccount, updateAccount, deleteAccount,
   getTransactions, getTransaction, createTransaction, insertTransactions,
   updateTransaction, deleteTransaction, updateTransactionsBulk, deleteTransactionsBulk, setTransactionCategories, getPayeeStats,

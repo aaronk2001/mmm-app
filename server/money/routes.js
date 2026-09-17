@@ -71,6 +71,7 @@ router.get('/overview', (req, res) => {
       budgetStatus,
       displayCurrency: cc.baseCurrency,
       isEmpty: data.accounts.length === 0 && data.transactions.length === 0,
+      lastAutopost: store.getLastAutopost(),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -412,7 +413,7 @@ router.post('/recurring', (req, res) => {
 // launch server-side; exposed so the client can trigger + refetch on demand.
 router.post('/recurring/post-due', (req, res) => {
   try {
-    res.json({ posted: store.postDueRecurring() });
+    res.json(store.postDueRecurring());
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

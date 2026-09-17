@@ -116,7 +116,7 @@ describe('recurring auto-post to transactions', () => {
     const acc = store.createAccount('Checking', 'checking', 1000);
     const r = store.createRecurring({ payee: 'Rent', amount: 1200, cadence: 'monthly', kind: 'bill', next_date: ymd(-1), account_id: acc.id });
 
-    const posted = store.postDueRecurring();
+    const posted = store.postDueRecurring().posted;
     expect(posted).toBe(1);
 
     const txns = store.getTransactions();
@@ -133,8 +133,8 @@ describe('recurring auto-post to transactions', () => {
     const acc = store.createAccount('Checking', 'checking', 0);
     store.createRecurring({ payee: 'Salary', amount: 3000, cadence: 'monthly', kind: 'income', next_date: ymd(0), account_id: acc.id });
 
-    expect(store.postDueRecurring()).toBe(1);
-    expect(store.postDueRecurring()).toBe(0); // nothing due now
+    expect(store.postDueRecurring().posted).toBe(1);
+    expect(store.postDueRecurring().posted).toBe(0); // nothing due now
     expect(store.getTransactions()).toHaveLength(1);
     expect(store.getAccounts()[0].balance).toBe(3000);
   });
@@ -143,22 +143,47 @@ describe('recurring auto-post to transactions', () => {
     const acc = store.createAccount('Checking', 'checking', 0);
     store.createRecurring({ payee: 'Netflix', amount: 15, cadence: 'weekly', kind: 'bill', next_date: ymd(-21), account_id: acc.id });
 
-    const posted = store.postDueRecurring(); // -21, -14, -7, 0 => 4 posts
+    const posted = store.postDueRecurring().posted; // -21, -14, -7, 0 => 4 posts
     expect(posted).toBe(4);
     expect(store.getAccounts()[0].balance).toBe(-60);
   });
 
   it('skips items with no linked account (forecast-only)', () => {
     store.createRecurring({ payee: 'Rent', amount: 1200, cadence: 'monthly', kind: 'bill', next_date: ymd(-1) });
-    expect(store.postDueRecurring()).toBe(0);
+    expect(store.postDueRecurring().posted).toBe(0);
     expect(store.getTransactions()).toHaveLength(0);
   });
 
   it('does not post items dated in the future', () => {
     const acc = store.createAccount('Checking', 'checking', 500);
     store.createRecurring({ payee: 'Rent', amount: 1200, cadence: 'monthly', kind: 'bill', next_date: ymd(5), account_id: acc.id });
-    expect(store.postDueRecurring()).toBe(0);
+    expect(store.postDueRecurring().posted).toBe(0);
     expect(store.getAccounts()[0].balance).toBe(500);
+  });
+
+  it('caps catch-up per item, reports the truncation, and continues on the next call', () => {
+    const acc = store.createAccount('Checking', 'checking', 0);
+    // ~2 years of missed weekly bills = 105 periods; cap is 100 per call.
+    const r = store.createRecurring({ payee: 'Stale', amount: 1, cadence: 'weekly', kind: 'bill', next_date: ymd(-7 * 104), account_id: acc.id });
+
+    const first = store.postDueRecurring();
+    expect(first.posted).toBe(100);
+    expect(first.truncated).toEqual([{ id: r.id, payee: 'Stale', remaining: 5 }]);
+
+    const second = store.postDueRecurring();
+    expect(second.posted).toBe(5);
+    expect(second.truncated).toEqual([]);
+    expect(store.getTransactions()).toHaveLength(105);
+  });
+
+  it('records the last auto-post result in meta', () => {
+    const acc = store.createAccount('Checking', 'checking', 0);
+    store.createRecurring({ payee: 'Rent', amount: 10, cadence: 'monthly', kind: 'bill', next_date: ymd(-1), account_id: acc.id });
+    store.postDueRecurring();
+    const last = store.getLastAutopost();
+    expect(last.posted).toBe(1);
+    expect(last.truncated).toEqual([]);
+    expect(typeof last.at).toBe('string');
   });
 });
 
