@@ -151,3 +151,44 @@ describe('projectCashflow', () => {
     expect(out.summary.lowestBalance).toBe(400);
   });
 });
+
+describe('computeGoalInsights with recurring', () => {
+  const liquid = [{ type: 'checking', balance: 6000 }];
+
+  it('normalizes weekly and biweekly recurring to a monthly figure', () => {
+    const insights = store.computeGoalInsights(liquid, [], [
+      { kind: 'bill', amount: 100, cadence: 'weekly' },    // 433.33/mo
+      { kind: 'bill', amount: 200, cadence: 'biweekly' },  // 433.33/mo
+      { kind: 'bill', amount: 50, cadence: 'monthly' },    // 50/mo
+    ]);
+    expect(insights.emergencyFund.monthlyExpenses).toBeCloseTo(916.67, 1);
+    expect(insights.emergencyFund.targetAmount).toBeCloseTo(5500, 0); // 6 months
+  });
+
+  it('takes the max of actual and recurring so a posted bill is not double counted', () => {
+    // 60 days of actuals: $2,400 spent => $1,200/mo. Recurring says $1,000/mo.
+    const txns = [
+      { amount: -1200, date: daysAgo(10) },
+      { amount: -1200, date: daysAgo(40) },
+      { amount: 5000, date: daysAgo(5) },
+    ];
+    const insights = store.computeGoalInsights(liquid, txns, [{ kind: 'bill', amount: 1000, cadence: 'monthly' }]);
+    expect(insights.emergencyFund.monthlyExpenses).toBe(1200); // not 2200
+  });
+
+  it('recurring income raises monthlyIncome when actuals are thin', () => {
+    const insights = store.computeGoalInsights(
+      liquid,
+      [{ amount: -500, date: daysAgo(3) }],
+      [{ kind: 'income', amount: 3000, cadence: 'monthly' }, { kind: 'bill', amount: 500, cadence: 'monthly' }]
+    );
+    // fire.yearsToFire only becomes a number when monthlySavings > 0 (3000 - 500)
+    expect(insights.fire.yearsToFire).not.toBeNull();
+  });
+
+  it('reports 0 months covered (not a division fallback) when there are no expenses', () => {
+    const insights = store.computeGoalInsights(liquid, [], []);
+    expect(insights.emergencyFund.monthsCovered).toBe(0);
+    expect(insights.emergencyFund.targetAmount).toBe(0);
+  });
+});
