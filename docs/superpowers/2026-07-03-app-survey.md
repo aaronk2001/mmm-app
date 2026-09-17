@@ -1,3 +1,5 @@
+> **HISTORICAL (pre-overhaul snapshot, 2026-07-03).** Most risks listed here were fixed in commits 07b08f3…63859ae. Do not plan from this document; see docs/superpowers/plans/ and the v3 plan.
+
 # MMM-App State-of-the-App Survey
 **Date:** 2026-07-03 | **Status:** Functional MVP + Phase 1 Extension (undocumented completion)
 
