@@ -5,6 +5,7 @@ const { db } = require('../db/connection');
 const repo = require('../db/repo');
 const calc = require('./calc');
 const parsers = require('./parsers');
+const { computeRunway } = require('./runway');
 
 // Store v2 — thin data-access orchestration over the per-row repo API. Every
 // exported name and signature matches v1 so routes.js and the tests keep
@@ -349,6 +350,12 @@ function projectCashflow(accounts, recurring, days = 90) {
   return calc.projectCashflow(accounts, recurring, days, recentExpenses / 60);
 }
 
+function getRunway() {
+  const data = readData();
+  const recurring = calc.detectRecurring(getTransactions(), getDeclaredRecurring());
+  return computeRunway({ accounts: getAccounts(), transactions: data.transactions, recurring });
+}
+
 // ── metrics (formula-engine variables) ────────────────────────────────────────
 
 function cfSlug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'field'; }
@@ -571,6 +578,7 @@ module.exports = {
   postDueRecurring,
   getLastAutopost,
   projectCashflow,
+  getRunway,
 
   getGoals,
   createGoal,
