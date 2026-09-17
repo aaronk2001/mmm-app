@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Zap,
@@ -16,10 +16,12 @@ import Card from '../shared/Card';
 import Money from '../shared/Money';
 import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../../../lib/query';
 import { toast } from '../../../lib/toast';
 import { confirmDialog } from '../../../lib/confirm';
+import { computeIncomeVsSpending } from '../../../lib/incomeVsSpending';
+import IncomeVsSpendingCard from './parts/cashflow/IncomeVsSpendingCard';
 
 const todayStr = () => {
   const d = new Date();
@@ -128,65 +130,7 @@ export default function CashFlow() {
   const recurring = recurringData?.recurring || [];
   const declared = recurringData?.declared || [];
 
-  // Income vs spending by month, COMBINING posted transactions (actuals) with
-  // projected upcoming recurring occurrences. Past/current months come from real
-  // transactions; today-and-forward come from recurring. Linked recurring only
-  // project strictly after today (their due dates already auto-posted).
-  const byMonth = {};
-  const addTo = (m, field, amt) => {
-    if (!byMonth[m]) byMonth[m] = { month: m, income: 0, spending: 0 };
-    byMonth[m][field] += amt;
-  };
-
-  txns.forEach(t => {
-    const m = String(t.date).slice(0, 7);
-    if (t.amount >= 0) addTo(m, 'income', t.amount);
-    else addTo(m, 'spending', Math.abs(t.amount));
-  });
-
-  const advanceDate = (d, cadence) => {
-    const nd = new Date(d);
-    if (cadence === 'weekly') nd.setDate(nd.getDate() + 7);
-    else if (cadence === 'biweekly') nd.setDate(nd.getDate() + 14);
-    else nd.setMonth(nd.getMonth() + 1);
-    return nd;
-  };
-
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  // Last day of the 5th month ahead — keeps projected months whole (no partial tail).
-  const horizon = new Date(now.getFullYear(), now.getMonth() + 6, 0);
-  recurring.forEach(r => {
-    if (!r.next_date) return;
-    const amt = Math.abs(parseFloat(r.amount) || 0);
-    if (!amt) return;
-    const field = r.kind === 'income' ? 'income' : 'spending';
-    let d = new Date(`${String(r.next_date).slice(0, 10)}T00:00:00`);
-    let guard = 0;
-    // Skip occurrences already covered: linked items post through today, so
-    // project strictly after today; unlinked start from today.
-    while (d < startOfToday && guard < 500) { d = advanceDate(d, r.cadence); guard++; }
-    if (r.account_id && d.getTime() === startOfToday.getTime()) d = advanceDate(d, r.cadence);
-    guard = 0;
-    while (d <= horizon && guard < 500) {
-      const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      addTo(m, field, amt);
-      d = advanceDate(d, r.cadence);
-      guard++;
-    }
-  });
-
-  // Window: two months of history through the projection horizon.
-  const minD = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-  const minMonth = `${minD.getFullYear()}-${String(minD.getMonth() + 1).padStart(2, '0')}`;
-  const incomeVsSpending = Object.values(byMonth)
-    .filter(r => r.month >= minMonth)
-    .sort((a, b) => a.month.localeCompare(b.month))
-    .map(r => ({ month: r.month, income: Math.round(r.income), spending: Math.round(r.spending) }));
-
-  const totalIncome = incomeVsSpending.reduce((s, r) => s + r.income, 0);
-  const totalSpending = incomeVsSpending.reduce((s, r) => s + r.spending, 0);
-  const totalNet = totalIncome - totalSpending;
+  const ivs = useMemo(() => computeIncomeVsSpending({ transactions: txns, recurring }), [txns, recurring]);
 
   const accountName = (id) => accounts.find(a => a.id === id)?.name || null;
 
@@ -469,87 +413,9 @@ export default function CashFlow() {
             </Card>
           </motion.div>
 
-          {/* Income vs Spending (monthly actuals) */}
-          {incomeVsSpending.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.05 }}
-              style={{ marginBottom: '24px' }}
-            >
-              <Card className="m-card-sm" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--m-ink)', marginBottom: '4px' }}>
-                  <DollarSign size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom' }} />
-                  Income vs Spending
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginBottom: '16px' }}>
-                  Posted transactions + upcoming recurring
-                </div>
-
-                {/* Totals across the shown months */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '16px', marginBottom: '20px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', fontWeight: 500, marginBottom: '4px' }}>
-                      Total Income
-                    </div>
-                    <div style={{ fontSize: 'clamp(16px, 4vw, 20px)', fontWeight: 700, color: 'var(--m-green)', fontVariantNumeric: 'tabular-nums' }}>
-                      <Money value={totalIncome} prefix="$" decimals={0} />
-                    </div>
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', fontWeight: 500, marginBottom: '4px' }}>
-                      Total Spending
-                    </div>
-                    <div style={{ fontSize: 'clamp(16px, 4vw, 20px)', fontWeight: 700, color: 'var(--m-red)', fontVariantNumeric: 'tabular-nums' }}>
-                      <Money value={totalSpending} prefix="$" decimals={0} />
-                    </div>
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', color: 'var(--m-muted)', fontWeight: 500, marginBottom: '4px' }}>
-                      Net
-                    </div>
-                    <div style={{ fontSize: 'clamp(16px, 4vw, 20px)', fontWeight: 700, color: totalNet >= 0 ? 'var(--m-green)' : 'var(--m-red)', fontVariantNumeric: 'tabular-nums' }}>
-                      <Money value={Math.abs(totalNet)} prefix={totalNet >= 0 ? '$' : '-$'} decimals={0} />
-                    </div>
-                  </div>
-                </div>
-
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={incomeVsSpending}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--m-border)" />
-                    <XAxis
-                      dataKey="month"
-                      stroke="var(--m-muted)"
-                      style={{ fontSize: '12px' }}
-                      tickFormatter={m => {
-                        const [y, mo] = m.split('-');
-                        return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short' });
-                      }}
-                    />
-                    <YAxis
-                      stroke="var(--m-muted)"
-                      style={{ fontSize: '12px' }}
-                      tickFormatter={v => `$${(v / 1000).toFixed(0)}k`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--m-surface)',
-                        border: '1px solid var(--m-border)',
-                        borderRadius: '8px',
-                        color: 'var(--m-ink)',
-                      }}
-                      formatter={value => <Money value={value} prefix="$" decimals={0} />}
-                      labelFormatter={m => {
-                        const [y, mo] = String(m).split('-');
-                        return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <Bar dataKey="income" name="Income" fill="var(--m-green)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="spending" name="Spending" fill="var(--m-red)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
+          {ivs.rows.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }} style={{ marginBottom: '24px' }}>
+              <IncomeVsSpendingCard rows={ivs.rows} totals={ivs.totals} />
             </motion.div>
           )}
 
