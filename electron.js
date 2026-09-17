@@ -38,7 +38,7 @@ function applyLoginItem() {
 // Defender scans node_modules on a cold cache).
 const SPLASH_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(
   '<!doctype html><meta charset="utf-8"><style>' +
-  'html,body{margin:0;height:100%;background:#101318;color:#e9ecf1;' +
+  'html,body{margin:0;height:100%;background:#0f1115;color:#e6e9ee;' +
   'font-family:Inter,Segoe UI,system-ui,sans-serif;display:flex;align-items:center;' +
   'justify-content:center;flex-direction:column;gap:16px}' +
   '.mark{width:56px;height:56px}' +
@@ -107,7 +107,7 @@ function createWindow() {
     height: 860,
     minWidth: 980,
     minHeight: 600,
-    backgroundColor: '#101318',
+    backgroundColor: '#0f1115',
     title: 'MMM',
     icon: path.join(__dirname, 'assets', 'icon.ico'),
     webPreferences: {
@@ -126,7 +126,7 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' http://127.0.0.1:5006 http://localhost:5006; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'none';"
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:5006 http://localhost:5006; img-src 'self' data: https:; font-src 'self' data:; frame-ancestors 'none';"
         ],
       },
     });
