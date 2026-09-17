@@ -24,6 +24,14 @@ describe('migrateLayout', () => {
     expect(layout.some(l => l.i === 'insights')).toBe(false);
     expect(layout.some(l => l.i === 'runway')).toBe(true);
   });
+
+  it('v3 pushes a widget that spans into the right column, not only ones starting there', () => {
+    const saved = [{ i: 'netWorth', x: 6, y: 0, w: 6, h: 2 }, { i: 'insights', x: 0, y: 2, w: 6, h: 6 }];
+    const { layout } = migrateLayout(saved, 2, defs);
+    expect(layout.find(l => l.i === 'runway')).toMatchObject({ x: 8, y: 0 });
+    expect(layout.find(l => l.i === 'netWorth').y).toBe(2);   // pushed by runway's h
+    expect(layout.find(l => l.i === 'insights').y).toBe(2);   // untouched (x+w = 6, not into the right column)
+  });
 });
 
 describe('inferLegacyVersion', () => {

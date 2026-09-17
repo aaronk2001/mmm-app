@@ -10,7 +10,7 @@ const MIGRATIONS = [
       : [{ i: 'insights', x: 0, y: 0, w: defs.insights.w, h: defs.insights.h }, ...pushDown(layout, () => true, defs.insights.h)]) },
   { v: 2, up: (layout) => layout.map(l => (l.i === 'insights' && l.h < 6 ? { ...l, h: 6 } : l)) },
   { v: 3, up: (layout, defs) => (!defs.runway || layout.some(l => l.i === 'runway') ? layout
-      : [{ i: 'runway', x: RIGHT_COL_X, y: 0, w: defs.runway.w, h: defs.runway.h }, ...pushDown(layout, l => l.x >= RIGHT_COL_X, defs.runway.h)]) },
+      : [{ i: 'runway', x: RIGHT_COL_X, y: 0, w: defs.runway.w, h: defs.runway.h }, ...pushDown(layout, l => l.x + l.w > RIGHT_COL_X, defs.runway.h)]) },
 ];
 
 export function migrateLayout(saved, fromVersion, defs) {
