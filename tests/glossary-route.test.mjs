@@ -1,7 +1,28 @@
 // Route-level test: mounts the money router on an ephemeral Express server.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import routes from '../server/money/routes.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Walk src/components/money and pull every <Term name="…"> / name={'…'} / name={"…"}.
+function findTermNames() {
+  const root = path.join(__dirname, '..', 'src', 'components', 'money');
+  const names = new Set();
+  const re = /<Term\s+name=(?:"([^"]*)"|'([^']*)'|\{'([^']*)'\}|\{"([^"]*)"\})/g;
+  for (const file of fs.readdirSync(root, { recursive: true })) {
+    if (!file.endsWith('.jsx')) continue;
+    const contents = fs.readFileSync(path.join(root, file), 'utf8');
+    let m;
+    while ((m = re.exec(contents))) {
+      names.add(m[1] ?? m[2] ?? m[3] ?? m[4]);
+    }
+  }
+  return [...names];
+}
 
 let server; let base;
 beforeAll(async () => {
@@ -34,5 +55,14 @@ describe('GET /glossary', () => {
   it('404s for an unknown term', async () => {
     const res = await fetch(`${base}/glossary?term=flux%20capacitor`);
     expect(res.status).toBe(404);
+  });
+
+  it('resolves every <Term name=…> call site in the app', async () => {
+    const names = findTermNames();
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      const res = await fetch(`${base}/glossary?term=${encodeURIComponent(name)}`);
+      expect(res.status, `"${name}" should resolve`).toBe(200);
+    }
   });
 });

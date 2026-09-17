@@ -254,6 +254,56 @@
       "term": "Scenario Analysis",
       "plain": "Testing your financial plan against different future scenarios (job loss, market crash, inheritance).",
       "more": "Reveals gaps and builds confidence in your resilience."
+    },
+    {
+      "term": "Assets",
+      "plain": "Everything you own that has value — cash, accounts, investments, property.",
+      "more": "Assets minus liabilities equals net worth."
+    },
+    {
+      "term": "Liabilities",
+      "plain": "Everything you owe — loans, credit card balances, mortgages.",
+      "more": "Paying down high-interest liabilities first usually beats investing the difference."
+    },
+    {
+      "term": "Zero-Based Budget",
+      "plain": "A budgeting method where every dollar of income is assigned a job — spending, saving, or debt — until nothing is left unassigned.",
+      "more": "Forces intentional tradeoffs instead of letting leftover cash drift unspent."
+    },
+    {
+      "term": "Variance",
+      "plain": "The difference between what you budgeted for a category and what you actually spent.",
+      "more": "Recurring positive variance in a category is a signal to adjust the budget itself."
+    },
+    {
+      "term": "Recurring",
+      "plain": "Income or bills that repeat on a regular schedule, like rent or a paycheck.",
+      "more": "Recurring items are what make cash-flow projections possible — the rest is variable spending."
+    },
+    {
+      "term": "Discretionary",
+      "plain": "Spending that's optional — dining out, entertainment, hobbies — as opposed to fixed necessities.",
+      "more": "The easiest category to cut back on when you need to free up cash flow."
+    },
+    {
+      "term": "Debt Avalanche",
+      "plain": "Paying off debts in order from highest interest rate to lowest, while making minimum payments on the rest.",
+      "more": "Mathematically minimizes total interest paid over the life of your debts."
+    },
+    {
+      "term": "Snowball Method",
+      "plain": "Paying off debts in order from smallest balance to largest, while making minimum payments on the rest.",
+      "more": "Costs slightly more in interest than avalanche but builds momentum through quick wins."
+    },
+    {
+      "term": "25x Rule",
+      "plain": "A rule of thumb that your FIRE number is 25 times your annual expenses, based on a 4% safe withdrawal rate.",
+      "more": "Reaching 25x your spending means your portfolio can theoretically sustain withdrawals indefinitely."
+    },
+    {
+      "term": "Category",
+      "plain": "A label used to group similar transactions, like Groceries or Rent, so spending can be tracked and budgeted.",
+      "more": "Consistent categorization is what makes budget-vs-actual comparisons meaningful."
     }
   ]
 }

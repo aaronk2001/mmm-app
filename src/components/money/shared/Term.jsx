@@ -5,9 +5,9 @@ let mapPromise = null;
 function glossaryMap() {
   if (!mapPromise) {
     mapPromise = fetch('/api/money/glossary')
-      .then(r => (r.ok ? r.json() : { terms: [] }))
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
       .then(data => new Map((data.terms || []).map(t => [String(t.term).toLowerCase(), t])))
-      .catch(() => new Map());
+      .catch(() => { mapPromise = null; return new Map(); });
   }
   return mapPromise;
 }
