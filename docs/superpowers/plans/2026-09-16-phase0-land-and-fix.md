@@ -1252,4 +1252,4 @@ Record in `docs/superpowers/plans/2026-09-16-phase0-land-and-fix.md` (this file)
 - **Placeholder scan:** no TBD/TODO; every code step carries code. T5 Step 6 and T6 Step 6 ask the executor to confirm two existing prop/token names before use — that is a check, not a placeholder.
 - **Type consistency:** `postDueRecurring() → {posted, truncated}` used identically in T3 store/route/index/MoneyHub; `computeIncomeVsSpending({transactions, recurring, today}) → {rows, totals}` used identically in T4 test/module/card/section; `computeRunway` field names match between test, module and widget; `migrateLayout/inferLegacyVersion/LAYOUT_VERSION` match between test, module and Overview.
 
-Phase 0 shipped 2026-09-17 — commits ca428e5..6acae63 (103 tests green, MMM.exe rebuilt).
+Phase 0 shipped 2026-09-17 — commits ca428e5..b0d3143 + docs (103 tests green, MMM.exe rebuilt).
