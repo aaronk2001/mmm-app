@@ -9,6 +9,7 @@ const repo = require('../db/repo');
 const { db } = require('../db/connection');
 const paperStore = require('./paper-store');
 const { gateDecision } = require('./strategy-gate');
+const { runNexusImport } = require('./import-nexus');
 
 const router = express.Router();
 
@@ -123,6 +124,17 @@ router.post('/journal', (req, res) => {
       tag: req.body.tag || null,
     });
     res.json(entry);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// NEXUS import — one-time-per-record pull from nexus-app's flat-file store.
+// Idempotent (import_log keyed on source+source_id); safe to click again.
+// ────────────────────────────────────────────────────────────────────────────
+
+router.post('/import-nexus', (req, res) => {
+  try {
+    res.json(runNexusImport({ dryRun: !!req.body?.dryRun }));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
