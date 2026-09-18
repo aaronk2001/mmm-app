@@ -257,7 +257,7 @@ function computeAdvice(input = {}) {
         title: 'Recurring bills eat a big slice',
         detail: `Your ${bills.length} recurring bills run about ${money(totalBills)}/mo — ${pct(totalBills / income)} of income. ${biggest.payee} (${money(monthlyBill(biggest))}/mo) is the largest; cancel one you don't use.`,
         impact: scored('info', clamp(totalBills / income, 0, 1)),
-        action: { label: 'Review recurring', route: '/cashflow', params: {} },
+        action: { label: 'Review subscriptions', route: '/cashflow', params: { hash: 'subscriptions' } },
       });
     }
   }
