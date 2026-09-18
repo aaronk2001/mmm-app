@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -103,6 +103,22 @@ function SectionSkeleton() {
   );
 }
 
+// Shared by the group loop and the pinned-to-bottom settings footer so the
+// two nav-item call sites can't drift out of step.
+function NavItem({ section }) {
+  const Icon = section.icon;
+  return (
+    <NavLink
+      to={`/${section.id}`}
+      onMouseEnter={() => IMPORTERS[section.id]?.()}
+      className={({ isActive }) => `m-nav-item ${isActive ? 'active' : ''}`}
+    >
+      <Icon size={18} className="m-nav-icon" />
+      <span>{section.label}</span>
+    </NavLink>
+  );
+}
+
 export default function MoneyHub() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEmpty, setIsEmpty] = useState(false);
@@ -117,17 +133,22 @@ export default function MoneyHub() {
   const location = useLocation();
 
   // Group collapse state — read once from settings.nav.collapsed, written back
-  // fire-and-forget on toggle so a slow save never blocks the click.
+  // fire-and-forget on toggle so a slow save never blocks the click. If the
+  // user has already toggled a group before the GET resolves, the fetched
+  // value is stale relative to their intent — discard it rather than
+  // clobbering the optimistic local state (and the PUT already in flight).
   const [collapsed, setCollapsed] = useState({});
+  const userToggledRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     api('settings').then((s) => {
-      if (!cancelled) setCollapsed(s?.nav?.collapsed || {});
-    }).catch(() => { /* defaults to all-expanded */ });
+      if (!cancelled && !userToggledRef.current) setCollapsed(s?.nav?.collapsed || {});
+    }).catch(() => { /* defaults to all-expanded; collapse still works locally */ });
     return () => { cancelled = true; };
   }, []);
 
   function toggleGroup(groupId) {
+    userToggledRef.current = true;
     setCollapsed((prev) => {
       const next = { ...prev, [groupId]: !prev[groupId] };
       saveSettings({ nav: { collapsed: next } }).catch(() => {});
@@ -279,38 +300,16 @@ export default function MoneyHub() {
                   <span className="m-sidebar-group-label">{group.label}</span>
                   <ChevronDown size={14} className={`m-sidebar-group-chevron${isCollapsed ? ' collapsed' : ''}`} />
                 </button>
-                {visibleItems.map((section) => {
-                  const Icon = section.icon;
-                  return (
-                    <NavLink
-                      key={section.id}
-                      to={`/${section.id}`}
-                      onMouseEnter={() => IMPORTERS[section.id]?.()}
-                      className={({ isActive }) => `m-nav-item ${isActive ? 'active' : ''}`}
-                    >
-                      <Icon size={18} className="m-nav-icon" />
-                      <span>{section.label}</span>
-                    </NavLink>
-                  );
-                })}
+                {visibleItems.map((section) => (
+                  <NavItem key={section.id} section={section} />
+                ))}
               </div>
             );
           })}
           <div className="m-sidebar-footer">
-            {SECTIONS.filter((s) => !s.group).map((section) => {
-              const Icon = section.icon;
-              return (
-                <NavLink
-                  key={section.id}
-                  to={`/${section.id}`}
-                  onMouseEnter={() => IMPORTERS[section.id]?.()}
-                  className={({ isActive }) => `m-nav-item ${isActive ? 'active' : ''}`}
-                >
-                  <Icon size={18} className="m-nav-icon" />
-                  <span>{section.label}</span>
-                </NavLink>
-              );
-            })}
+            {SECTIONS.filter((s) => !s.group).map((section) => (
+              <NavItem key={section.id} section={section} />
+            ))}
           </div>
         </div>
       </nav>
