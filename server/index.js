@@ -9,6 +9,7 @@ const path        = require('path');
 const moneyRoutes = require('./money/routes');
 const planRoutes = require('./tools/routes');
 const settingsRoutes = require('./settings/routes');
+const onlineRoutes = require('./online/routes');
 const backupRoutes = require('./backup/routes');
 const { startBackupScheduler } = require('./backup/scheduler');
 const { checkpoint } = require('./db/connection');
@@ -64,6 +65,7 @@ app.use('/api/money/backups', backupRoutes);
 app.use('/api/money', moneyRoutes);
 app.use('/api/plan', planRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/online', onlineRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));

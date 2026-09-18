@@ -7,6 +7,7 @@ import { api, saveSettings, queryClient, useApi } from '../../../lib/query';
 import RulesManager from './RulesManager';
 import CustomFieldsManager from './CustomFieldsManager';
 import ProfilePanel, { PROFILE_STEPS, PROFILE_DEFAULTS, ALL_PROFILE_FIELDS, buildProfilePayload } from './parts/settings/ProfilePanel';
+import OnlinePanel from './parts/settings/OnlinePanel';
 import ErrorState from '../shared/ErrorState';
 import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
@@ -440,6 +441,8 @@ export default function Settings() {
           </Row>
         </Section>
       )}
+
+      <OnlinePanel />
 
       <Section title="Privacy &amp; Data" subtitle="MMM is local-first by design.">
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '4px 0' }}>
