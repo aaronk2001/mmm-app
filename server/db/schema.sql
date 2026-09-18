@@ -241,3 +241,36 @@ CREATE TABLE IF NOT EXISTS import_log (
   imported_at TEXT NOT NULL,
   PRIMARY KEY (source, source_id)
 );
+
+-- Markets section (Sprint A, Track 2). Structured "last known" price data,
+-- written only by server/market/snapshots.js's interval job (opt-in, 30 min,
+-- market hours only) or an explicit Refresh — never by a UI render. This is
+-- deliberately separate from `http_cache`: http_cache is the online seam's
+-- generic raw-response cache keyed by request URL, while price_cache is the
+-- normalized, typed shape the Markets UI reads directly with zero network
+-- risk (id = `${kind}:${symbol}`, e.g. "quote:AAPL", "index:^GSPC").
+CREATE TABLE IF NOT EXISTS price_cache (
+  id          TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL,               -- quote | index | future | crypto | fx | macro
+  symbol      TEXT NOT NULL,
+  price_cents INTEGER,
+  change_pct  REAL,
+  data        TEXT    DEFAULT '{}',        -- JSON-encoded full quote/series payload
+  source      TEXT    DEFAULT 'yahoo',     -- yahoo | fred | coingecko | frankfurter
+  fetched_at  TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_price_cache_kind ON price_cache(kind);
+
+-- Price alert thresholds for a watched symbol. Storage-only in Sprint A — no
+-- evaluator/notification engine is in scope for this track; that's future
+-- work once the online seam grows a notification path.
+CREATE TABLE IF NOT EXISTS alert_rules (
+  id            TEXT PRIMARY KEY,
+  symbol        TEXT NOT NULL,
+  condition     TEXT NOT NULL,             -- above | below
+  target_cents  INTEGER NOT NULL,
+  active        INTEGER DEFAULT 1,
+  created_at    TEXT,
+  triggered_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_symbol ON alert_rules(symbol);
