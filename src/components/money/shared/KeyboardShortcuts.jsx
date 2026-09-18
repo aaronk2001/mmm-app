@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import useDialog from './useDialog';
 
 // Only the shortcuts that actually exist — no G-prefixed navigation, that
 // isn't implemented this phase.
@@ -28,15 +29,11 @@ export default function KeyboardShortcuts() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => {
-    if (open) {
-      const t = setTimeout(() => panelRef.current?.focus(), 30);
-      return () => clearTimeout(t);
-    }
-    if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
-      document.activeElement.blur();
-    }
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+
+  // Mutual exclusion with the other dialogs, focus in/out, and the Tab trap
+  // that makes this component's aria-modal claim honest.
+  useDialog({ id: 'keyboard-shortcuts', open, onClose: close, panelRef });
 
   if (!open) return null;
 

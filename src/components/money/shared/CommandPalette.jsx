@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useId } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { api } from '../../../lib/query';
+import useDialog from './useDialog';
 
 // Subsequence fuzzy match (NEXUS CommandPalette's algorithm) — every query
 // character must appear in order in the target string, not necessarily
@@ -33,6 +34,7 @@ export default function CommandPalette({ sections }) {
   const [payees, setPayees] = useState([]);
   const fetchedRef = useRef(false);
   const inputRef = useRef(null);
+  const panelRef = useRef(null);
   const listboxId = useId();
   const navigate = useNavigate();
 
@@ -55,18 +57,8 @@ export default function CommandPalette({ sections }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Reset query + focus the input on open; on close, release focus back to
-  // the page rather than leaving it stuck on a now-invisible row/input.
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      setActiveIndex(0);
-      const t = setTimeout(() => inputRef.current?.focus(), 30);
-      return () => clearTimeout(t);
-    }
-    if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
-      document.activeElement.blur();
-    }
+    if (open) { setQuery(''); setActiveIndex(0); }
   }, [open]);
 
   // Fetch accounts/payees once per open (not once per keystroke). A failed
@@ -83,6 +75,10 @@ export default function CommandPalette({ sections }) {
   useEffect(() => { setActiveIndex(0); }, [query]);
 
   const close = useCallback(() => setOpen(false), []);
+
+  // Mutual exclusion with the other dialogs, focus in/out, and the Tab trap
+  // that makes this component's aria-modal claim honest.
+  useDialog({ id: 'command-palette', open, onClose: close, panelRef, initialFocusRef: inputRef });
 
   const runItem = useCallback((item) => {
     if (!item) return;
@@ -145,7 +141,7 @@ export default function CommandPalette({ sections }) {
 
   return (
     <div className="m-palette-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="m-palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div ref={panelRef} className="m-palette" role="dialog" aria-modal="true" aria-label="Command palette">
         <div className="m-palette-input-row">
           <Search size={16} aria-hidden="true" />
           <input
