@@ -158,6 +158,28 @@ function detectRecurring(transactions, declaredRecurring = []) {
   return [...declaredRecurring || [], ...recurring.filter(r => !declaredPayees.has(r.payee.toLowerCase()))];
 }
 
+// Mirrors server/money/store.js addMonthsClamped — keep the two in step.
+// Adds n months to Date `d`, clamping the day-of-month to the target month's
+// last day instead of letting it roll into the following month.
+function addMonthsClamped(d, n) {
+  const day = d.getDate();
+  const probe = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const lastDay = new Date(probe.getFullYear(), probe.getMonth() + 1, 0).getDate();
+  probe.setDate(Math.min(day, lastDay));
+  return probe;
+}
+
+// Returns a new Date advanced by one cadence period, or null for an
+// unrecognized cadence (caller stops advancing rather than guessing monthly).
+function advanceCadence(d, cadence) {
+  if (cadence === 'weekly') { const nd = new Date(d); nd.setDate(nd.getDate() + 7); return nd; }
+  if (cadence === 'biweekly') { const nd = new Date(d); nd.setDate(nd.getDate() + 14); return nd; }
+  if (cadence === 'monthly') return addMonthsClamped(d, 1);
+  if (cadence === 'quarterly') return addMonthsClamped(d, 3);
+  if (cadence === 'annual') return addMonthsClamped(d, 12);
+  return null;
+}
+
 // Forward-projects liquid balances. avgDailyDiscretionary is supplied by the
 // caller (store computes it from recent transactions) so this stays pure.
 function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary = 0) {
@@ -185,10 +207,9 @@ function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary =
           currentBalance += delta;
         }
 
-        if (r.cadence === 'monthly') checkDate.setMonth(checkDate.getMonth() + 1);
-        else if (r.cadence === 'biweekly') checkDate.setDate(checkDate.getDate() + 14);
-        else if (r.cadence === 'weekly') checkDate.setDate(checkDate.getDate() + 7);
-        else break;
+        const advanced = advanceCadence(checkDate, r.cadence);
+        if (!advanced) break;
+        checkDate = advanced;
       }
     });
 
@@ -247,6 +268,8 @@ function computeGoalInsights(accounts, transactions, recurring = []) {
     const a = Math.abs(parseFloat(amt) || 0);
     if (cadence === 'weekly') return a * 52 / 12;
     if (cadence === 'biweekly') return a * 26 / 12;
+    if (cadence === 'quarterly') return a / 3;
+    if (cadence === 'annual') return a / 12;
     return a; // monthly
   };
   let recurringBills = 0;
