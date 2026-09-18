@@ -5,12 +5,23 @@
 
 const ym = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
+// Mirrors server/money/store.js addMonthsClamped — keep the two in step.
+// Adds n months to Date `d`, clamping the day-of-month to the target month's
+// last day instead of letting it roll into the following month.
+function addMonthsClamped(d, n) {
+  const day = d.getDate();
+  const probe = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const lastDay = new Date(probe.getFullYear(), probe.getMonth() + 1, 0).getDate();
+  probe.setDate(Math.min(day, lastDay));
+  return probe;
+}
+
 function advance(d, cadence) {
-  const nd = new Date(d);
-  if (cadence === 'weekly') nd.setDate(nd.getDate() + 7);
-  else if (cadence === 'biweekly') nd.setDate(nd.getDate() + 14);
-  else nd.setMonth(nd.getMonth() + 1);
-  return nd;
+  if (cadence === 'weekly') { const nd = new Date(d); nd.setDate(nd.getDate() + 7); return nd; }
+  if (cadence === 'biweekly') { const nd = new Date(d); nd.setDate(nd.getDate() + 14); return nd; }
+  if (cadence === 'quarterly') return addMonthsClamped(d, 3);
+  if (cadence === 'annual') return addMonthsClamped(d, 12);
+  return addMonthsClamped(d, 1); // monthly (default)
 }
 
 export function computeIncomeVsSpending({ transactions = [], recurring = [], today = new Date() }) {
