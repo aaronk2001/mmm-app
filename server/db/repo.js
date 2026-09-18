@@ -391,6 +391,7 @@ function updateHolding(d, id, patch) {
   if (patch.shares !== undefined) { sets.push('shares = ?'); vals.push(parseFloat(patch.shares) || 0); }
   if (patch.cost_basis !== undefined) { sets.push('cost_basis_cents = ?'); vals.push(toCents(patch.cost_basis)); }
   if (patch.current_price !== undefined) { sets.push('current_price_cents = ?'); vals.push(toCents(patch.current_price)); }
+  if (patch.price_source !== undefined) { sets.push('price_source = ?'); vals.push(patch.price_source); }
   sets.push('updated_at = ?');
   vals.push(new Date().toISOString().slice(0, 10));
   d.prepare(`UPDATE holdings SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);

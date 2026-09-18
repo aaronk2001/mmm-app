@@ -68,6 +68,11 @@ router.get('/futures', async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.get('/sectors', async (req, res) => {
+  try { res.json({ sectors: await providers.yahoo.sectors() }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/earnings/:symbol', async (req, res) => {
   try {
     const out = await providers.yahoo.earnings(req.params.symbol.toUpperCase());
@@ -107,6 +112,37 @@ router.get('/forex', async (req, res) => {
     const symbols = req.query.symbols ? String(req.query.symbols).split(',') : undefined;
     const out = await providers.frankfurter.latest(base, symbols);
     res.json(out);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Investments "Refresh prices" — the explicit, UI-triggered action that sets
+// holding.price_source='yahoo'. Manual entry (Investments.jsx's own price
+// edit) stays the default; this only overwrites a holding once a live quote
+// actually came back for its symbol.
+// ────────────────────────────────────────────────────────────────────────────
+
+router.post('/refresh-holdings', async (req, res) => {
+  try {
+    if (!online.enabled('market')) return res.status(400).json({ error: 'Market data is off. Enable it in Settings first.' });
+    const d = db();
+    const holdings = repo.getHoldings(d);
+    const symbols = [...new Set(holdings.map((h) => String(h.symbol).toUpperCase()))];
+    const prices = {};
+    for (const symbol of symbols) {
+      // eslint-disable-next-line no-await-in-loop
+      const q = await providers.yahoo.quote(symbol);
+      if (q.quote?.price != null) prices[symbol] = q.quote.price;
+    }
+    let updated = 0;
+    for (const h of holdings) {
+      const price = prices[String(h.symbol).toUpperCase()];
+      if (price != null) {
+        repo.updateHolding(d, h.id, { current_price: price, price_source: 'yahoo' });
+        updated += 1;
+      }
+    }
+    res.json({ ok: true, updated, total: holdings.length, holdings: repo.getHoldings(d) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

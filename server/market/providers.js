@@ -29,6 +29,14 @@ const SLOW_TTL = 30 * 60 * 1000;     // macro/earnings/screener — 30 min
 
 const INDEX_SYMBOLS = { '^GSPC': 'S&P 500', '^DJI': 'Dow 30', '^IXIC': 'Nasdaq', '^RUT': 'Russell 2000', '^VIX': 'VIX' };
 const FUTURES_SYMBOLS = { 'ES=F': 'S&P 500 Futures', 'NQ=F': 'Nasdaq Futures', 'YM=F': 'Dow Futures', 'CL=F': 'Crude Oil', 'GC=F': 'Gold', 'SI=F': 'Silver', 'NG=F': 'Nat Gas' };
+// The 11 SPDR sector ETFs — no dedicated "sectors" data source in scope for
+// this sprint, so sector performance is just quote() over these symbols,
+// same shape as indices()/futures() below.
+const SECTOR_SYMBOLS = {
+  XLK: 'Technology', XLF: 'Financials', XLE: 'Energy', XLV: 'Health Care',
+  XLY: 'Consumer Discretionary', XLP: 'Consumer Staples', XLI: 'Industrials',
+  XLB: 'Materials', XLU: 'Utilities', XLRE: 'Real Estate', XLC: 'Communication Services',
+};
 // Predefined screens only — no custom screener query builder in this sprint.
 const SCREENS = {
   day_gainers: 'Day Gainers',
@@ -96,6 +104,12 @@ async function futures(opts = {}) {
   const symbols = Object.keys(FUTURES_SYMBOLS);
   const results = await Promise.all(symbols.map((s) => quote(s, opts)));
   return results.map((r, i) => ({ ...r, symbol: symbols[i], name: FUTURES_SYMBOLS[symbols[i]] }));
+}
+
+async function sectors(opts = {}) {
+  const symbols = Object.keys(SECTOR_SYMBOLS);
+  const results = await Promise.all(symbols.map((s) => quote(s, opts)));
+  return results.map((r, i) => ({ ...r, symbol: symbols[i], name: SECTOR_SYMBOLS[symbols[i]] }));
 }
 
 // ── yahoo: earnings + predefined screener (crumb required — SDK transport) ─
@@ -179,8 +193,9 @@ async function latest(base = 'USD', symbols = ['EUR', 'GBP', 'JPY'], { ttl = SLO
 module.exports = {
   INDEX_SYMBOLS,
   FUTURES_SYMBOLS,
+  SECTOR_SYMBOLS,
   SCREENS,
-  yahoo: { quote, chart, indices, futures, earnings, screener },
+  yahoo: { quote, chart, indices, futures, sectors, earnings, screener },
   fred: { series },
   coingecko: { simplePrice },
   frankfurter: { latest },
