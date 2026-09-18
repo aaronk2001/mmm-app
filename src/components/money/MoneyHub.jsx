@@ -25,6 +25,8 @@ import ErrorBoundary from './shared/ErrorBoundary';
 import Toasts from './shared/Toasts';
 import ConfirmHost from './shared/ConfirmDialog';
 import QuickAdd from './shared/QuickAdd';
+import CommandPalette from './shared/CommandPalette';
+import KeyboardShortcuts from './shared/KeyboardShortcuts';
 import Logo from './shared/Logo';
 import DigestModal from './shared/DigestModal';
 import ComingSoon from './shared/ComingSoon';
@@ -369,7 +371,13 @@ export default function MoneyHub() {
         )}
       </main>
 
-      {(entered || !isEmpty) && !isLoading && <QuickAdd />}
+      {(entered || !isEmpty) && !isLoading && (
+        <>
+          <QuickAdd />
+          <CommandPalette sections={SECTIONS} />
+          <KeyboardShortcuts />
+        </>
+      )}
       {digest && <DigestModal digest={digest} onClose={() => setDigest(null)} />}
       <Toasts />
       <ConfirmHost />
