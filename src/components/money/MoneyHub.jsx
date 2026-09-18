@@ -29,6 +29,7 @@ import CommandPalette from './shared/CommandPalette';
 import KeyboardShortcuts from './shared/KeyboardShortcuts';
 import Logo from './shared/Logo';
 import DigestModal from './shared/DigestModal';
+import OnboardingModal from './sections/parts/onboarding/OnboardingModal';
 import ComingSoon from './shared/ComingSoon';
 import { toast, showToast } from '../../lib/toast';
 import { api, saveSettings } from '../../lib/query';
@@ -374,6 +375,7 @@ export default function MoneyHub() {
           <QuickAdd />
           <CommandPalette sections={SECTIONS} />
           <KeyboardShortcuts />
+          <OnboardingModal />
         </>
       )}
       {digest && <DigestModal digest={digest} onClose={() => setDigest(null)} />}
