@@ -46,4 +46,31 @@ describe('computeIncomeVsSpending', () => {
     expect(rows).toHaveLength(6); // Sep..Feb
     expect(totals).toEqual({ income: 60, spending: 0, net: 60 });
   });
+
+  it('projects a quarterly bill only on its true occurrences, not every month', () => {
+    const { rows, totals } = computeIncomeVsSpending({
+      today,
+      transactions: [],
+      recurring: [{ kind: 'bill', amount: 300, cadence: 'quarterly', next_date: '2026-09-16' }],
+    });
+    // Sep 16 (today, unlinked so it counts) and Dec 16 land inside the
+    // Sep..Feb horizon; Mar 16 2027 falls just past it. A fallthrough-to-
+    // monthly bug would have hit every month (Sep, Oct, Nov, Dec, Jan, Feb).
+    expect(rows.map((r) => r.month)).toEqual(['2026-09', '2026-12']);
+    expect(rows.every((r) => r.spending === 300)).toBe(true);
+    expect(totals.spending).toBe(600);
+  });
+
+  it('projects an annual bill only on its true occurrence within the horizon', () => {
+    const { rows, totals } = computeIncomeVsSpending({
+      today,
+      transactions: [],
+      recurring: [{ kind: 'bill', amount: 1200, cadence: 'annual', next_date: '2026-09-16' }],
+    });
+    // Only the Sep 16 hit falls inside the Sep..Feb horizon; the next
+    // occurrence isn't until Sep 2027.
+    expect(rows.map((r) => r.month)).toEqual(['2026-09']);
+    expect(rows[0].spending).toBe(1200);
+    expect(totals.spending).toBe(1200);
+  });
 });

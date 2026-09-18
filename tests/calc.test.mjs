@@ -150,6 +150,30 @@ describe('projectCashflow', () => {
     expect(out.lowBalanceWarnings.length).toBe(6); // every projected day is under 500
     expect(out.summary.lowestBalance).toBe(400);
   });
+
+  it('advances a quarterly bill through every occurrence in a long window, not just the first', () => {
+    // next_date is 5 days out (always in the future, regardless of run date).
+    // Quarterly hits land at ~day 5, ~day 96, ~day 187 inside a 200-day window
+    // (worst-case 2-quarter offset is 189 days — still short of 200 by a
+    // comfortable margin); the 4th hit (~day 278) falls outside it. Before the
+    // fix, an unrecognized cadence hit "else break" and never advanced past
+    // the first occurrence, so this would have summed to -90, not -270.
+    const accounts = [{ type: 'checking', balance: 0 }];
+    const recurring = [{ payee: 'Insurance', amount: 90, cadence: 'quarterly', kind: 'bill', next_date: daysAgo(-5) }];
+    const out = store.projectCashflow(accounts, recurring, 200);
+    expect(out.summary.endBalance).toBe(-270);
+  });
+
+  it('advances an annual bill through every occurrence in a multi-year window, not just the first', () => {
+    // Same shape as the quarterly case above, scaled to a ~2-year window so
+    // three annual hits (~day 5, ~day 371, ~day 736) land inside it and a
+    // 4th (~day 1101) does not. Before the fix this would have summed to
+    // -40, not -120.
+    const accounts = [{ type: 'checking', balance: 0 }];
+    const recurring = [{ payee: 'Domain renewal', amount: 40, cadence: 'annual', kind: 'bill', next_date: daysAgo(-5) }];
+    const out = store.projectCashflow(accounts, recurring, 800);
+    expect(out.summary.endBalance).toBe(-120);
+  });
 });
 
 describe('computeGoalInsights with recurring', () => {
