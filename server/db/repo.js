@@ -52,6 +52,8 @@ function emptyData() {
     closes: [],
     watchlist: [],
     import_log: [],
+    price_cache: [],
+    alert_rules: [],
   };
 }
 
@@ -669,6 +671,76 @@ function deleteWatchlistItem(d, id) {
   if (!info.changes) throw new Error('Watchlist item not found');
 }
 
+// ── market price cache (Sprint A, Track 2) ──────────────────────────────────
+// Written only by server/market/snapshots.js (interval job or explicit
+// Refresh) — never read-triggers-a-fetch. Money is INTEGER cents at rest;
+// this layer converts to dollars at its boundary like every other table.
+
+const rowPriceCache = (r) => ({
+  id: r.id, kind: r.kind, symbol: r.symbol,
+  price: toDollars(r.price_cents), change_pct: r.change_pct,
+  data: safeJson(r.data, {}), source: r.source, fetched_at: r.fetched_at,
+});
+function getPriceCache(d, kind = null) {
+  const rows = kind
+    ? d.prepare('SELECT * FROM price_cache WHERE kind = ? ORDER BY symbol').all(kind)
+    : d.prepare('SELECT * FROM price_cache ORDER BY kind, symbol').all();
+  return rows.map(rowPriceCache);
+}
+function getPriceCacheEntry(d, id) {
+  const r = d.prepare('SELECT * FROM price_cache WHERE id = ?').get(id);
+  return r ? rowPriceCache(r) : null;
+}
+function upsertPriceCache(d, entry) {
+  d.prepare(`
+    INSERT INTO price_cache (id, kind, symbol, price_cents, change_pct, data, source, fetched_at) VALUES (?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, symbol = excluded.symbol, price_cents = excluded.price_cents,
+      change_pct = excluded.change_pct, data = excluded.data, source = excluded.source, fetched_at = excluded.fetched_at
+  `).run(
+    entry.id, entry.kind, entry.symbol,
+    entry.price == null ? null : toCents(entry.price), entry.change_pct ?? null,
+    jsonText(entry.data, {}), entry.source || 'yahoo', entry.fetched_at || new Date().toISOString(),
+  );
+  return getPriceCacheEntry(d, entry.id);
+}
+
+// ── price alert rules (Sprint A, Track 2) ───────────────────────────────────
+
+const rowAlertRule = (r) => ({
+  id: r.id, symbol: r.symbol, condition: r.condition,
+  target: toDollars(r.target_cents), active: !!r.active,
+  created_at: r.created_at, triggered_at: r.triggered_at,
+});
+function getAlertRules(d) {
+  return d.prepare('SELECT * FROM alert_rules ORDER BY created_at').all().map(rowAlertRule);
+}
+function createAlertRule(d, a) {
+  const id = a.id || newId();
+  d.prepare('INSERT INTO alert_rules (id, symbol, condition, target_cents, active, created_at, triggered_at) VALUES (?,?,?,?,?,?,?)')
+    .run(id, String(a.symbol).toUpperCase(), a.condition, toCents(a.target), a.active === false ? 0 : 1, a.created_at || new Date().toISOString(), a.triggered_at || null);
+  return getAlertRule(d, id);
+}
+function getAlertRule(d, id) {
+  const r = d.prepare('SELECT * FROM alert_rules WHERE id = ?').get(id);
+  return r ? rowAlertRule(r) : null;
+}
+function updateAlertRule(d, id, patch) {
+  const existing = getAlertRule(d, id);
+  if (!existing) throw new Error('Alert rule not found');
+  const sets = [];
+  const vals = [];
+  if (patch.condition !== undefined) { sets.push('condition = ?'); vals.push(patch.condition); }
+  if (patch.target !== undefined) { sets.push('target_cents = ?'); vals.push(toCents(patch.target)); }
+  if (patch.active !== undefined) { sets.push('active = ?'); vals.push(patch.active ? 1 : 0); }
+  if (patch.triggered_at !== undefined) { sets.push('triggered_at = ?'); vals.push(patch.triggered_at); }
+  if (sets.length) d.prepare(`UPDATE alert_rules SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
+  return getAlertRule(d, id);
+}
+function deleteAlertRule(d, id) {
+  const info = d.prepare('DELETE FROM alert_rules WHERE id = ?').run(id);
+  if (!info.changes) throw new Error('Alert rule not found');
+}
+
 function getImportLog(d) {
   return d.prepare('SELECT * FROM import_log').all().map(rowImportLog);
 }
@@ -684,6 +756,7 @@ function markImported(d, source, sourceId, importedAt = new Date().toISOString()
 const BLOB_KEYS = [
   'accounts', 'transactions', 'categories', 'budgets', 'goals', 'rules', 'holdings', 'networth_snapshots', 'recurring', 'http_cache',
   'paper_account', 'paper_positions', 'paper_trades', 'paper_journal', 'agent_events', 'decisions', 'closes', 'watchlist', 'import_log',
+  'price_cache', 'alert_rules',
 ];
 
 function readAll(d) {
@@ -707,6 +780,8 @@ function readAll(d) {
     closes: getCloses(d),
     watchlist: getWatchlist(d),
     import_log: getImportLog(d),
+    price_cache: getPriceCache(d),
+    alert_rules: getAlertRules(d),
   };
   // Loose top-level keys round-tripped verbatim via meta.
   const extras = d.prepare("SELECT value FROM meta WHERE key='extras'").get();
@@ -723,6 +798,7 @@ function writeAll(d, blob) {
     for (const t of [
       'transactions', 'holdings', 'accounts', 'categories', 'budgets', 'goals', 'rules', 'networth_snapshots', 'recurring', 'http_cache',
       'paper_journal', 'paper_trades', 'paper_positions', 'agent_events', 'closes', 'decisions', 'watchlist', 'import_log',
+      'price_cache', 'alert_rules',
     ]) {
       d.prepare(`DELETE FROM ${t}`).run();
     }
@@ -774,6 +850,8 @@ function writeAll(d, blob) {
     for (const e of arr('agent_events')) appendAgentEvent(d, e);
     for (const w of arr('watchlist')) createWatchlistItem(d, w);
     for (const i of arr('import_log')) markImported(d, i.source, i.source_id, i.imported_at);
+    for (const p of arr('price_cache')) upsertPriceCache(d, p);
+    for (const a of arr('alert_rules')) createAlertRule(d, a);
 
     const extras = {};
     for (const k of Object.keys(blob)) if (!BLOB_KEYS.includes(k)) extras[k] = blob[k];
@@ -837,4 +915,6 @@ module.exports = {
   getCloses, createClose,
   getWatchlist, createWatchlistItem, deleteWatchlistItem,
   getImportLog, hasImported, markImported,
+  getPriceCache, getPriceCacheEntry, upsertPriceCache,
+  getAlertRules, getAlertRule, createAlertRule, updateAlertRule, deleteAlertRule,
 };
