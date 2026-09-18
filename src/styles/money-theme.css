@@ -371,6 +371,43 @@
   pointer-events: none;
 }
 
+/* ─── Shared tooltip (.m-tooltip, .m-tooltip-bubble) ───────────────── */
+/* Hover + keyboard-focus triggered (see Tooltip.jsx); positioned with CSS
+   only, no measurement/portal. --m-surface-3 does not exist in the token
+   bridge (theme.css only defines --surface/--surface-2), so this reuses
+   --m-surface + --m-shadow-lg for elevation, matching .m-term-tooltip. */
+.money-hub .m-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.money-hub .m-tooltip-bubble {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: var(--m-surface);
+  border: 1px solid var(--m-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--m-ink);
+  max-width: 240px;
+  white-space: normal;
+  text-align: left;
+  box-shadow: var(--m-shadow-lg);
+  pointer-events: none;
+}
+.money-hub .m-tooltip-top {
+  bottom: 100%;
+  margin-bottom: 8px;
+}
+.money-hub .m-tooltip-bottom {
+  top: 100%;
+  margin-top: 8px;
+}
+
 /* ─── Empty state & loading ────────────────────────────────────────── */
 .money-hub .m-empty-state {
   display: flex;
