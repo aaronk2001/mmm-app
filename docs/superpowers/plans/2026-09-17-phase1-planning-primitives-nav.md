@@ -1658,7 +1658,9 @@ EOF
 - Modify: `src/components/money/MoneyHub.jsx`, `src/styles/money-theme.css`
 
 **Interfaces:**
-- Consumes: `SECTIONS` (Task 7), `api('money/overview')` for accounts and `api('money/payee-stats')` for payees,
+- Consumes: `SECTIONS` (Task 7), `api('money/accounts')` → `{ accounts: [...] }` and
+  `api('money/payees?limit=100')` → `{ payees: [...] }` (verified against `server/money/routes.js:85,208` —
+  there is no `payee-stats` route, and `/overview` does not return an account list),
   `useNavigate` from react-router.
 - Produces: `<CommandPalette sections={SECTIONS} />` and `<KeyboardShortcuts />`, both self-mounting their own
   key listeners.
