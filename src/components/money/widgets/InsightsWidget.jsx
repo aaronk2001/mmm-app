@@ -20,7 +20,9 @@ function toPath(action) {
   if (p.category) qs.set('category', p.category);
   if (p.q) qs.set('q', p.q);
   const s = qs.toString();
-  return action.route + (s ? `?${s}` : '');
+  // `hash` targets an anchor within the destination section (e.g. the
+  // subscriptions panel inside Cash Flow), so it trails the querystring.
+  return action.route + (s ? `?${s}` : '') + (p.hash ? `#${p.hash}` : '');
 }
 
 export default function InsightsWidget() {
