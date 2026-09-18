@@ -18,6 +18,18 @@ function need(res, name, v) {
   return true;
 }
 
+// The one liquid account that would actually receive a new paycheck deposit —
+// checking first, then savings/cash. Injecting into every checking account
+// would double-count the raise for anyone with more than one.
+const LIQUID_PRIORITY = ['checking', 'savings', 'cash'];
+function pickLiquidAccountId(accounts) {
+  for (const type of LIQUID_PRIORITY) {
+    const acct = accounts.find((a) => a.type === type);
+    if (acct) return acct.id;
+  }
+  return null;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Snapshot / profile
 // ────────────────────────────────────────────────────────────────────────────
@@ -74,18 +86,28 @@ router.post('/offer', (req, res) => {
 
     // Δ runway: re-run the real runway engine with the new monthly take-home
     // added to liquid cash for one month. Same engine as the Overview headline,
-    // so the two can never disagree.
+    // so the two can never disagree. Inject into exactly ONE liquid account —
+    // mapping every `checking` account would double (or triple) count the
+    // raise for anyone with more than one checking account.
     const baseRunway = computeRunway({ ...data });
+    const injectId = pickLiquidAccountId(data.accounts);
     const withOffer = computeRunway({
       ...data,
-      accounts: data.accounts.map((a) => (a.type === 'checking'
-        ? { ...a, balance: (parseFloat(a.balance) || 0) + offer.monthly_take_home }
-        : a)),
+      accounts: injectId
+        ? data.accounts.map((a) => (a.id === injectId
+          ? { ...a, balance: (parseFloat(a.balance) || 0) + offer.monthly_take_home }
+          : a))
+        : data.accounts, // no liquid account at all — nothing to inject into
     });
 
+    // Net-worth deltas: the employment gap belongs to the OFFER scenario only.
+    // Staying in the current job means no unpaid gap, so the baseline snapshot
+    // must keep gap_period_weeks at 0 even when the offer carries one — do not
+    // "fix" this back to symmetric, the two scenarios are not the same.
     const nwBase = snap.income.current_gross
       ? planning.modelNetWorth18mo(snap, snap.income.current_gross, 0.30).final_net_worth : null;
-    const nwOffer = planning.modelNetWorth18mo(snap, newSalary, 0.30).final_net_worth;
+    const offerSnap = { ...snap, context: { ...snap.context, gap_period_weeks: gapWeeks } };
+    const nwOffer = planning.modelNetWorth18mo(offerSnap, newSalary, 0.30).final_net_worth;
     const raise = planning.modelRaise(snap, newSalary, gapWeeks);
 
     res.json({

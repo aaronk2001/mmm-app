@@ -4,6 +4,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import routes from '../server/tools/routes.js';
 import store from '../server/money/store.js';
+import runwayModule from '../server/money/runway.js';
+
+const { computeRunway } = runwayModule;
 
 let server; let base;
 
@@ -84,6 +87,38 @@ describe('POST /offer', () => {
 
   it('400s without a new_salary', async () => {
     expect((await post('/offer', {})).status).toBe(400);
+  });
+
+  it('injects the take-home into exactly one liquid account, not every checking account', async () => {
+    const data = store.readData();
+    data.accounts = [
+      { id: 'c1', name: 'Checking 1', type: 'checking', balance: 2000, opening_balance: 2000 },
+      { id: 'c2', name: 'Checking 2', type: 'checking', balance: 2000, opening_balance: 2000 },
+      { id: 's1', name: 'Savings',    type: 'savings',  balance: 6000, opening_balance: 6000 },
+    ];
+    store.writeData(data);
+
+    const { body } = await post('/offer', { new_salary: 85000, gap_weeks: 0 });
+
+    // A single injection into the first checking account (c1) is the only
+    // correct answer — computeRunway sums liquid across accounts, so double-
+    // injecting into c2 as well would inflate this delta.
+    const base = computeRunway({ ...data });
+    const singleInjection = computeRunway({
+      ...data,
+      accounts: data.accounts.map((a) => (a.id === 'c1'
+        ? { ...a, balance: a.balance + body.offer.monthly_take_home }
+        : a)),
+    });
+    const expectedDelta = Math.round((singleInjection.months - base.months) * 10) / 10;
+
+    expect(body.delta_runway_months).toBe(expectedDelta);
+  });
+
+  it('applies the employment gap to the offer scenario only, not the baseline', async () => {
+    const { body: noGap } = await post('/offer', { new_salary: 85000, gap_weeks: 0 });
+    const { body: withGap } = await post('/offer', { new_salary: 85000, gap_weeks: 8 });
+    expect(withGap.delta_net_worth_18mo).toBeLessThan(noGap.delta_net_worth_18mo);
   });
 });
 
