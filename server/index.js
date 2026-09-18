@@ -7,6 +7,7 @@ const compression = require('compression');
 const path        = require('path');
 
 const moneyRoutes = require('./money/routes');
+const planRoutes = require('./tools/routes');
 const settingsRoutes = require('./settings/routes');
 const backupRoutes = require('./backup/routes');
 const { startBackupScheduler } = require('./backup/scheduler');
@@ -61,6 +62,7 @@ app.use(express.static(path.join(__dirname, '..', 'src', 'dist')));
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/money/backups', backupRoutes);
 app.use('/api/money', moneyRoutes);
+app.use('/api/plan', planRoutes);
 app.use('/api/settings', settingsRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
