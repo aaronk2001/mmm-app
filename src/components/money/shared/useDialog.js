@@ -18,7 +18,7 @@ const FOCUSABLE = [
 ].join(',');
 
 export default function useDialog({ id, open, onClose, panelRef, initialFocusRef }) {
-  const tookFocus = useRef(false);
+  const openerRef = useRef(null);
 
   useEffect(() => {
     if (open) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: id }));
@@ -32,15 +32,18 @@ export default function useDialog({ id, open, onClose, panelRef, initialFocusRef
 
   useEffect(() => {
     if (open) {
-      tookFocus.current = true;
+      // Remember who opened us so focus can go back there on close — the
+      // WAI-ARIA dialog contract. Blurring instead would dump the user at the
+      // top of the document on the next Tab.
+      const opener = document.activeElement;
+      openerRef.current = opener instanceof HTMLElement && opener !== document.body ? opener : null;
       const t = setTimeout(() => (initialFocusRef?.current || panelRef.current)?.focus(), 30);
       return () => clearTimeout(t);
     }
-    if (tookFocus.current) {
-      tookFocus.current = false;
-      if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
-        document.activeElement.blur();
-      }
+    const opener = openerRef.current;
+    if (opener) {
+      openerRef.current = null;
+      if (opener.isConnected) opener.focus();
     }
     return undefined;
   }, [open, panelRef, initialFocusRef]);
@@ -51,7 +54,12 @@ export default function useDialog({ id, open, onClose, panelRef, initialFocusRef
       if (e.key !== 'Tab') return;
       const panel = panelRef.current;
       if (!panel) return;
-      const items = [...panel.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
+      // tabIndex >= 0 matters: the palette's option rows are <button
+      // tabIndex={-1}>, so a selector-only match would make `last` an element
+      // the browser never focuses — neither branch below would fire and Tab
+      // would walk straight out of the panel.
+      const items = [...panel.querySelectorAll(FOCUSABLE)]
+        .filter((el) => el.offsetParent !== null && el.tabIndex >= 0);
       if (!items.length) { e.preventDefault(); panel.focus(); return; }
       const first = items[0];
       const last = items[items.length - 1];

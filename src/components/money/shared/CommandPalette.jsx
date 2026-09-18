@@ -163,7 +163,7 @@ export default function CommandPalette({ sections }) {
         {flat.length > 0 ? (
           <div className="m-palette-list" role="listbox" id={listboxId}>
             {groups.map((group) => (
-              <div key={group.label}>
+              <div key={group.label} role="group" aria-label={group.label}>
                 <div className="m-palette-group-label">{group.label}</div>
                 {group.items.map((item) => {
                   const idx = flat.indexOf(item);
