@@ -56,6 +56,7 @@ const IMPORTERS = {
   debt:         () => import('./sections/Debt'),
   investments:  () => import('./sections/Investments'),
   reports:      () => import('./sections/Reports'),
+  plan:         () => import('./sections/Plan'),
   learn:        () => import('./sections/Learn'),
   settings:     () => import('./sections/Settings'),
 };
@@ -78,10 +79,7 @@ const SECTIONS = [
   { id: 'debt',         label: 'Debt Payoff',          icon: CreditCard,      group: 'money' },
   { id: 'investments',  label: 'Investments',          icon: TrendingUp,      group: 'money' },
   { id: 'reports',      label: 'Reports',              icon: FileText,        group: 'money' },
-  // `soon` here is TEMPORARY — Task 9 creates sections/Plan.jsx, deletes this
-  // `soon` string and adds the IMPORTERS entry. Without it, LAZY['plan'] is
-  // undefined and `/plan` throws instead of rendering.
-  { id: 'plan',         label: 'Plan',                 icon: Compass,         group: 'plan',   soon: 'Planning tools land in the next step of this phase.' },
+  { id: 'plan',         label: 'Plan',                 icon: Compass,         group: 'plan' },
   { id: 'markets',      label: 'Markets',              icon: LineChart,       group: 'invest', soon: 'Markets lands with the online data seam.' },
   { id: 'desk',         label: 'Desk',                 icon: Brain,           group: 'invest', soon: 'The research desk lands after the LLM contract.' },
   { id: 'trades',       label: 'Trades',               icon: CandlestickChart, group: 'invest', soon: 'Paper trading lands with the paper ledger.' },

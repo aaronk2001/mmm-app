@@ -762,6 +762,33 @@
   animation: m-slide-up 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* ─── Section tabs (.m-tabs, .m-tab) — Plan's nested-route nav ───────── */
+.money-hub .m-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--m-border);
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+.money-hub .m-tab {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--m-ink-2);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.money-hub .m-tab:hover {
+  color: var(--m-ink);
+}
+.money-hub .m-tab.active {
+  color: var(--m-accent);
+  border-bottom-color: var(--m-accent);
+  font-weight: 600;
+}
+
 /* ─── Reduced motion ───────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .money-hub * {
