@@ -105,6 +105,23 @@ describe('computeAdvice', () => {
     expect(byId(fs, 'goal-behind-g1')).toBeTruthy();
   });
 
+  it('spreads quarterly and annual bills over their true monthly share in the recurring-heavy finding', () => {
+    const fs = computeAdvice({
+      metrics: { monthly_income: 1000, monthly_expenses: 800 },
+      recurring: [
+        { payee: 'Insurance', amount: 900, cadence: 'quarterly', kind: 'bill' }, // 300/mo
+        { payee: 'Domain', amount: 2400, cadence: 'annual', kind: 'bill' },      // 200/mo
+      ],
+    });
+    const f = byId(fs, 'recurring-heavy');
+    expect(f).toBeTruthy();
+    // 300 + 200 = 500/mo (50% of income), not 900 + 2400 = 3300/mo (330%) —
+    // the old fallthrough-to-monthly bug would have used the raw amounts.
+    expect(f.detail).toContain('$500/mo');
+    expect(f.detail).toContain('50% of income');
+    expect(f.detail).toContain('Insurance ($300/mo)');
+  });
+
   it('flags month-over-month spending spikes', () => {
     const fs = computeAdvice({
       metrics: { monthly_income: 4000, monthly_expenses: 3000 },

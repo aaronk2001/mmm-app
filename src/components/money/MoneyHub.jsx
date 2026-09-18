@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -12,6 +12,12 @@ import {
   FileText,
   GraduationCap,
   Settings,
+  Compass,
+  LineChart,
+  Brain,
+  CandlestickChart,
+  Newspaper,
+  ChevronDown,
 } from 'lucide-react';
 import '../../styles/money-theme.css';
 import Card from './shared/Card';
@@ -19,8 +25,12 @@ import ErrorBoundary from './shared/ErrorBoundary';
 import Toasts from './shared/Toasts';
 import ConfirmHost from './shared/ConfirmDialog';
 import QuickAdd from './shared/QuickAdd';
+import CommandPalette from './shared/CommandPalette';
+import KeyboardShortcuts from './shared/KeyboardShortcuts';
 import Logo from './shared/Logo';
 import DigestModal from './shared/DigestModal';
+import OnboardingModal from './sections/parts/onboarding/OnboardingModal';
+import ComingSoon from './shared/ComingSoon';
 import { toast, showToast } from '../../lib/toast';
 import { api, saveSettings } from '../../lib/query';
 
@@ -47,23 +57,36 @@ const IMPORTERS = {
   debt:         () => import('./sections/Debt'),
   investments:  () => import('./sections/Investments'),
   reports:      () => import('./sections/Reports'),
+  plan:         () => import('./sections/Plan'),
   learn:        () => import('./sections/Learn'),
   settings:     () => import('./sections/Settings'),
 };
 const LAZY = Object.fromEntries(Object.entries(IMPORTERS).map(([id, imp]) => [id, lazy(imp)]));
 
+const GROUPS = [
+  { id: 'money',  label: 'MONEY' },
+  { id: 'plan',   label: 'PLAN' },
+  { id: 'invest', label: 'INVEST' },
+  { id: 'grow',   label: 'GROW' },
+];
+
 const SECTIONS = [
-  { id: 'overview',     label: 'Overview',             icon: LayoutDashboard },
-  { id: 'accounts',     label: 'Accounts & Net Worth', icon: Wallet },
-  { id: 'budget',       label: 'Budget',               icon: PiggyBank },
-  { id: 'cashflow',     label: 'Cash Flow',            icon: Zap },
-  { id: 'goals',        label: 'Goals',                icon: Target },
-  { id: 'debt',         label: 'Debt Payoff',          icon: CreditCard },
-  { id: 'investments',  label: 'Investments',          icon: TrendingUp },
-  { id: 'transactions', label: 'Transactions',         icon: Receipt },
-  { id: 'reports',      label: 'Reports',              icon: FileText },
-  { id: 'learn',        label: 'Learn',                icon: GraduationCap },
-  { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },
+  { id: 'overview',     label: 'Overview',             icon: LayoutDashboard, group: 'money' },
+  { id: 'accounts',     label: 'Accounts & Net Worth', icon: Wallet,          group: 'money' },
+  { id: 'transactions', label: 'Transactions',         icon: Receipt,         group: 'money' },
+  { id: 'budget',       label: 'Budget',               icon: PiggyBank,       group: 'money' },
+  { id: 'cashflow',     label: 'Cash Flow',            icon: Zap,             group: 'money' },
+  { id: 'goals',        label: 'Goals',                icon: Target,          group: 'money' },
+  { id: 'debt',         label: 'Debt Payoff',          icon: CreditCard,      group: 'money' },
+  { id: 'investments',  label: 'Investments',          icon: TrendingUp,      group: 'money' },
+  { id: 'reports',      label: 'Reports',              icon: FileText,        group: 'money' },
+  { id: 'plan',         label: 'Plan',                 icon: Compass,         group: 'plan' },
+  { id: 'markets',      label: 'Markets',              icon: LineChart,       group: 'invest', soon: 'Markets lands with the online data seam.' },
+  { id: 'desk',         label: 'Desk',                 icon: Brain,           group: 'invest', soon: 'The research desk lands after the LLM contract.' },
+  { id: 'trades',       label: 'Trades',               icon: CandlestickChart, group: 'invest', soon: 'Paper trading lands with the paper ledger.' },
+  { id: 'learn',        label: 'Learn',                icon: GraduationCap,   group: 'grow' },
+  { id: 'media',        label: 'Media',                icon: Newspaper,       group: 'grow', soon: 'News and video land with the media rebuild.' },
+  { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },      // ungrouped, pinned to the bottom
 ];
 
 function SectionSkeleton() {
@@ -81,6 +104,22 @@ function SectionSkeleton() {
   );
 }
 
+// Shared by the group loop and the pinned-to-bottom settings footer so the
+// two nav-item call sites can't drift out of step.
+function NavItem({ section }) {
+  const Icon = section.icon;
+  return (
+    <NavLink
+      to={`/${section.id}`}
+      onMouseEnter={() => IMPORTERS[section.id]?.()}
+      className={({ isActive }) => `m-nav-item ${isActive ? 'active' : ''}`}
+    >
+      <Icon size={18} className="m-nav-icon" />
+      <span>{section.label}</span>
+    </NavLink>
+  );
+}
+
 export default function MoneyHub() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEmpty, setIsEmpty] = useState(false);
@@ -93,6 +132,34 @@ export default function MoneyHub() {
     try { return sessionStorage.getItem('mmm-entered') === '1'; } catch { return false; }
   });
   const location = useLocation();
+
+  // Group collapse state — read once from settings.nav.collapsed, written back
+  // fire-and-forget on toggle so a slow save never blocks the click. If the
+  // user has already toggled a group before the GET resolves, the fetched
+  // value is stale relative to their intent — discard it rather than
+  // clobbering the optimistic local state (and the PUT already in flight).
+  const [collapsed, setCollapsed] = useState({});
+  const userToggledRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    api('settings').then((s) => {
+      if (!cancelled && !userToggledRef.current) setCollapsed(s?.nav?.collapsed || {});
+    }).catch(() => { /* defaults to all-expanded; collapse still works locally */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  function toggleGroup(groupId) {
+    userToggledRef.current = true;
+    setCollapsed((prev) => {
+      const next = { ...prev, [groupId]: !prev[groupId] };
+      saveSettings({ nav: { collapsed: next } }).catch(() => {});
+      return next;
+    });
+  }
+
+  // First path segment drives which nav item stays visible in a collapsed
+  // group — the active item must never be hidden by collapsing its group.
+  const activeSectionId = location.pathname.split('/').filter(Boolean)[0];
 
   function enterApp() {
     try { sessionStorage.setItem('mmm-entered', '1'); } catch { /* private mode */ }
@@ -211,26 +278,40 @@ export default function MoneyHub() {
           padding: '24px 12px',
           overflowY: 'auto',
           flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <div style={{ marginBottom: '20px' }}>
           <Logo />
         </div>
         <div className="m-sidebar">
-          {SECTIONS.map(section => {
-            const Icon = section.icon;
+          {GROUPS.map((group) => {
+            const items = SECTIONS.filter((s) => s.group === group.id);
+            const isCollapsed = !!collapsed[group.id];
+            const visibleItems = items.filter((s) => !isCollapsed || s.id === activeSectionId);
             return (
-              <NavLink
-                key={section.id}
-                to={`/${section.id}`}
-                onMouseEnter={() => IMPORTERS[section.id]()}
-                className={({ isActive }) => `m-nav-item ${isActive ? 'active' : ''}`}
-              >
-                <Icon size={18} className="m-nav-icon" />
-                <span>{section.label}</span>
-              </NavLink>
+              <div className="m-sidebar-group" key={group.id}>
+                <button
+                  type="button"
+                  className="m-sidebar-group-header"
+                  aria-expanded={!isCollapsed}
+                  onClick={() => toggleGroup(group.id)}
+                >
+                  <span className="m-sidebar-group-label">{group.label}</span>
+                  <ChevronDown size={14} className={`m-sidebar-group-chevron${isCollapsed ? ' collapsed' : ''}`} />
+                </button>
+                {visibleItems.map((section) => (
+                  <NavItem key={section.id} section={section} />
+                ))}
+              </div>
             );
           })}
+          <div className="m-sidebar-footer">
+            {SECTIONS.filter((s) => !s.group).map((section) => (
+              <NavItem key={section.id} section={section} />
+            ))}
+          </div>
         </div>
       </nav>
 
@@ -273,10 +354,13 @@ export default function MoneyHub() {
                 <Suspense fallback={<SectionSkeleton />}>
                   <Routes>
                     <Route path="/" element={<Navigate to="/overview" replace />} />
-                    {SECTIONS.map(({ id }) => {
-                      const Section = LAZY[id];
-                      return <Route key={id} path={`/${id}`} element={<Section />} />;
-                    })}
+                    {SECTIONS.map(({ id, label, soon }) => (
+                      <Route
+                        key={id}
+                        path={`/${id}/*`}
+                        element={soon ? <ComingSoon title={label} description={soon} /> : (() => { const S = LAZY[id]; return <S />; })()}
+                      />
+                    ))}
                     <Route path="*" element={<Navigate to="/overview" replace />} />
                   </Routes>
                 </Suspense>
@@ -286,7 +370,14 @@ export default function MoneyHub() {
         )}
       </main>
 
-      {(entered || !isEmpty) && !isLoading && <QuickAdd />}
+      {(entered || !isEmpty) && !isLoading && (
+        <>
+          <QuickAdd />
+          <CommandPalette sections={SECTIONS} />
+          <KeyboardShortcuts />
+          <OnboardingModal />
+        </>
+      )}
       {digest && <DigestModal digest={digest} onClose={() => setDigest(null)} />}
       <Toasts />
       <ConfirmHost />

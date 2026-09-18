@@ -6,7 +6,7 @@
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'cash', 'credit', 'loan', 'investment', 'other'];
 const PERIODS = ['monthly', 'weekly', 'biweekly', 'annual'];
-const CADENCES = ['monthly', 'biweekly', 'weekly'];
+const CADENCES = ['monthly', 'biweekly', 'weekly', 'quarterly', 'annual'];
 const KINDS = ['income', 'bill'];
 
 // Round-trip check: Date.parse alone silently normalizes impossible dates

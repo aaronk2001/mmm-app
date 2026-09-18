@@ -278,13 +278,25 @@ function ymd(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Adds n months to Date `d`, clamping the day-of-month to the target month's
+// last day instead of letting it roll into the following month (setMonth on
+// Jan 31 + 1 rolls to Mar 3, not Feb 28 — the clamp fixes that).
+function addMonthsClamped(d, n) {
+  const day = d.getDate();
+  const probe = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const lastDay = new Date(probe.getFullYear(), probe.getMonth() + 1, 0).getDate();
+  probe.setDate(Math.min(day, lastDay));
+  return probe;
+}
+
 function advanceDate(dateStr, cadence) {
   const [y, m, dd] = String(dateStr).slice(0, 10).split('-').map(Number);
   const d = new Date(y, m - 1, dd);
-  if (cadence === 'weekly') d.setDate(d.getDate() + 7);
-  else if (cadence === 'biweekly') d.setDate(d.getDate() + 14);
-  else d.setMonth(d.getMonth() + 1); // monthly
-  return ymd(d);
+  if (cadence === 'weekly') { d.setDate(d.getDate() + 7); return ymd(d); }
+  if (cadence === 'biweekly') { d.setDate(d.getDate() + 14); return ymd(d); }
+  if (cadence === 'quarterly') return ymd(addMonthsClamped(d, 3));
+  if (cadence === 'annual') return ymd(addMonthsClamped(d, 12));
+  return ymd(addMonthsClamped(d, 1)); // monthly (default)
 }
 
 // Per-item cap on catch-up posts per call. A stale item (e.g. a weekly bill
@@ -581,6 +593,7 @@ module.exports = {
   updateRecurring,
   deleteRecurring,
   postDueRecurring,
+  advanceDate,
   getLastAutopost,
   projectCashflow,
   getRunway,
