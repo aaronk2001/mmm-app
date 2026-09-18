@@ -23,3 +23,5 @@ tmp-esb/
 
 # Claude Code / OMC agent state
 .omc/
+mmm.db.corrupted-backup-*
+mmm.db.pre-restore-*

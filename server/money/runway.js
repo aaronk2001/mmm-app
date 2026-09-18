@@ -22,7 +22,9 @@ function perMonth(amount, cadence) {
   const a = Math.abs(parseFloat(amount) || 0);
   if (cadence === 'weekly') return a * 52 / 12;
   if (cadence === 'biweekly') return a * 26 / 12;
-  return a;
+  if (cadence === 'quarterly') return a / 3;
+  if (cadence === 'annual') return a / 12;
+  return a; // monthly
 }
 function isTransferCategory(t, categories) {
   const catId = t.category_id;

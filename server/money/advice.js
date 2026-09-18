@@ -240,7 +240,13 @@ function computeAdvice(input = {}) {
   // ── 8. Recurring-bill load ─────────────────────────────────────────────────
   const bills = recurring.filter((r) => r.kind === 'bill');
   if (bills.length && income > 0) {
-    const monthlyBill = (r) => (r.cadence === 'weekly' ? r.amount * 4.33 : r.cadence === 'biweekly' ? r.amount * 2.17 : r.amount);
+    const monthlyBill = (r) => (
+      r.cadence === 'weekly' ? r.amount * 4.33
+        : r.cadence === 'biweekly' ? r.amount * 2.17
+        : r.cadence === 'quarterly' ? r.amount / 3
+        : r.cadence === 'annual' ? r.amount / 12
+        : r.amount // monthly
+    );
     const totalBills = bills.reduce((s, r) => s + monthlyBill(r), 0);
     const biggest = bills.slice().sort((a, b) => monthlyBill(b) - monthlyBill(a))[0];
     if (totalBills > income * 0.4) {
@@ -251,7 +257,7 @@ function computeAdvice(input = {}) {
         title: 'Recurring bills eat a big slice',
         detail: `Your ${bills.length} recurring bills run about ${money(totalBills)}/mo — ${pct(totalBills / income)} of income. ${biggest.payee} (${money(monthlyBill(biggest))}/mo) is the largest; cancel one you don't use.`,
         impact: scored('info', clamp(totalBills / income, 0, 1)),
-        action: { label: 'Review recurring', route: '/cashflow', params: {} },
+        action: { label: 'Review subscriptions', route: '/cashflow', params: { hash: 'subscriptions' } },
       });
     }
   }

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
   Zap,
@@ -22,6 +23,7 @@ import { toast } from '../../../lib/toast';
 import { confirmDialog } from '../../../lib/confirm';
 import { computeIncomeVsSpending } from '../../../lib/incomeVsSpending';
 import IncomeVsSpendingCard from './parts/cashflow/IncomeVsSpendingCard';
+import Subscriptions from './parts/cashflow/Subscriptions';
 
 const todayStr = () => {
   const d = new Date();
@@ -59,6 +61,16 @@ export default function CashFlow() {
   const [formData, setFormData] = useState({ payee: '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '', account_id: '' });
   const [editingId, setEditingId] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
+
+  // Scroll to the Subscriptions panel when arriving via #/cashflow#subscriptions.
+  // HashRouter parses the fragment after its own leading '#' into location.hash.
+  const subscriptionsRef = useRef(null);
+  const location = useLocation();
+  useEffect(() => {
+    if (!loading && location.hash === '#subscriptions' && subscriptionsRef.current) {
+      subscriptionsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [loading, location.hash]);
 
   const refetchData = async () => {
     try {
@@ -743,6 +755,8 @@ export default function CashFlow() {
                         <option value="weekly">Weekly</option>
                         <option value="biweekly">Biweekly</option>
                         <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="annual">Annual</option>
                       </select>
                     </div>
                     <div>
@@ -1078,6 +1092,18 @@ export default function CashFlow() {
               </div>
             </motion.div>
           )}
+
+          {/* Subscriptions — normalized cycle view over the same recurring bills */}
+          <motion.div
+            id="subscriptions"
+            ref={subscriptionsRef}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.32 }}
+            style={{ marginBottom: '24px' }}
+          >
+            <Subscriptions recurring={recurring} />
+          </motion.div>
 
           {/* Empty recurring state */}
           {recurringIncome.length === 0 && recurringBills.length === 0 && (

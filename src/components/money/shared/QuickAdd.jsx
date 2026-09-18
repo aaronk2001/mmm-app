@@ -63,6 +63,17 @@ export default function QuickAdd() {
     return () => window.removeEventListener('keydown', onEsc);
   }, [open]);
 
+  // Lets the command palette's "Add a transaction" action open Quick Add
+  // without either component knowing about the other directly.
+  useEffect(() => {
+    const onOpenEvent = () => {
+      setOpen(true);
+      setTimeout(() => payeeRef.current?.focus(), 30);
+    };
+    window.addEventListener('mmm:quickadd', onOpenEvent);
+    return () => window.removeEventListener('mmm:quickadd', onOpenEvent);
+  }, []);
+
   const suggestions = useMemo(() => {
     const q = form.payee.trim().toLowerCase();
     if (!q) return [];

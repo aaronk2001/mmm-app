@@ -6,6 +6,8 @@ import {
 import { api, saveSettings, queryClient, useApi } from '../../../lib/query';
 import RulesManager from './RulesManager';
 import CustomFieldsManager from './CustomFieldsManager';
+import ProfilePanel, { PROFILE_STEPS, PROFILE_DEFAULTS, ALL_PROFILE_FIELDS, buildProfilePayload } from './parts/settings/ProfilePanel';
+import ErrorState from '../shared/ErrorState';
 import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
 
@@ -102,6 +104,52 @@ function Toggle({ on, disabled, onChange }) {
     >
       <span style={{ width: 19, height: 19, borderRadius: 999, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.3)' }} />
     </button>
+  );
+}
+
+// Same nine fields, same PUT, same server-side validation as the onboarding
+// modal — ProfilePanel is the one place the field groups are drawn so the
+// two surfaces can't drift apart.
+function ProfileSection() {
+  const { data, isLoading, error, refetch } = useApi('plan/profile');
+  const [values, setValues] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  useEffect(() => {
+    if (data?.profile && values === null) setValues({ ...PROFILE_DEFAULTS, ...data.profile });
+  }, [data, values]);
+
+  async function save() {
+    setSaving(true); setSaveError(null);
+    try {
+      const payload = buildProfilePayload(values, ALL_PROFILE_FIELDS);
+      const res = await api('plan/profile', { method: 'PUT', body: JSON.stringify(payload) });
+      setValues((v) => ({ ...v, ...res.profile }));
+      queryClient.invalidateQueries({ queryKey: ['plan/profile'] });
+      toast.success('Profile saved.');
+    } catch (err) {
+      // Server is the only validator — its message is rendered verbatim.
+      setSaveError(err.message);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Section title="Profile" subtitle="What the Plan section uses to model your take-home, offers, and runway.">
+      {isLoading || values === null ? (
+        error ? <ErrorState message={error.message} onRetry={refetch} /> : <div style={{ fontSize: 13, color: 'var(--m-ink-2)' }}>Loading…</div>
+      ) : (
+        <>
+          <ProfilePanel steps={PROFILE_STEPS} values={values} onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))} idPrefix="settings-profile" />
+          {saveError && <div role="alert" style={{ fontSize: 13, color: 'var(--m-red)', marginBottom: 12 }}>{saveError}</div>}
+          <div style={{ paddingTop: 4 }}>
+            <button className="m-btn m-btn-primary m-btn-sm" onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save profile'}
+            </button>
+          </div>
+        </>
+      )}
+    </Section>
   );
 }
 
@@ -265,6 +313,8 @@ export default function Settings() {
         <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--m-ink)' }}>Settings &amp; Privacy</div>
         <div style={{ fontSize: 13, color: 'var(--m-ink-2)' }}>Make MMM yours — and keep your money on your machine.</div>
       </div>
+
+      <ProfileSection />
 
       <Section title="Appearance" subtitle="Theme, accent color, and layout density apply instantly.">
         <Row label="Theme" hint="Match your system or lock it in.">
