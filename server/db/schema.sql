@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS recurring (
   id           TEXT PRIMARY KEY,
   payee        TEXT    NOT NULL,
   amount_cents INTEGER NOT NULL,
-  cadence      TEXT    NOT NULL,            -- monthly | biweekly | weekly
+  cadence      TEXT    NOT NULL,            -- monthly | biweekly | weekly | quarterly | annual
   kind         TEXT    NOT NULL,            -- income | bill
   next_date    TEXT,
   note         TEXT    DEFAULT '',
