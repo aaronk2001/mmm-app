@@ -11,6 +11,7 @@ const planRoutes = require('./tools/routes');
 const settingsRoutes = require('./settings/routes');
 const onlineRoutes = require('./online/routes');
 const backupRoutes = require('./backup/routes');
+const tradingRoutes = require('./trading/routes');
 const { startBackupScheduler } = require('./backup/scheduler');
 const { checkpoint } = require('./db/connection');
 
@@ -66,6 +67,7 @@ app.use('/api/money', moneyRoutes);
 app.use('/api/plan', planRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/online', onlineRoutes);
+app.use('/api/trading', tradingRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
