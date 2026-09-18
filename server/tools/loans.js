@@ -98,8 +98,12 @@ function calcAutoLoan({ vehicle_price, down_payment = 0, trade_in = 0, annual_ra
  * @returns {{current_monthly_payment: number, new_monthly_payment: number, monthly_savings: number, breakeven_months: number|null, breakeven_years?: number, total_savings: number|null, verdict: string}}
  */
 function calcRefiBreakeven({ current_rate, new_rate, balance, years_remaining, closing_costs }) {
-  const currentMonthly = calcMonthlyPayment(balance, current_rate / 100, years_remaining * 12);
-  const newMonthly     = calcMonthlyPayment(balance, new_rate   / 100, years_remaining * 12);
+  // Clamp negatives like calcMortgage/calcAutoLoan do — an unclamped negative
+  // rate produces a nonsense payment instead of the 0%-rate straight-line path.
+  const curRate = Math.max(0, Number(current_rate)) / 100;
+  const newRate = Math.max(0, Number(new_rate)) / 100;
+  const currentMonthly = calcMonthlyPayment(balance, curRate, years_remaining * 12);
+  const newMonthly     = calcMonthlyPayment(balance, newRate, years_remaining * 12);
   const monthlySavings = currentMonthly - newMonthly;
 
   if (monthlySavings <= 0) {
