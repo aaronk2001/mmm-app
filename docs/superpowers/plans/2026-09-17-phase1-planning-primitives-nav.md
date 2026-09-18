@@ -771,11 +771,14 @@ const data = () => ({
     { id: 'a6', name: 'Car loan',  type: 'loan',       balance: -11000 },
   ],
   transactions: [],
+  // NOTE: repo.readAll() converts amount_cents -> `amount` in DOLLARS before
+  // any consumer sees a recurring row (server/db/repo.js rowRecurring). Every
+  // fixture here and in Task 5 uses `amount`, matching tests/runway.test.mjs.
   recurring: [
-    { id: 'r1', payee: 'Rent',    amount_cents: 140000, cadence: 'monthly',  kind: 'bill' },
-    { id: 'r2', payee: 'Netflix', amount_cents: 1599,   cadence: 'monthly',  kind: 'bill' },
-    { id: 'r3', payee: 'Car ins', amount_cents: 60000,  cadence: 'quarterly', kind: 'bill' },
-    { id: 'r4', payee: 'Paycheck', amount_cents: 250000, cadence: 'biweekly', kind: 'income' },
+    { id: 'r1', payee: 'Rent',     amount: 1400,  cadence: 'monthly',   kind: 'bill' },
+    { id: 'r2', payee: 'Netflix',  amount: 15.99, cadence: 'monthly',   kind: 'bill' },
+    { id: 'r3', payee: 'Car ins',  amount: 600,   cadence: 'quarterly', kind: 'bill' },
+    { id: 'r4', payee: 'Paycheck', amount: 2500,  cadence: 'biweekly',  kind: 'income' },
   ],
   categories: [],
   goals: [],
@@ -905,7 +908,8 @@ function perMonth(amount, cadence) {
 - `const p = settings?.profile || {}`
 - sum `balance` by type set → `checking`, `savings` (savings + cash), `retirement`
 - `current_net_worth` = sum of **all** account balances (liabilities already carry a negative balance)
-- `expenses.total_monthly` = Σ `perMonth(r.amount_cents / 100, r.cadence)` over `recurring` where `kind === 'bill'`
+- `expenses.total_monthly` = Σ `perMonth(r.amount, r.cadence)` over `recurring` where `kind === 'bill'`
+  (`r.amount` is already dollars — `repo.readAll` converts `amount_cents` on the way out)
 - `income.current_gross` = `Number(p.gross_salary) > 0 ? Number(p.gross_salary) : null`
 - `context.state` = `p.state || 'AZ'`; `context.gap_period_weeks` = `0`
 - `goals` = `{ emergency_fund_target, roth_ira_monthly, target_net_worth_18mo }` read from `p` when present,
@@ -1002,7 +1006,7 @@ beforeAll(async () => {
     { id: 'a2', name: 'Savings',  type: 'savings',  balance: 6000, opening_balance: 6000 },
   ];
   data.recurring = [
-    { id: 'r1', payee: 'Rent', amount_cents: 320000, cadence: 'monthly', kind: 'bill', next_date: '2026-10-01' },
+    { id: 'r1', payee: 'Rent', amount: 3200, cadence: 'monthly', kind: 'bill', next_date: '2026-10-01' },
   ];
   store.writeData(data);
 
@@ -1261,14 +1265,17 @@ describe('runway normalization', () => {
     transactions: [], categories: [], today: new Date(2026, 8, 17),
   };
 
+  // `amount` is dollars and the returned key is `monthlyBurn` — see
+  // tests/runway.test.mjs and server/money/runway.js:86.
   it('spreads a quarterly bill over three months', () => {
-    const r = computeRunway({ ...base, recurring: [{ id: 'r1', payee: 'Ins', amount_cents: 60000, cadence: 'quarterly', kind: 'bill' }] });
-    expect(r.burn).toBeCloseTo(200, 2);
+    const r = computeRunway({ ...base, recurring: [{ id: 'r1', payee: 'Ins', amount: 600, cadence: 'quarterly', kind: 'bill' }] });
+    expect(r.monthlyBurn).toBeCloseTo(200, 2);
+    expect(r.burnSource).toBe('recurring');
   });
 
   it('spreads an annual bill over twelve months', () => {
-    const r = computeRunway({ ...base, recurring: [{ id: 'r1', payee: 'Domain', amount_cents: 120000, cadence: 'annual', kind: 'bill' }] });
-    expect(r.burn).toBeCloseTo(100, 2);
+    const r = computeRunway({ ...base, recurring: [{ id: 'r1', payee: 'Domain', amount: 1200, cadence: 'annual', kind: 'bill' }] });
+    expect(r.monthlyBurn).toBeCloseTo(100, 2);
   });
 });
 
@@ -1291,7 +1298,7 @@ describe('postDueRecurring with new cadences', () => {
   it('posts a due quarterly bill once and schedules the next quarter', () => {
     const data = store.readData();
     data.accounts = [{ id: 'a1', name: 'Checking', type: 'checking', balance: 5000, opening_balance: 5000 }];
-    data.recurring = [{ id: 'r1', payee: 'Car insurance', amount_cents: 60000, cadence: 'quarterly', kind: 'bill', next_date: '2026-01-01', account_id: 'a1' }];
+    data.recurring = [{ id: 'r1', payee: 'Car insurance', amount: 600, cadence: 'quarterly', kind: 'bill', next_date: '2026-01-01', account_id: 'a1' }];
     store.writeData(data);
 
     const { posted } = store.postDueRecurring();
@@ -1570,7 +1577,10 @@ const SECTIONS = [
   { id: 'debt',         label: 'Debt Payoff',          icon: CreditCard,      group: 'money' },
   { id: 'investments',  label: 'Investments',          icon: TrendingUp,      group: 'money' },
   { id: 'reports',      label: 'Reports',              icon: FileText,        group: 'money' },
-  { id: 'plan',         label: 'Plan',                 icon: Compass,         group: 'plan' },
+  // `soon` here is TEMPORARY — Task 9 creates sections/Plan.jsx, deletes this
+  // `soon` string and adds the IMPORTERS entry. Without it, LAZY['plan'] is
+  // undefined and `/plan` throws instead of rendering.
+  { id: 'plan',         label: 'Plan',                 icon: Compass,         group: 'plan',   soon: 'Planning tools land in the next step of this phase.' },
   { id: 'markets',      label: 'Markets',              icon: LineChart,       group: 'invest', soon: 'Markets lands with the online data seam.' },
   { id: 'desk',         label: 'Desk',                 icon: Brain,           group: 'invest', soon: 'The research desk lands after the LLM contract.' },
   { id: 'trades',       label: 'Trades',               icon: CandlestickChart, group: 'invest', soon: 'Paper trading lands with the paper ledger.' },
@@ -1623,7 +1633,7 @@ Then in the browser at `http://127.0.0.1:5006`:
 - all four group headers render; clicking one collapses it and the state survives a reload
 - `#/markets` shows a one-line status card, not a blank page or a redirect
 - `#/overview`, `#/budget`, `#/cashflow`, `#/debt` all still load
-- `#/plan` currently falls through to Overview (Task 9 fills it)
+- `#/plan` shows its temporary status card (Task 9 replaces it with the real section)
 
 - [ ] **Step 5: Commit**
 
@@ -1791,7 +1801,8 @@ export default function Plan() {
 }
 ```
 
-Add `plan: () => import('./sections/Plan')` to `IMPORTERS` in `MoneyHub.jsx`.
+In `MoneyHub.jsx`: add `plan: () => import('./sections/Plan')` to `IMPORTERS` **and delete the temporary
+`soon` string from the `plan` entry in `SECTIONS`** that Task 7 left there.
 
 - [ ] **Step 2: Write `TakeHome.jsx`**
 
@@ -2010,8 +2021,9 @@ EOF
 ### Task 12: subscriptions view
 
 **Files:**
-- Create: `src/components/money/sections/parts/cashflow/Subscriptions.jsx`
+- Create: `src/lib/cadence.js`, `src/components/money/sections/parts/cashflow/Subscriptions.jsx`
 - Modify: `src/components/money/sections/CashFlow.jsx`, `server/money/advice.js`
+- Test: `tests/cadence-client.test.mjs`
 
 **Interfaces:**
 - Consumes: the cadences from Task 5; the existing `recurring` list already loaded by `CashFlow.jsx`.
@@ -2019,20 +2031,32 @@ EOF
 
 - [ ] **Step 1: Write `Subscriptions.jsx`**
 
-A filtered view over `recurring` where `kind === 'bill'`, with a cycle filter
-(All / Monthly / Quarterly / Annual) and two totals in `MetricCard`s: **monthly equivalent** and
-**annual total**. Normalize with the same rule as the server:
+First create `src/lib/cadence.js` — the **one** client-side copy of the normalizer. The server has its own
+(`runway.js`, `calc.js`, `tools/profile.js`); a browser module cannot import CommonJS server code, so exactly
+one client copy is the floor. Do not inline a fourth copy in a component.
 
 ```javascript
-const perMonth = (amount, cadence) => {
+// Client mirror of the server's per-month normalization (server/money/runway.js
+// perMonth). Keep the two in step — tests/cadence-client.test.mjs pins the
+// values against the same table.
+export function perMonth(amount, cadence) {
   const a = Math.abs(Number(amount) || 0);
   if (cadence === 'weekly')    return a * 52 / 12;
   if (cadence === 'biweekly')  return a * 26 / 12;
   if (cadence === 'quarterly') return a / 3;
   if (cadence === 'annual')    return a / 12;
   return a;
-};
+}
+export const perYear = (amount, cadence) => perMonth(amount, cadence) * 12;
 ```
+
+Add `tests/cadence-client.test.mjs` asserting all five cadences against `perMonth` and `perYear`
+(`perMonth(600, 'quarterly') === 200`, `perYear(600, 'quarterly') === 2400`, weekly `100` → `433.33`,
+biweekly `100` → `216.67`, annual `1200` → `100`, monthly `50` → `50`).
+
+`Subscriptions.jsx` is then a filtered view over `recurring` where `kind === 'bill'`, importing `perMonth` /
+`perYear` from `../../../../lib/cadence`, with a cycle filter (All / Monthly / Quarterly / Annual) and two
+totals in `MetricCard`s: **monthly equivalent** and **annual total**.
 
 Rows sort by monthly equivalent descending and show payee, raw amount, cadence badge, monthly equivalent, and
 next date. Empty list → the existing `EmptyState` with "No recurring bills yet."
@@ -2055,7 +2079,7 @@ Confirm `tests/advice.test.mjs` still passes; update the finding's asserted `act
 - [ ] **Step 4: Verify**
 
 ```bash
-npx vitest run tests/advice.test.mjs
+npx vitest run tests/advice.test.mjs tests/cadence-client.test.mjs
 npm run build
 npm start
 ```
@@ -2065,7 +2089,7 @@ and that the cycle filter isolates it.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/money/sections/parts/cashflow/Subscriptions.jsx src/components/money/sections/CashFlow.jsx server/money/advice.js
+git add src/lib/cadence.js tests/cadence-client.test.mjs src/components/money/sections/parts/cashflow/Subscriptions.jsx src/components/money/sections/CashFlow.jsx server/money/advice.js
 git commit -F - <<'EOF'
 feat(cashflow): subscriptions view with cycle normalization
 
