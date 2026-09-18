@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
   TrendingDown,
@@ -30,6 +31,11 @@ import BigStat from '../shared/BigStat';
 import EmptyState from '../shared/EmptyState';
 import CalcPanel from './parts/debt/CalcPanel';
 
+// URL slugs for the ?calc= deep link (ruling R7) — display names are what
+// CalcPanel and the tab buttons use, slugs are what the query string carries.
+const CALC_SLUGS = { Mortgage: 'mortgage', 'Auto Loan': 'auto-loan', Refi: 'refi', DTI: 'dti' };
+const CALC_NAMES = Object.fromEntries(Object.entries(CALC_SLUGS).map(([name, slug]) => [slug, name]));
+
 /**
  * Debt Payoff section — Debt list, strategy toggle, payoff simulation, timeline chart, and loan calculators.
  *
@@ -55,9 +61,12 @@ export default function Debt() {
   // Debounce for extra payment input
   const debounceRef = useRef(null);
 
-  // Loan calculator state
-  const [showCalculators, setShowCalculators] = useState(false);
-  const [activeCalculator, setActiveCalculator] = useState(null);
+  // Loan calculator state — the choice is deep-linkable (ruling R7):
+  // #/debt?calc=refi lands on Refi, and picking a tab updates the URL.
+  const [params, setParams] = useSearchParams();
+  const activeCalculator = CALC_NAMES[params.get('calc')] || null;
+  const setCalculator = (c) => setParams(c ? { calc: CALC_SLUGS[c] } : {}, { replace: true });
+  const [showCalculators, setShowCalculators] = useState(() => Boolean(activeCalculator));
 
   // Load debts on mount
   useEffect(() => {
@@ -171,7 +180,7 @@ export default function Debt() {
           subtitle="Strategy and timeline"
         />
         <EmptyState
-          title="No debts to track"
+          title="Nothing to pay down — this is an asset."
           message="Add a loan or credit card account to see payoff strategies and timelines."
           icon={AlertCircle}
         />
@@ -603,7 +612,7 @@ export default function Debt() {
               {['Mortgage', 'Auto Loan', 'Refi', 'DTI'].map(calc => (
                 <button
                   key={calc}
-                  onClick={() => setActiveCalculator(activeCalculator === calc ? null : calc)}
+                  onClick={() => setCalculator(activeCalculator === calc ? null : calc)}
                   style={{
                     padding: '10px 12px',
                     borderRadius: '6px',
@@ -622,7 +631,7 @@ export default function Debt() {
             </div>
           )}
 
-          {activeCalculator && <CalcPanel type={activeCalculator} debts={debts} />}
+          {activeCalculator && <CalcPanel key={activeCalculator} type={activeCalculator} />}
         </Card>
       </motion.div>
 
