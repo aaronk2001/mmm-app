@@ -88,7 +88,12 @@ function hashResult(result) {
 
 /**
  * @typedef {{date: string, equity_cents: number}} EquityPoint
- * @typedef {{id: number, symbol: string, side: ('buy'|'sell'), qty: number, date: string, priceCents: number, grossCents: number, commissionCents: number, slippageCents: number, cashDeltaCents: number, decisionIndex: number}} Trade
+ * @typedef {{id: number, symbol: string, side: ('buy'|'sell'), qty: number, date: string, priceCents: number, grossCents: number, commissionCents: number, slippageCents: number, cashDeltaCents: number, decisionIndex: number, pnl_cents?: number}} Trade
+ *   pnl_cents is present on 'sell' fills only — realized P&L against the
+ *   split-adjusted average cost held at the moment of the sell (correct
+ *   across corporate actions, unlike a downstream replay of the ledger that
+ *   doesn't know about splits). Absent on 'buy' fills (no realized P&L to
+ *   report; they only open/add to a position).
  */
 
 /**
@@ -226,6 +231,11 @@ function runBacktest(config) {
         const proceedsCents = grossCents - commissionCents;
         cashCents += proceedsCents;
         qty[order.symbol] -= qtyAbs;
+        // Realized P&L against the split-adjusted avgCostCents held at this
+        // moment — BEFORE it gets reset to 0 below. This is what metrics.js
+        // trusts directly instead of replaying (split-blind) average-cost
+        // accounting from the fill ledger alone.
+        trade.pnl_cents = Math.round(proceedsCents - avgCostCents[order.symbol] * qtyAbs);
         if (qty[order.symbol] === 0) avgCostCents[order.symbol] = 0;
         trade.cashDeltaCents = proceedsCents;
       }

@@ -504,4 +504,45 @@ describe('metrics against a real runBacktest() output', () => {
     // buyAndHold never closes, so there's no realized round-trip to rate.
     expect(m.winRate).toBeNull();
   });
+
+  // C2 regression: reconstructRealizedPnlCents used to replay average-cost
+  // accounting WITHOUT engine.js's split adjustment (qty *= split;
+  // avgCostCents /= split), so a ledger carrying post-split quantities
+  // against a pre-split average cost fabricated a loss on an exactly
+  // break-even trade. engine.js now emits the correct pnl_cents directly on
+  // the sell trade (computed from its own split-adjusted avgCostCents at the
+  // moment of the sell), and metrics.js trusts that field instead of
+  // re-deriving it.
+  it('reports an exact break-even (not a fabricated loss/0% win rate) across a 2:1 split', () => {
+    const dates = ['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04'];
+    const bars = {
+      X: [
+        { date: dates[0], open: 100, high: 100, low: 100, close: 100 },
+        { date: dates[1], open: 100, high: 100, low: 100, close: 100 },
+        { date: dates[2], open: 50, high: 50, low: 50, close: 50, split: 2 },
+        { date: dates[3], open: 50, high: 50, low: 50, close: 50 },
+      ],
+    };
+    let step = 0;
+    const strategy = {
+      onBar() {
+        step += 1;
+        if (step === 1) return { weights: { X: 1 } }; // buy 100 @ $100, fills at bar[1].open
+        if (step === 3) return { weights: { X: 0 } }; // sell 200 (post-split) @ $50, fills at bar[3].open
+        return null;
+      },
+    };
+    const result = runBacktest({ bars, strategy, initialCashCents: 1000000, commissionCents: 0, slippageBps: 0 });
+
+    // The equity curve is correctly flat throughout — a split is
+    // equity-invariant.
+    for (const point of result.equityCurve) expect(point.equity_cents).toBe(1000000);
+
+    const sell = result.trades.find((t) => t.side === 'sell');
+    expect(sell.pnl_cents).toBe(0);
+
+    const m = metrics(result.equityCurve, result.trades, null);
+    expect(m.winRate).toBe(0); // an exact break-even close is not a "win"
+    expect(m.profitFactor).toBeNull(); // no gross profit and no gross loss to ratio
+  });
 });
