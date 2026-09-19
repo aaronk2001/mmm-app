@@ -62,6 +62,14 @@ fs.cpSync(path.join(ROOT, 'assets'), path.join(APP, 'assets'), { recursive: true
 if (fs.existsSync(path.join(ROOT, 'content'))) {
   fs.cpSync(path.join(ROOT, 'content'), path.join(APP, 'content'), { recursive: true });
 }
+// Verify the copy actually landed — if it silently misses the payload,
+// content.js:loadLessons() returns [] and the packaged Learn section ships
+// empty with a green build (the same trap class the require scan below
+// exists to close, left open for content). Fail the build loudly instead.
+if (!fs.existsSync(path.join(APP, 'content', 'learn', 'sources.yaml'))) {
+  console.error('[3/6] FATAL: content/learn/sources.yaml missing from the packaged app — Learn would ship empty. Aborting.');
+  process.exit(1);
+}
 // Never ship a database, legacy blob, or backups inside the app folder — user
 // data lives in %APPDATA%\mmm and a fresh install must start empty.
 for (const junk of ['mmm.db', 'mmm.db-wal', 'mmm.db-shm', 'data.json', 'data.json.migrated.bak', 'backups']) {
