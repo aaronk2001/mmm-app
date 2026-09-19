@@ -69,6 +69,19 @@ function cleanParams(action, form) {
   return out;
 }
 
+// Names the variable(s) each action's buildDefaults() actually draws its
+// pre-fill from — used to decide whether the "pre-filled from your own
+// numbers" claim below is true, or whether it's actually running on
+// SAMPLE_DATA (server/learn/variables.js) and must say so instead.
+const SOURCE_VARS = {
+  create_goal: ['ef_target', 'monthly_surplus'],
+  set_category_budget: ['budget_variance_top3'],
+  add_recurring: ['largest_outflow'],
+  create_rule: ['largest_outflow'],
+  enable_rollover: [],
+  export_backup: [],
+};
+
 function Field({ label, children }) {
   return (
     <div>
@@ -78,9 +91,16 @@ function Field({ label, children }) {
   );
 }
 
+// True when any variable this action's pre-fill draws from is running on
+// SAMPLE_DATA rather than the user's own numbers (server/learn/variables.js).
+export function usesSampleData(action, variables) {
+  return (SOURCE_VARS[action] || []).some((name) => variables?.[name]?.sample);
+}
+
 export default function ApplyConfirm({ action, variables, onCancel, onConfirm, submitting }) {
   const [form, setForm] = useState(() => buildDefaults(action, variables));
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  const isSample = usesSampleData(action, variables);
 
   const needsCategories = action === 'set_category_budget' || action === 'create_rule';
   const needsAccounts = action === 'create_goal' || action === 'add_recurring';
@@ -101,7 +121,9 @@ export default function ApplyConfirm({ action, variables, onCancel, onConfirm, s
     <form onSubmit={submit} className="m-card m-card-no-hover" style={{ padding: 16, display: 'grid', gap: 12 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--m-ink)' }}>{ACTION_COPY[action] || action}</div>
       <div style={{ fontSize: 12, color: 'var(--m-ink-2)' }}>
-        Review and edit these values — they're pre-filled from your own numbers. Nothing is written until you confirm.
+        {isSample
+          ? "These are pre-filled from sample figures, not your own numbers — add accounts and transactions to personalize this. Review and edit before confirming; nothing is written until you confirm."
+          : "Review and edit these values — they're pre-filled from your own numbers. Nothing is written until you confirm."}
       </div>
 
       {action === 'create_goal' && (

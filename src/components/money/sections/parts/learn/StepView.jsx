@@ -80,7 +80,7 @@ export default function StepView({
 }) {
   if (step.type === 'check') {
     return (
-      <StepShell label={TYPE_LABEL.check}>
+      <StepShell label={TYPE_LABEL.check} numbers={<YourNumbers personalizes={personalizes} variables={variables} />}>
         <CheckStep step={step} onAnswer={onCheckAnswer} onContinue={onContinue} submitting={submitting} />
       </StepShell>
     );
@@ -88,7 +88,7 @@ export default function StepView({
 
   if (step.type === 'apply') {
     return (
-      <StepShell label={TYPE_LABEL.apply}>
+      <StepShell label={TYPE_LABEL.apply} numbers={<YourNumbers personalizes={personalizes} variables={variables} />}>
         <ApplyConfirm action={step.action} variables={variables} submitting={applySubmitting} onConfirm={onApply} onCancel={onSkipApply} />
         {applyError && <div role="alert" style={{ fontSize: 12, color: 'var(--m-red)' }}>{applyError}</div>}
         <button type="button" className="m-btn m-btn-ghost m-btn-sm" style={{ justifySelf: 'start' }} onClick={onSkipApply} disabled={applySubmitting}>
