@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { reduced } from '../shared/AnimatedNumber';
 import {
   TrendingDown,
   DollarSign,
@@ -558,7 +559,7 @@ export default function Debt() {
                   stroke="var(--m-accent)"
                   dot={false}
                   strokeWidth={2}
-                  isAnimationActive={true}
+                  isAnimationActive={!reduced()}
                 />
               </LineChart>
             </ResponsiveContainer>
