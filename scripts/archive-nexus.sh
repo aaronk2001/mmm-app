@@ -43,8 +43,12 @@
 #      the importer against wherever nexus-app currently lives, e.g.:
 #        node scripts/import-nexus.mjs
 #      (uses the default path; only works if step 1 above was done first), or
-#      point it at the archive directly without restoring it:
-#        node -e "console.log(require('./server/trading/import-nexus').runNexusImport({dataDir: '/c/Users/aaron/projects/_archive/nexus-app/server/store'}))"
+#      point it at the archive directly without restoring it — set
+#      MMM_DATA_DIR so the import lands in the installed app's real data dir
+#      (%APPDATA%\mmm) rather than falling back to the in-repo dev database
+#      (see server/db/connection.js's DATA_DIR fallback), and pass the
+#      archive path via --data-dir rather than requiring the module directly:
+#        MMM_DATA_DIR="$APPDATA/mmm" node scripts/import-nexus.mjs --data-dir "/c/Users/aaron/projects/_archive/nexus-app/server/store"
 #      The importer is idempotent (keyed on source+source_id) — safe to run
 #      against either location, and safe to run more than once.
 #
@@ -58,7 +62,8 @@
 #   path — review and commit that yourself, in the umbrella repo, whenever
 #   you're ready. The archived copy is plain filesystem content under
 #   _archive/nexus-app; it is not automatically git-added anywhere by this
-#   script.
+#   script. Note that this also leaves a brand-new UNTRACKED tree at
+#   projects/_archive/nexus-app in the umbrella repo until you `git add` it.
 #
 # SAFE TO RUN TWICE
 #   - If nexus-app no longer exists at its original path and the archive
