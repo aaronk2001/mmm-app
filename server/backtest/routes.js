@@ -46,6 +46,28 @@ function configHash(coreConfig) {
   return crypto.createHash('sha256').update(stableStringify(coreConfig)).digest('hex');
 }
 
+// Cheap per-symbol {count, maxDate} snapshot of price_bars over the run's
+// date range, folded into the hash so a re-upload of corrected bars under an
+// otherwise-identical config produces a NEW hash instead of matching (and
+// silently reusing) a stale prior run.
+function barsFingerprint(symbols, from, to) {
+  const out = {};
+  for (const s of symbols) out[s] = repo.getPriceBarFingerprint(db(), s, { from, to });
+  return out;
+}
+
+// Symbols a strategy spec actually references, given its kind/params — used
+// to reject a typo'd strategy symbol (e.g. buyAndHold('APPL') over a universe
+// of 'AAPL') instead of silently running a no-op backtest.
+function strategyReferencedSymbols(kind, params) {
+  const p = params || {};
+  if (kind === 'fixedWeightRebalance') {
+    return Object.keys(p.weights || {}).map((s) => String(s).toUpperCase());
+  }
+  if (typeof p.symbol === 'string' && p.symbol.trim()) return [String(p.symbol).trim().toUpperCase()];
+  return [];
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Bars — CSV upload (offline) + Yahoo sync (opt-in, via online.fetch)
 // ────────────────────────────────────────────────────────────────────────────
@@ -221,6 +243,7 @@ router.post('/run', async (req, res) => {
     coreConfig = {
       symbols: [...symbols].sort(), from, to, strategy, initialCashCents,
       slippageBps, commissionCents, maxWeightPerAsset, benchmarkSymbol, splitDate,
+      barsFingerprint: barsFingerprint(symbols, from, to),
     };
     const hash = configHash(coreConfig);
 
@@ -232,6 +255,13 @@ router.post('/run', async (req, res) => {
     // ── semantically invalid config → 400, persisted ──────────────────────
     if (!STRATEGY_KINDS.includes(strategy.kind)) {
       const errMsg = `Unknown strategy kind: "${strategy.kind}"`;
+      const run = repo.createBacktestRun(db(), { config_hash: hash, config: coreConfig, outcome: 'invalid_config', error: errMsg });
+      return res.status(400).json({ error: errMsg, outcome: 'invalid_config', run });
+    }
+
+    const missingSymbols = strategyReferencedSymbols(strategy.kind, strategy.params).filter((s) => !symbols.includes(s));
+    if (missingSymbols.length) {
+      const errMsg = `strategy references symbol(s) not in symbols: ${missingSymbols.join(', ')}`;
       const run = repo.createBacktestRun(db(), { config_hash: hash, config: coreConfig, outcome: 'invalid_config', error: errMsg });
       return res.status(400).json({ error: errMsg, outcome: 'invalid_config', run });
     }
