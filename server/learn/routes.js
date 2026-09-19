@@ -116,7 +116,16 @@ router.get('/lessons/:id', (req, res) => {
       return rendered;
     });
 
-    res.json({ ...lessonSummary(lesson), source_id: lesson.source_id, license_note: lesson.license_note, requires_data: lesson.requires_data, steps });
+    // Additive fields for the UI (Wave 2): `personalizes` names which
+    // variables this lesson's prose claims to be quoting back at the user;
+    // `variables` is the same computed set that already drove renderStep()
+    // above (no new computation), so the client can render Grade.jsx badges
+    // and a "running on sample figures" banner truthfully, and pre-fill an
+    // apply-action confirm from the user's own numbers.
+    res.json({
+      ...lessonSummary(lesson), source_id: lesson.source_id, license_note: lesson.license_note,
+      requires_data: lesson.requires_data, personalizes: lesson.personalizes || [], variables: vars, steps,
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -208,10 +217,12 @@ router.get('/review/session', (req, res) => {
     const cards = dueCards.map((card) => {
       const lesson = content.getLessonById(lessons, card.lesson_id);
       const checkStep = lesson && lesson.steps.find((s) => s.index === card.step_index);
+      const personalizes = lesson ? (lesson.personalizes || []) : [];
       return {
-        id: card.id, lesson_id: card.lesson_id, step_index: card.step_index, due: card.due,
+        id: card.id, lesson_id: card.lesson_id, lesson_title: lesson ? lesson.title : null, step_index: card.step_index, due: card.due,
         question: checkStep ? renderStep(checkStep, vars).question : null,
         options: checkStep ? renderStep(checkStep, vars).options : [],
+        sample: personalizes.some((name) => vars[name] && vars[name].sample),
       };
     });
     res.json({ cards, endScreen: fsrs.endScreenSummary({ cardsReviewed: 0, correctCount: 0 }) });
