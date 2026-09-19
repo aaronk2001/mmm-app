@@ -143,6 +143,13 @@ router.post('/lessons/:id/steps/:stepIndex', (req, res) => {
     const lesson = findLesson(req.params.id);
     if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
     const stepIndex = Number(req.params.stepIndex);
+    // A check step's correctness is graded server-side from the lesson's
+    // answer key at POST /lessons/:id/check — a client hitting this generic
+    // endpoint instead could supply status:'correct' directly for a check
+    // step and skip that lookup entirely. Reject it here.
+    if (checkStepIndexes(lesson).includes(stepIndex)) {
+      return res.status(400).json({ error: 'This step is a check step — answer it via POST /lessons/:id/check' });
+    }
     const status = req.body.status || 'skipped';
     if (!['correct', 'wrong', 'skipped'].includes(status)) return res.status(400).json({ error: 'status must be correct, wrong, or skipped' });
 

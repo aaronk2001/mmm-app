@@ -105,6 +105,18 @@ describe('full lesson-completion flow', () => {
     const { status } = await post(`/lessons/${LESSON_ID}/check`, { stepIndex: 0, selectedKey: 'A' });
     expect(status).toBe(400);
   });
+
+  // I4: the generic step endpoint records a step's status verbatim from the
+  // client, with none of /check's server-side answer lookup — a client
+  // could otherwise POST status:'correct' straight at a check step's index
+  // and mark it correct without ever answering it.
+  it('rejects a generic step post for a check-step stepIndex, and never records it', async () => {
+    const { status, body } = await post(`/lessons/${LESSON_ID}/steps/3`, { status: 'correct' });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/check step/i);
+    const rows = repo.getLearnStepProgress(db(), LESSON_ID);
+    expect(rows.find((r) => r.step_index === 3)).toBeUndefined();
+  });
 });
 
 describe('apply-action undo via routes', () => {
