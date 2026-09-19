@@ -165,8 +165,16 @@ function maxDrawdown(equityCurve) {
   let worstEnd = null;
 
   for (const point of equityCurve) {
-    if (!(point.equity_cents > 0)) continue;
-    if (peak === null || point.equity_cents > peak) {
+    // Only the PEAK needs a positive reading to be established (you can't
+    // set a high-water mark off a non-positive value). Once a peak exists,
+    // a zero/negative point is a real trough — a total wipeout is a 100%
+    // drawdown, not an unmeasurable one — so it must still compute against
+    // that peak instead of being skipped.
+    if (peak === null) {
+      if (!(point.equity_cents > 0)) continue;
+      peak = point.equity_cents;
+      peakDate = point.date;
+    } else if (point.equity_cents > peak) {
       peak = point.equity_cents;
       peakDate = point.date;
     }

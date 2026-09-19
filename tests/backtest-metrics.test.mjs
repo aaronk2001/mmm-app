@@ -65,6 +65,23 @@ describe('maxDrawdown', () => {
     const curve = [{ date: '2024-01-01', equity_cents: 100 }, { date: '2024-01-02', equity_cents: 200 }];
     expect(maxDrawdown(curve).pct).toBe(0);
   });
+
+  // I1: a total wipeout must report -100%, not -50%. The old code's
+  // `if (!(point.equity_cents > 0)) continue;` skipped non-positive points
+  // for TROUGH measurement too, so a 100000 -> 50000 -> 0 curve stopped
+  // measuring drawdown at the last positive reading (-50%) instead of
+  // against the zero balance (-100%). Only the peak needs a positive seed.
+  it('reports -100% (not -50%) on a total wipeout, once a peak is established', () => {
+    const curve = [
+      { date: '2024-01-01', equity_cents: 100000 },
+      { date: '2024-01-02', equity_cents: 50000 },
+      { date: '2024-01-03', equity_cents: 0 },
+    ];
+    const dd = maxDrawdown(curve);
+    expect(dd.pct).toBe(-1);
+    expect(dd.startDate).toBe('2024-01-01');
+    expect(dd.endDate).toBe('2024-01-03');
+  });
 });
 
 // ── Volatility / Sharpe / Sortino / Calmar ──────────────────────────────
