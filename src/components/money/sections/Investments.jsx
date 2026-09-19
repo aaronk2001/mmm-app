@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TrendingUp, Plus, Trash2, Pencil, X } from 'lucide-react';
+import { TrendingUp, Plus, Trash2, Pencil, X, RefreshCw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import SectionHeader from '../shared/SectionHeader';
 import Card from '../shared/Card';
@@ -28,6 +28,7 @@ export default function Investments() {
   const [busy, setBusy] = useState(false);
   const [editingPrice, setEditingPrice] = useState(null);
   const [priceInput, setPriceInput] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const accName = (id) => accounts.find((a) => a.id === id)?.name || '—';
 
@@ -57,6 +58,19 @@ export default function Investments() {
     if (!(await confirmDialog({ message: 'Delete this holding?', confirmLabel: 'Delete' }))) return;
     try { await api('money/holdings/' + id, { method: 'DELETE' }); refresh(); }
     catch (err) { console.error(err); toast.error(`Delete failed: ${err.message}`); }
+  }
+  // Manual price editing (savePriceEdit below) stays the default path — this
+  // is the one explicit, user-triggered fetch: it never runs on its own, and
+  // a disabled/failed market feature leaves prices exactly as they were.
+  async function refreshPrices() {
+    setRefreshing(true);
+    try {
+      const res = await api('market/refresh-holdings', { method: 'POST' });
+      refresh();
+      toast.success(`Refreshed ${res.updated}/${res.total} price${res.total === 1 ? '' : 's'} from Yahoo`);
+    } catch (err) {
+      toast.error(`Refresh failed: ${err.message}`);
+    } finally { setRefreshing(false); }
   }
   function openPriceEdit(h) { setEditingPrice(h.id); setPriceInput(String(h.current_price)); }
   async function savePriceEdit(id) {
@@ -136,7 +150,12 @@ export default function Investments() {
           <Card className="m-card-sm" style={{ overflowX: 'auto', marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--m-ink)' }}>Holdings</div>
-              <button className="m-btn m-btn-primary m-btn-sm" onClick={openAdd}><Plus size={15} style={{ marginRight: 4 }} /> Add</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="m-btn m-btn-secondary m-btn-sm" onClick={refreshPrices} disabled={refreshing}>
+                  <RefreshCw size={14} style={{ marginRight: 4 }} /> {refreshing ? 'Refreshing…' : 'Refresh prices'}
+                </button>
+                <button className="m-btn m-btn-primary m-btn-sm" onClick={openAdd}><Plus size={15} style={{ marginRight: 4 }} /> Add</button>
+              </div>
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>

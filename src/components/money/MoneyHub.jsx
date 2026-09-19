@@ -58,6 +58,8 @@ const IMPORTERS = {
   investments:  () => import('./sections/Investments'),
   reports:      () => import('./sections/Reports'),
   plan:         () => import('./sections/Plan'),
+  markets:      () => import('./sections/Markets'),
+  trades:       () => import('./sections/Trades'),
   learn:        () => import('./sections/Learn'),
   settings:     () => import('./sections/Settings'),
 };
@@ -81,9 +83,9 @@ const SECTIONS = [
   { id: 'investments',  label: 'Investments',          icon: TrendingUp,      group: 'money' },
   { id: 'reports',      label: 'Reports',              icon: FileText,        group: 'money' },
   { id: 'plan',         label: 'Plan',                 icon: Compass,         group: 'plan' },
-  { id: 'markets',      label: 'Markets',              icon: LineChart,       group: 'invest', soon: 'Markets lands with the online data seam.' },
+  { id: 'markets',      label: 'Markets',              icon: LineChart,       group: 'invest' },
   { id: 'desk',         label: 'Desk',                 icon: Brain,           group: 'invest', soon: 'The research desk lands after the LLM contract.' },
-  { id: 'trades',       label: 'Trades',               icon: CandlestickChart, group: 'invest', soon: 'Paper trading lands with the paper ledger.' },
+  { id: 'trades',       label: 'Trades',               icon: CandlestickChart, group: 'invest' },
   { id: 'learn',        label: 'Learn',                icon: GraduationCap,   group: 'grow' },
   { id: 'media',        label: 'Media',                icon: Newspaper,       group: 'grow', soon: 'News and video land with the media rebuild.' },
   { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },      // ungrouped, pinned to the bottom
