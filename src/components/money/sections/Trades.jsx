@@ -3,18 +3,13 @@ import { Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { CandlestickChart } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
 import Skeleton from '../shared/Skeleton';
-import ComingSoon from '../shared/ComingSoon';
 
 const TABS = [
   { id: 'open', label: 'Open', Comp: lazy(() => import('./parts/trades/Open')) },
   { id: 'closed', label: 'Closed', Comp: lazy(() => import('./parts/trades/Closed')) },
   { id: 'journal', label: 'Journal', Comp: lazy(() => import('./parts/trades/Journal')) },
-  { id: 'backtest', label: 'Backtest', Comp: BacktestComingSoon },
+  { id: 'backtest', label: 'Backtest', Comp: lazy(() => import('./parts/trades/Backtest')) },
 ];
-
-function BacktestComingSoon() {
-  return <ComingSoon title="Backtest" description="Strategy backtesting lands in a later sprint." />;
-}
 
 export default function Trades() {
   return (

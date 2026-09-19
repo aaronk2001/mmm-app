@@ -274,3 +274,50 @@ CREATE TABLE IF NOT EXISTS alert_rules (
   triggered_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_alert_rules_symbol ON alert_rules(symbol);
+
+-- Backtester (Sprint B, Wave 2). Bars come from either an offline CSV upload
+-- (source='csv', works with zero API keys) or a Yahoo pull through Sprint A's
+-- online.fetch seam (source='yahoo') — both land here so the run endpoint
+-- reads one table regardless of origin. Dates are local 'YYYY-MM-DD' strings,
+-- never a Date object (see server/backtest/engine.js header).
+CREATE TABLE IF NOT EXISTS price_bars (
+  symbol         TEXT    NOT NULL,
+  date           TEXT    NOT NULL,
+  open_cents     INTEGER NOT NULL,
+  high_cents     INTEGER NOT NULL,
+  low_cents      INTEGER NOT NULL,
+  close_cents    INTEGER NOT NULL,
+  volume         INTEGER,
+  split          REAL    DEFAULT 1,
+  dividend_cents INTEGER DEFAULT 0,
+  source         TEXT    DEFAULT 'csv',        -- csv | yahoo
+  PRIMARY KEY (symbol, date)
+);
+CREATE INDEX IF NOT EXISTS idx_price_bars_symbol ON price_bars(symbol);
+
+-- Named, reusable strategy presets — `kind` maps to a factory in
+-- server/backtest/strategies.js, `params` is that factory's JSON-encoded args.
+CREATE TABLE IF NOT EXISTS strategies (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  params     TEXT DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+
+-- One row per backtest run. `config_hash` lets an identical run (same
+-- symbols/dates/strategy/params/costs) be recognised across repeats.
+-- `outcome` is the enum the routes layer and the UI both key off of.
+CREATE TABLE IF NOT EXISTS backtest_runs (
+  id          TEXT PRIMARY KEY,
+  config_hash TEXT NOT NULL,
+  strategy_id TEXT REFERENCES strategies(id) ON DELETE SET NULL,
+  config      TEXT NOT NULL,                   -- JSON snapshot of the request
+  outcome     TEXT NOT NULL,                   -- completed | no_data | invalid_config | failed
+  error       TEXT,
+  result      TEXT,                            -- JSON: engine.js output (outcome=completed only)
+  metrics     TEXT,                            -- JSON: metrics.js output (outcome=completed only)
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_backtest_runs_hash ON backtest_runs(config_hash);
+CREATE INDEX IF NOT EXISTS idx_backtest_runs_created ON backtest_runs(created_at);
