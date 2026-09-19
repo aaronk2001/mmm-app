@@ -54,6 +54,9 @@ function emptyData() {
     import_log: [],
     price_cache: [],
     alert_rules: [],
+    price_bars: [],
+    strategies: [],
+    backtest_runs: [],
   };
 }
 
@@ -742,6 +745,103 @@ function deleteAlertRule(d, id) {
   if (!info.changes) throw new Error('Alert rule not found');
 }
 
+// ── backtester (Sprint B, Wave 2) ───────────────────────────────────────────
+
+const rowPriceBar = (r) => ({
+  symbol: r.symbol, date: r.date,
+  open: toDollars(r.open_cents), high: toDollars(r.high_cents),
+  low: toDollars(r.low_cents), close: toDollars(r.close_cents),
+  volume: r.volume, split: r.split, dividend: toDollars(r.dividend_cents) || 0,
+  source: r.source,
+});
+function getPriceBars(d, symbol, { from = null, to = null } = {}) {
+  let sql = 'SELECT * FROM price_bars WHERE symbol = ?';
+  const params = [String(symbol).toUpperCase()];
+  if (from) { sql += ' AND date >= ?'; params.push(from); }
+  if (to) { sql += ' AND date <= ?'; params.push(to); }
+  sql += ' ORDER BY date';
+  return d.prepare(sql).all(...params).map(rowPriceBar);
+}
+function getPriceBarSymbols(d) {
+  return d.prepare('SELECT DISTINCT symbol FROM price_bars ORDER BY symbol').all().map((r) => r.symbol);
+}
+// Bulk upsert — one call per CSV upload or Yahoo sync. Returns rows written.
+function upsertPriceBars(d, symbol, bars, source = 'csv') {
+  const sym = String(symbol).toUpperCase();
+  const stmt = d.prepare(`
+    INSERT INTO price_bars (symbol, date, open_cents, high_cents, low_cents, close_cents, volume, split, dividend_cents, source)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(symbol, date) DO UPDATE SET open_cents = excluded.open_cents, high_cents = excluded.high_cents,
+      low_cents = excluded.low_cents, close_cents = excluded.close_cents, volume = excluded.volume,
+      split = excluded.split, dividend_cents = excluded.dividend_cents, source = excluded.source
+  `);
+  let count = 0;
+  const run = d.transaction(() => {
+    for (const b of bars) {
+      stmt.run(
+        sym, String(b.date).slice(0, 10), toCents(b.open), toCents(b.high), toCents(b.low), toCents(b.close),
+        b.volume == null ? null : Math.round(Number(b.volume)) || 0,
+        b.split == null ? 1 : Number(b.split) || 1,
+        toCents(b.dividend || 0), source,
+      );
+      count += 1;
+    }
+  });
+  run();
+  return count;
+}
+function deletePriceBars(d, symbol) {
+  return d.prepare('DELETE FROM price_bars WHERE symbol = ?').run(String(symbol).toUpperCase()).changes;
+}
+
+const rowStrategy = (r) => ({ id: r.id, name: r.name, kind: r.kind, params: safeJson(r.params, {}), created_at: r.created_at });
+function getStrategies(d) {
+  return d.prepare('SELECT * FROM strategies ORDER BY created_at').all().map(rowStrategy);
+}
+function getStrategy(d, id) {
+  const r = d.prepare('SELECT * FROM strategies WHERE id = ?').get(id);
+  return r ? rowStrategy(r) : null;
+}
+function createStrategy(d, s) {
+  const id = s.id || newId();
+  d.prepare('INSERT INTO strategies (id, name, kind, params, created_at) VALUES (?,?,?,?,?)')
+    .run(id, s.name, s.kind, jsonText(s.params, {}), s.created_at || new Date().toISOString());
+  return getStrategy(d, id);
+}
+function deleteStrategy(d, id) {
+  const info = d.prepare('DELETE FROM strategies WHERE id = ?').run(id);
+  if (!info.changes) throw new Error('Strategy not found');
+}
+
+const rowBacktestRun = (r) => ({
+  id: r.id, config_hash: r.config_hash, strategy_id: r.strategy_id,
+  config: safeJson(r.config, {}), outcome: r.outcome, error: r.error,
+  result: safeJson(r.result, null), metrics: safeJson(r.metrics, null),
+  created_at: r.created_at,
+});
+function getBacktestRuns(d, { limit = 50 } = {}) {
+  return d.prepare('SELECT * FROM backtest_runs ORDER BY created_at DESC LIMIT ?').all(limit).map(rowBacktestRun);
+}
+function getBacktestRun(d, id) {
+  const r = d.prepare('SELECT * FROM backtest_runs WHERE id = ?').get(id);
+  return r ? rowBacktestRun(r) : null;
+}
+function getBacktestRunsByHash(d, hash) {
+  return d.prepare('SELECT * FROM backtest_runs WHERE config_hash = ? ORDER BY created_at DESC').all(hash).map(rowBacktestRun);
+}
+function createBacktestRun(d, r) {
+  const id = r.id || newId();
+  d.prepare(`
+    INSERT INTO backtest_runs (id, config_hash, strategy_id, config, outcome, error, result, metrics, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).run(
+    id, r.config_hash, r.strategy_id || null, jsonText(r.config, {}), r.outcome,
+    r.error || null, r.result == null ? null : jsonText(r.result, null), r.metrics == null ? null : jsonText(r.metrics, null),
+    r.created_at || new Date().toISOString(),
+  );
+  return getBacktestRun(d, id);
+}
+
 function getImportLog(d) {
   return d.prepare('SELECT * FROM import_log').all().map(rowImportLog);
 }
@@ -757,7 +857,7 @@ function markImported(d, source, sourceId, importedAt = new Date().toISOString()
 const BLOB_KEYS = [
   'accounts', 'transactions', 'categories', 'budgets', 'goals', 'rules', 'holdings', 'networth_snapshots', 'recurring', 'http_cache',
   'paper_account', 'paper_positions', 'paper_trades', 'paper_journal', 'agent_events', 'decisions', 'closes', 'watchlist', 'import_log',
-  'price_cache', 'alert_rules',
+  'price_cache', 'alert_rules', 'price_bars', 'strategies', 'backtest_runs',
 ];
 
 function readAll(d) {
@@ -783,6 +883,9 @@ function readAll(d) {
     import_log: getImportLog(d),
     price_cache: getPriceCache(d),
     alert_rules: getAlertRules(d),
+    price_bars: d.prepare('SELECT * FROM price_bars ORDER BY symbol, date').all().map(rowPriceBar),
+    strategies: getStrategies(d),
+    backtest_runs: getBacktestRuns(d, { limit: 1e9 }),
   };
   // Loose top-level keys round-tripped verbatim via meta.
   const extras = d.prepare("SELECT value FROM meta WHERE key='extras'").get();
@@ -799,7 +902,7 @@ function writeAll(d, blob) {
     for (const t of [
       'transactions', 'holdings', 'accounts', 'categories', 'budgets', 'goals', 'rules', 'networth_snapshots', 'recurring', 'http_cache',
       'paper_journal', 'paper_trades', 'paper_positions', 'agent_events', 'closes', 'decisions', 'watchlist', 'import_log',
-      'price_cache', 'alert_rules',
+      'price_cache', 'alert_rules', 'backtest_runs', 'strategies', 'price_bars',
     ]) {
       d.prepare(`DELETE FROM ${t}`).run();
     }
@@ -853,6 +956,11 @@ function writeAll(d, blob) {
     for (const i of arr('import_log')) markImported(d, i.source, i.source_id, i.imported_at);
     for (const p of arr('price_cache')) upsertPriceCache(d, p);
     for (const a of arr('alert_rules')) createAlertRule(d, a);
+    for (const s of arr('strategies')) createStrategy(d, s);
+    for (const r of arr('backtest_runs')) createBacktestRun(d, r);
+    for (const bySymbol of Object.entries(
+      arr('price_bars').reduce((acc, b) => { (acc[b.symbol] = acc[b.symbol] || []).push(b); return acc; }, {}),
+    )) upsertPriceBars(d, bySymbol[0], bySymbol[1], bySymbol[1][0]?.source || 'csv');
 
     const extras = {};
     for (const k of Object.keys(blob)) if (!BLOB_KEYS.includes(k)) extras[k] = blob[k];
@@ -918,4 +1026,7 @@ module.exports = {
   getImportLog, hasImported, markImported,
   getPriceCache, getPriceCacheEntry, upsertPriceCache,
   getAlertRules, getAlertRule, createAlertRule, updateAlertRule, deleteAlertRule,
+  getPriceBars, getPriceBarSymbols, upsertPriceBars, deletePriceBars,
+  getStrategies, getStrategy, createStrategy, deleteStrategy,
+  getBacktestRuns, getBacktestRun, getBacktestRunsByHash, createBacktestRun,
 };
