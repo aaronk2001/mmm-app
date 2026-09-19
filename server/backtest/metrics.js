@@ -536,7 +536,11 @@ function xirr(cashflows) {
     }
   }
 
-  return converged && Number.isFinite(r) ? r : null;
+  if (!converged || !Number.isFinite(r)) return null;
+  // A perfectly flat curve (no real return) can converge to a numerical
+  // dust value like -7.3e-11 instead of exactly 0, which renders as
+  // "-0.00%" (M4). Snap anything below solver tolerance to a clean 0.
+  return Math.abs(r) < 1e-9 ? 0 : r;
 }
 
 /**
@@ -610,7 +614,11 @@ function metrics(equityCurve, trades = [], benchmark = null, splitDate = null) {
     const split = dateKey(splitDate);
     const inCurve = sliceCurve(equityCurve, (e) => dateKey(e.date) <= split);
     const outCurve = sliceCurve(equityCurve, (e) => dateKey(e.date) >= split);
-    const inTrades = sliceCurve(trades, (t) => dateKey(t.date) <= split);
+    // Trades (unlike the curve boundary) are exclusive on the split date itself
+    // (M2): a trade dated exactly on splitDate used to land in BOTH inTrades and
+    // outTrades, double-counting it across in-sample/holdout win-rate and
+    // profit-factor stats.
+    const inTrades = sliceCurve(trades, (t) => dateKey(t.date) < split);
     const outTrades = sliceCurve(trades, (t) => dateKey(t.date) >= split);
     inSample = computeCore(inCurve, inTrades, benchmark);
     holdout = computeCore(outCurve, outTrades, benchmark);

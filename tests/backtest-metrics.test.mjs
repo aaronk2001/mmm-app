@@ -405,6 +405,16 @@ describe('xirr', () => {
     expect(xirr([{ date: '2021-01-01', amount_cents: -100 }, { date: '2022-01-01', amount_cents: -200 }])).toBeNull();
   });
 
+  it('reports a clean 0 (not -0.00% dust like -7.3e-11) on a perfectly flat curve (M4)', () => {
+    const cashflows = [
+      { date: '2021-01-01', amount_cents: -1000000 },
+      { date: '2022-01-01', amount_cents: 1000000 },
+    ];
+    const r = xirr(cashflows);
+    expect(r).toBe(0);
+    expect(Object.is(r, -0)).toBe(false);
+  });
+
   it('never hangs on a pathological series and fails closed to null', () => {
     // All-zero amounts: NPV(r) is identically 0 for every r, so there's no
     // sign requirement to fail on the has-both-signs check... use instead a
@@ -490,6 +500,26 @@ describe('metrics', () => {
       { date: '2023-01-01', equity_cents: 1331000 },
     ];
     expect(inSampleHoldoutGap(curve, [], null, '2022-01-01').cagrGap).toBeCloseTo(0.11, 9);
+  });
+
+  it('does not double-count a trade dated exactly on splitDate in both in-sample and holdout (M2)', () => {
+    const curve = [
+      { date: '2021-01-01', equity_cents: 1000000 },
+      { date: '2022-01-01', equity_cents: 1100000 },
+      { date: '2023-01-01', equity_cents: 1331000 },
+    ];
+    const splitTrades = [
+      { date: '2021-06-01', pnl_cents: 1000 }, // strictly in-sample: a win
+      { date: '2022-01-01', pnl_cents: -500 }, // exactly on splitDate: holdout-only now
+      { date: '2022-06-01', pnl_cents: 2000 }, // strictly holdout: a win
+    ];
+    const m = metrics(curve, splitTrades, null, '2022-01-01');
+    // In-sample sees only the 2021-06-01 win -> 100% win rate, no losses.
+    expect(m.inSample.winRate).toBe(1);
+    expect(m.inSample.profitFactor).toBeNull(); // no losses in-sample -> undefined ratio
+    // Holdout sees the splitDate trade plus the later one: 1 win, 1 loss.
+    expect(m.holdout.winRate).toBe(0.5);
+    expect(m.holdout.profitFactor).toBeCloseTo(4, 9); // 2000 / 500
   });
 
   it('gap fields are null when a split leaves a side without enough points for that metric', () => {
