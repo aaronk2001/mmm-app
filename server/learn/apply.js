@@ -120,13 +120,9 @@ const ACTIONS = {
 
 const ACTION_NAMES = Object.keys(ACTIONS);
 
-async function applyAction({ repo, d, store, validators, backup, lessonId = null, action, params = {} }) {
-  const def = ACTIONS[action];
-  if (!def) throw new Error(`Unknown apply action: ${action}`);
-
-  const ctx = { store, validators, backup };
-  const result = await def.apply(ctx, params);
-
+// Bookkeeping shared by both branches below: one activity_log row plus one
+// learn_applied_actions row for a given apply result, run against `d`.
+function recordApplied(repo, d, lessonId, action, params, result) {
   const activity = repo.createActivityLogEntry(d, {
     source: 'learn',
     action,
@@ -144,6 +140,35 @@ async function applyAction({ repo, d, store, validators, backup, lessonId = null
     entity_id: String(result.entity_id),
     activity_log_id: activity.id,
   });
+}
+
+async function applyAction({ repo, d, store, validators, backup, lessonId = null, action, params = {} }) {
+  const def = ACTIONS[action];
+  if (!def) throw new Error(`Unknown apply action: ${action}`);
+
+  const ctx = { store, validators, backup };
+
+  // export_backup's apply() awaits filesystem I/O (backup.runBackup) rather
+  // than writing through `d` — better-sqlite3 transactions must be a plain
+  // synchronous function, so an async apply() can't be inside the
+  // transaction boundary. Every other action's apply() is synchronous and
+  // writes through the same `d` connection ctx.store uses internally
+  // (server/db/connection.js's db() singleton), so the store write and both
+  // bookkeeping inserts are wrapped in one transaction: previously a throw
+  // between the store write and either insert could leave a real
+  // goal/budget/recurring/rule created with no activity_log or
+  // learn_applied_actions record of it — an untracked financial record.
+  if (def.apply.constructor.name === 'AsyncFunction') {
+    const result = await def.apply(ctx, params);
+    const run = d.transaction(() => recordApplied(repo, d, lessonId, action, params, result));
+    return run();
+  }
+
+  const run = d.transaction(() => {
+    const result = def.apply(ctx, params);
+    return recordApplied(repo, d, lessonId, action, params, result);
+  });
+  return run();
 }
 
 async function undoAction({ repo, d, store, validators, backup, appliedActionId }) {

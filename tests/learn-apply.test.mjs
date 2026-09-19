@@ -143,6 +143,59 @@ describe('learn/apply — export_backup', () => {
   });
 });
 
+// Production's ctx.store (server/money/store.js) and the `d` routes.js
+// passes into applyAction both resolve the SAME require('../db/connection')
+// singleton — everything there is plain CommonJS sharing one require cache.
+// This test file, being ESM (.mjs), gets store.js and connection.js through
+// two different module graphs (vitest's ESM loader vs. store.js's own
+// internal require()), which — unlike production — can hand back two
+// distinct Database objects for the same file. A double that writes through
+// the exact `d` under test (mirroring how ctx.store really behaves in
+// production) verifies the transaction boundary itself without tripping
+// over that test-harness-only artifact.
+function sharedDbStore(d) {
+  return {
+    createGoal: (name, target, current, linked_account_id, target_date, template, monthly_contribution, custom) =>
+      repo.createGoal(d, { name, target, current, linked_account_id, target_date, template, monthly_contribution, custom }),
+    createRule: (match, category_id, tag) => repo.createRule(d, { match, category_id, tag }),
+    getGoals: () => repo.getGoals(d),
+    getRules: () => repo.getRules(d),
+  };
+}
+
+describe('learn/apply — transactional apply (I3)', () => {
+  // A partial failure between the store write and the bookkeeping inserts
+  // used to leave a real entity created with no activity_log or
+  // learn_applied_actions row pointing at it — an untracked financial
+  // record. applyAction now wraps the store write + both inserts in one
+  // d.transaction(), so an injected failure in the second insert must roll
+  // back the store write too.
+  it('rolls back the store write if the learn_applied_actions insert fails', async () => {
+    const failingRepo = { ...repo, createLearnAppliedAction: () => { throw new Error('boom'); } };
+    const sharedStore = sharedDbStore(db);
+    await expect(applyAction(ctx({ repo: failingRepo, store: sharedStore, action: 'create_goal', params: { name: 'Trip', target: 1000 } }))).rejects.toThrow('boom');
+    expect(sharedStore.getGoals()).toHaveLength(0);
+  });
+
+  it('rolls back the store write if the activity_log insert fails', async () => {
+    const failingRepo = { ...repo, createActivityLogEntry: () => { throw new Error('boom'); } };
+    const sharedStore = sharedDbStore(db);
+    await expect(applyAction(ctx({ repo: failingRepo, store: sharedStore, action: 'create_rule', params: { match: 'Starbucks', category_id: 'din' } }))).rejects.toThrow('boom');
+    expect(sharedStore.getRules()).toHaveLength(0);
+  });
+
+  it('does not roll back a completed export_backup on a later bookkeeping failure (async apply cannot share the transaction)', async () => {
+    // export_backup's apply() is async filesystem I/O outside `d`, so it
+    // runs before the transaction opens — this documents that boundary
+    // rather than asserting rollback of the backup itself.
+    const failingRepo = { ...repo, createLearnAppliedAction: () => { throw new Error('boom'); } };
+    let ran = false;
+    const backup = { runBackup: async () => { ran = true; return { date: '2026-09-18' }; } };
+    await expect(applyAction(ctx({ repo: failingRepo, backup, action: 'export_backup', params: {} }))).rejects.toThrow('boom');
+    expect(ran).toBe(true);
+  });
+});
+
 describe('learn/apply — undoAction edge cases', () => {
   it('throws for an unknown applied-action id', async () => {
     await expect(undoAction(ctx({ appliedActionId: 'nope' }))).rejects.toThrow(/not found/);
