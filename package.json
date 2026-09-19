@@ -64,6 +64,7 @@
     "react-router-dom": "^7.18.1",
     "recharts": "^3.8.1",
     "tailwindcss": "^4.3.2",
+    "ts-fsrs": "^5.4.2",
     "yahoo-finance2": "^4.0.2"
   },
   "devDependencies": {
