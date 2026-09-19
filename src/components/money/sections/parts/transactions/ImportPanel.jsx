@@ -129,13 +129,13 @@ export default function ImportPanel({
       )}
 
       {csvError && (
-        <div style={{ padding: '12px', background: 'rgba(220, 38, 38, 0.05)', borderRadius: '8px', color: 'var(--m-red)', fontSize: '14px' }}>
+        <div style={{ padding: '12px', background: 'var(--m-red-bg)', borderRadius: '8px', color: 'var(--m-red)', fontSize: '14px' }}>
           {csvError}
         </div>
       )}
 
       {csvResult && (
-        <div style={{ padding: '12px', background: 'rgba(21, 163, 74, 0.05)', borderRadius: '8px', color: 'var(--m-green)', fontSize: '14px' }}>
+        <div style={{ padding: '12px', background: 'var(--m-green-bg)', borderRadius: '8px', color: 'var(--m-green)', fontSize: '14px' }}>
           <div style={{ fontWeight: 600 }}>✓ Imported {csvResult.imported} transactions</div>
           {csvResult.sample && csvResult.sample.length > 0 && (
             <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--m-ink-2)' }}>
