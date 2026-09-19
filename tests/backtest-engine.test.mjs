@@ -88,6 +88,52 @@ describe('view.js — look-ahead guard', () => {
     // instanceof check is not reliable even though it is the same class.
     expect(() => runBacktest({ bars, strategy: peeking, initialCashCents: 100000 })).toThrow(/look-ahead violation/);
   });
+
+  // Hostile tests — the proxy traps `get`/`has`/`set` but a descriptor read
+  // reaches straight past those into the raw target unless `getOwnPropertyDescriptor`
+  // and `ownKeys` are trapped too. These four routes were the actual hole
+  // (verified against the pre-fix code: gOPD/gOPDs leaked bar[5], Object.keys
+  // reported all 6 real indices instead of the visible 3).
+  it('blocks a future bar reached via Object.getOwnPropertyDescriptor', () => {
+    const bars = [{ close: 100 }, { close: 200 }, { close: 300 }, { close: 400 }, { close: 500 }, { close: 350 }];
+    const v = createBarView(bars, 3);
+    expect(() => Object.getOwnPropertyDescriptor(v.bars, '5')).toThrow(LookAheadError);
+  });
+
+  it('never dumps a future bar via Object.getOwnPropertyDescriptors or Object.keys', () => {
+    const bars = [{ close: 100 }, { close: 200 }, { close: 300 }, { close: 400 }, { close: 500 }, { close: 350 }];
+    const v = createBarView(bars, 3);
+    const all = Object.getOwnPropertyDescriptors(v.bars);
+    expect(Object.prototype.hasOwnProperty.call(all, '5')).toBe(false);
+    expect(all['2'].value.close).toBe(300);
+    // Object.keys must report only the visible window, not the real run length.
+    expect(Object.keys(v.bars)).toEqual(['0', '1', '2']);
+  });
+
+  it('rejects delete on the bar view', () => {
+    const v = createBarView([{ close: 1 }, { close: 2 }], 2);
+    expect(() => { delete v.bars[0]; }).toThrow(/read-only/);
+  });
+
+  it('rejects defineProperty on the bar view', () => {
+    const v = createBarView([{ close: 1 }, { close: 2 }], 2);
+    expect(() => Object.defineProperty(v.bars, '0', { value: { close: 999 } })).toThrow(/read-only/);
+  });
+
+  it('regression: visible-window operations still behave normally after the descriptor-trap fix', () => {
+    const bars = [{ close: 1 }, { close: 2 }, { close: 3 }, { close: 4 }, { close: 5 }, { close: 6 }];
+    const v = createBarView(bars, 3);
+    const B = v.bars;
+    expect(B[2].close).toBe(3);
+    expect(B.length).toBe(3);
+    expect(B.slice().map((b) => b.close)).toEqual([1, 2, 3]);
+    expect([...B].map((b) => b.close)).toEqual([1, 2, 3]);
+    expect(B.map((b) => b.close)).toEqual([1, 2, 3]);
+    expect(B.at(-1).close).toBe(3);
+    expect(B.reduce((s, b) => s + b.close, 0)).toBe(6);
+    expect(JSON.parse(JSON.stringify(B))).toEqual([{ close: 1 }, { close: 2 }, { close: 3 }]);
+    expect({ ...B }).toEqual({ 0: { close: 1 }, 1: { close: 2 }, 2: { close: 3 } });
+  });
 });
 
 describe('clampWeights — risk clamp', () => {
