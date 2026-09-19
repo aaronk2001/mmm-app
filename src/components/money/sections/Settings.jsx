@@ -103,7 +103,7 @@ function Toggle({ on, disabled, onChange }) {
         justifyContent: on ? 'flex-end' : 'flex-start', alignItems: 'center',
       }}
     >
-      <span style={{ width: 19, height: 19, borderRadius: 999, background: '#fff', boxShadow: 'var(--m-shadow)' }} />
+      <span style={{ width: 19, height: 19, borderRadius: 999, background: 'var(--m-switch-knob)', boxShadow: 'var(--m-shadow)' }} />
     </button>
   );
 }
