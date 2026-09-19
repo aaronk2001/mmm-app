@@ -47,10 +47,25 @@ const apiLimiter = rateLimit({
 app.use('/api', apiLimiter);
 
 // ─── Request timeout ─────────────────────────────────────────────────────────
-// Hard-kill any request not finished within 30s — except local-LLM routes,
-// which legitimately run longer (ollama.js allows 40s per call).
+// Hard-kill any request not finished within 30s — except routes that
+// legitimately run longer:
+//  - /api/money/coach: local-LLM route, ollama.js allows 40s per call.
+//  - /api/backtest/run: runs off the event loop in a worker_thread whose OWN
+//    timeout (worker.js's DEFAULT_TIMEOUT_MS) is also 30s — without this
+//    exemption the two timers race and a backtest that legitimately finishes
+//    right at the wire gets killed by this middleware instead of returning.
+//  - /api/backtest/bars/sync, /api/market/refresh, /api/market/refresh-holdings:
+//    each drives one or more online.fetch calls (8s timeout x up to 3
+//    attempts with backoff ~= 25s) — refresh/refresh-holdings do this
+//    sequentially per watchlist/holding symbol, so more than one symbol can
+//    exceed 30s even with every call individually well-behaved.
 const REQUEST_TIMEOUT_MS = 30_000;
-const TIMEOUT_EXEMPT = [/^\/api\/money\/coach/];
+const TIMEOUT_EXEMPT = [
+  /^\/api\/money\/coach/,
+  /^\/api\/backtest\/run/,
+  /^\/api\/backtest\/bars\/sync/,
+  /^\/api\/market\/refresh(-holdings)?/,
+];
 app.use((req, res, next) => {
   if (TIMEOUT_EXEMPT.some((re) => re.test(req.path))) return next();
   const timer = setTimeout(() => {
