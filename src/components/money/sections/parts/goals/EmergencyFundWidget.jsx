@@ -43,10 +43,10 @@ export default function EmergencyFundWidget({ em }) {
 
   const statusBg =
     em.adequacy === 'good'
-      ? 'rgba(21, 163, 74, 0.1)'
+      ? 'var(--m-green-bg)'
       : em.adequacy === 'ok'
-        ? 'rgba(217, 119, 6, 0.1)'
-        : 'rgba(220, 38, 38, 0.1)';
+        ? 'var(--m-amber-bg)'
+        : 'var(--m-red-bg)';
 
   const statusLabel =
     em.adequacy === 'good'
