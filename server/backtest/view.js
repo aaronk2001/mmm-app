@@ -58,6 +58,33 @@ function createBarView(bars, currentIndex) {
     set() {
       throw new Error('backtest bar view is read-only');
     },
+    // Descriptor reads (Object.getOwnPropertyDescriptor(s), spread, JSON
+    // stringification's key enumeration, for..in) bypass `get`/`has` and hit
+    // the raw target unless trapped here too — that was the look-ahead hole:
+    // Object.getOwnPropertyDescriptor(view.bars, futureIndex) read the real
+    // element straight off `bars` because this trap didn't exist.
+    getOwnPropertyDescriptor(target, prop) {
+      if (typeof prop === 'string' && /^\d+$/.test(prop)) guardIndex(prop);
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
+    // Must agree with getOwnPropertyDescriptor to satisfy the proxy
+    // invariants against a non-configurable-length target: ownKeys reports
+    // only the visible indices + 'length', and every one of those keys has a
+    // descriptor (the length descriptor is delegated to the real target,
+    // whose own 'length' is always the true underlying array length so it
+    // stays configurable/writable-consistent with what Reflect reports).
+    ownKeys(target) {
+      const keys = [];
+      for (let i = 0; i < currentIndex; i++) keys.push(String(i));
+      keys.push('length');
+      return keys;
+    },
+    deleteProperty() {
+      throw new Error('backtest bar view is read-only');
+    },
+    defineProperty() {
+      throw new Error('backtest bar view is read-only');
+    },
   });
 
   return {
