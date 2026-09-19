@@ -64,8 +64,14 @@ function sleep(ms) {
 function readCache(cacheKey) {
   return repo.getHttpCacheEntry(db(), cacheKey);
 }
+// The query string is stripped before the URL is stored. Providers put API
+// keys in query params (FRED does), and http_cache IS part of repo.readAll —
+// so an unstripped URL would carry the key into GET /api/money/export and
+// into every daily backup file. Nothing reads this column except a human
+// debugging a cache entry, for which the path alone is enough.
 function writeCache(cacheKey, data, feature, url) {
-  repo.upsertHttpCache(db(), { cache_key: cacheKey, feature, url, data, cached_at: new Date().toISOString() });
+  const safeUrl = String(url).split('?')[0];
+  repo.upsertHttpCache(db(), { cache_key: cacheKey, feature, url: safeUrl, data, cached_at: new Date().toISOString() });
 }
 
 function envelopeFromCache(cacheKey, ttl, offline) {

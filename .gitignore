@@ -25,3 +25,8 @@ tmp-esb/
 .omc/
 mmm.db.corrupted-backup-*
 mmm.db.pre-restore-*
+
+# Plaintext dev-mode key fallback and the encrypted key store — neither
+# belongs in git.
+secrets.dev.json
+keys.enc

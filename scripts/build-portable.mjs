@@ -113,9 +113,17 @@ for (const file of walkJsFiles(path.join(APP, 'server'))) {
     const spec = m[1];
     if (BUILTINS.has(spec.replace(/^node:/, ''))) continue;
     try {
-      fileRequire.resolve(spec);
+      // Resolving is not enough. Node walks the directory chain upward, and
+      // build/ lives inside the repo, so a package missing from the payload
+      // still resolves against the dev tree's node_modules and the scan
+      // passes — which is exactly the SERVER_DEPS trap this guard exists to
+      // catch. Assert the resolution actually landed inside the payload.
+      const resolved = fileRequire.resolve(spec);
+      if (!resolved.startsWith(APP + path.sep)) {
+        unresolved.push(`${path.relative(APP, file)} -> require('${spec}') resolved OUTSIDE the payload (${resolved})`);
+      }
     } catch {
-      unresolved.push(`${path.relative(APP, file)} -> require('${spec}')`);
+      unresolved.push(`${path.relative(APP, file)} -> require('${spec}') did not resolve`);
     }
   }
 }

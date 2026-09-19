@@ -70,9 +70,18 @@ function getSummary() {
   const account = getAccount();
   const openPositions = listPositions();
   const closedTrades = listTrades();
-  const totalPnl = closedTrades.reduce((s, t) => s + t.pnl, 0);
-  const wins = closedTrades.filter((t) => t.pnl > 0).length;
-  const winRate = closedTrades.length > 0 ? Math.round((wins / closedTrades.length) * 100) : 0;
+  // Only trades this app actually executed move paper_account.capital, so
+  // only those may feed total_pnl — otherwise imported NEXUS history shows a
+  // P&L that cannot be reconciled against the capital figure beside it, and
+  // the capital - starting_capital === total_pnl identity that close() works
+  // to guarantee silently stops holding. Imported history is reported
+  // separately.
+  const appTrades = closedTrades.filter((t) => t.source !== 'nexus');
+  const importedTrades = closedTrades.filter((t) => t.source === 'nexus');
+  const totalPnl = appTrades.reduce((s, t) => s + t.pnl, 0);
+  const importedPnl = importedTrades.reduce((s, t) => s + t.pnl, 0);
+  const wins = appTrades.filter((t) => t.pnl > 0).length;
+  const winRate = appTrades.length > 0 ? Math.round((wins / appTrades.length) * 100) : 0;
   return {
     capital: account.capital,
     starting_capital: account.starting_capital,
@@ -81,6 +90,8 @@ function getSummary() {
     total_return_pct: account.starting_capital
       ? Math.round((totalPnl / account.starting_capital) * 10000) / 100
       : 0,
+    imported_pnl: Math.round(importedPnl * 100) / 100,
+    imported_trades: importedTrades.length,
     open_positions: openPositions,
     closed_trades: closedTrades.slice(0, 20),
     win_rate: winRate,
@@ -139,6 +150,14 @@ function open(decision, lastPrice) {
     const gate = gateDecision(decision, ctx, lastPrice);
     if (!gate.ok) return { ok: false, violations: gate.violations };
 
+    // The gate passes SELL/HOLD/CLOSE decisions as valid but returns no qty
+    // for them — it only sizes BUYs. Without this guard qty is undefined,
+    // costCents becomes NaN, the `costCents > capitalCents` check silently
+    // passes (NaN > n is false), and the UPDATE binds NaN into a NOT NULL
+    // column: a raw SQLite error at HTTP 500 for a plausible payload.
+    if (!Number.isInteger(gate.qty) || gate.qty < 1) {
+      return { ok: false, violations: ['only BUY decisions can open a paper position'] };
+    }
     const qty = gate.qty;
     const entryPriceCents = Math.round(toCents(lastPrice));
     const slippageCents = Math.round(entryPriceCents * SLIPPAGE_RATE);
