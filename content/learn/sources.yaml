@@ -37,7 +37,7 @@ sources:
 
   - id: openstax-principles-of-finance-1e
     title: "Principles of Finance, 1st Edition — OpenStax (Dahlquist & Knight)"
-    url: "https://openstax.org/details/books/principles-of-finance"
+    url: "https://openstax.org/details/books/principles-finance"
     license: "CC BY 4.0"
     attribution: "Access for free at openstax.org. Principles of Finance (1st ed.) is licensed under CC BY 4.0. Adapted with modification for this lesson."
     allows_verbatim: true
