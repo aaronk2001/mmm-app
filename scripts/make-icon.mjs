@@ -1,6 +1,9 @@
 // Generates assets/icon.ico + assets/tray.png for the MMM mark (three ascending
-// teal→mint bars on a rounded charcoal tile). Pure Node: software-rasterizes with
-// 4x supersampling for smooth edges, PNG-encodes via zlib, packs the ICO with
+// bars in the v3 "Precision instrument" accent->positive gradient, on a --bg
+// tile — kept byte-for-byte in sync with docs/design/v3-tokens.md; see the
+// note in src/components/money/shared/Logo.jsx for why these are hardcoded
+// hex instead of var(--m-*)). Pure Node: software-rasterizes with 4x
+// supersampling for smooth edges, PNG-encodes via zlib, packs the ICO with
 // png-to-ico. No browser / native image deps.
 
 import fs from 'node:fs';
@@ -14,9 +17,9 @@ const ASSETS = path.join(ROOT, 'assets');
 fs.mkdirSync(ASSETS, { recursive: true });
 
 const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-const BG = hex('#0f1b19');
-const TEAL = hex('#14b8a6');
-const MINT = hex('#4ade80');
+const BG = hex('#0f1115');   // --bg (dark)
+const TEAL = hex('#2dd4bf'); // --accent (dark)
+const MINT = hex('#4ade80'); // --positive (dark)
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // Signed distance helpers in 32-unit design space.

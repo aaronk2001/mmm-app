@@ -101,7 +101,7 @@ const SPLASH_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(
   'justify-content:center;flex-direction:column;gap:16px}' +
   '.mark{width:56px;height:56px}' +
   '.b{font-size:26px;font-weight:800;letter-spacing:.06em;' +
-  'background:linear-gradient(120deg,#14b8a6,#4ade80);-webkit-background-clip:text;' +
+  'background:linear-gradient(120deg,#2dd4bf,#4ade80);-webkit-background-clip:text;' +
   '-webkit-text-fill-color:transparent}' +
   '.s{font-size:11px;letter-spacing:.2em;color:#616d7e;text-transform:uppercase}' +
   '.r{width:26px;height:26px;border:3px solid #29313f;border-top-color:#2dd4bf;' +
@@ -110,8 +110,8 @@ const SPLASH_URL = 'data:text/html;charset=utf-8,' + encodeURIComponent(
   '</style>' +
   '<svg class="mark" viewBox="0 0 32 32" fill="none"><defs>' +
   '<linearGradient id="g" x1="4" y1="26" x2="28" y2="6" gradientUnits="userSpaceOnUse">' +
-  '<stop stop-color="#14b8a6"/><stop offset="1" stop-color="#4ade80"/></linearGradient></defs>' +
-  '<rect x="1" y="1" width="30" height="30" rx="8" fill="#0f1b19" stroke="url(#g)" stroke-opacity="0.35"/>' +
+  '<stop stop-color="#2dd4bf"/><stop offset="1" stop-color="#4ade80"/></linearGradient></defs>' +
+  '<rect x="1" y="1" width="30" height="30" rx="8" fill="#0f1115" stroke="url(#g)" stroke-opacity="0.35"/>' +
   '<rect x="8" y="17" width="4" height="7" rx="2" fill="url(#g)"/>' +
   '<rect x="14" y="12" width="4" height="12" rx="2" fill="url(#g)"/>' +
   '<rect x="20" y="7" width="4" height="17" rx="2" fill="url(#g)"/></svg>' +
