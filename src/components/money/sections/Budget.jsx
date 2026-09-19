@@ -7,6 +7,7 @@ import Card from '../shared/Card';
 import Money from '../shared/Money';
 import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
+import ErrorState from '../shared/ErrorState';
 import { TrendingUp, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import { api } from '../../../lib/query';
 import { toast } from '../../../lib/toast';
@@ -153,9 +154,7 @@ export default function Budget() {
     return (
       <div>
         <SectionHeader icon={TrendingUp} title="Monthly Budget" subtitle="Envelope-style spending plan" />
-        <Card className="m-card-sm" style={{ color: 'var(--m-red)' }}>
-          Error: {error}
-        </Card>
+        <ErrorState message={`Error: ${error}`} />
       </div>
     );
   }
@@ -481,7 +480,7 @@ export default function Budget() {
               <Card
                 hoverable={false}
                 className="m-card-sm"
-                style={{ background: 'rgba(220, 38, 38, 0.05)', border: '1px solid var(--m-red)' }}
+                style={{ background: 'var(--m-red-bg)', border: '1px solid var(--m-red)' }}
               >
                 <div style={{ fontSize: '14px', color: 'var(--m-red)', fontWeight: 500 }}>
                   Heads up — over by <Money value={Math.abs(totalRemaining)} prefix="$" decimals={2} />. No judgment—let's adjust next month.
