@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom';
+import { MotionConfig } from 'motion/react';
 import {
   LayoutDashboard,
   Wallet,
@@ -267,6 +268,7 @@ export default function MoneyHub() {
   };
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="money-hub" style={{ minHeight: '100vh', display: 'flex' }}>
       <nav
         style={{
@@ -380,5 +382,6 @@ export default function MoneyHub() {
       <Toasts />
       <ConfirmHost />
     </div>
+    </MotionConfig>
   );
 }
