@@ -57,6 +57,15 @@ function emptyData() {
     price_bars: [],
     strategies: [],
     backtest_runs: [],
+    learn_progress: [],
+    learn_step_progress: [],
+    learn_cards: [],
+    learn_reviews: [],
+    learn_applied_actions: [],
+    learn_settings: null,
+    learn_streak: null,
+    learn_events: [],
+    activity_log: [],
   };
 }
 
@@ -864,12 +873,317 @@ function markImported(d, source, sourceId, importedAt = new Date().toISOString()
   d.prepare('INSERT OR IGNORE INTO import_log (source, source_id, imported_at) VALUES (?,?,?)').run(source, sourceId, importedAt);
 }
 
+// ── learn engine (Sprint D, Track 1) ────────────────────────────────────────
+// Single local user — no user_id columns, same spirit as paper_account.
+// Lesson CONTENT never lives here (content/learn/**/*.md, loaded by
+// server/learn/content.js); these tables are purely the user's progress,
+// spaced-repetition state, applied-action ledger, and settings.
+
+const rowLearnProgress = (r) => ({
+  lesson_id: r.lesson_id, status: r.status, score_pct: r.score_pct,
+  apply_action_done: !!r.apply_action_done,
+  started_at: r.started_at, completed_at: r.completed_at, updated_at: r.updated_at,
+});
+function getAllLearnProgress(d) {
+  return d.prepare('SELECT * FROM learn_progress').all().map(rowLearnProgress);
+}
+function getLearnProgress(d, lessonId) {
+  const r = d.prepare('SELECT * FROM learn_progress WHERE lesson_id = ?').get(lessonId);
+  return r ? rowLearnProgress(r) : null;
+}
+function upsertLearnProgress(d, lessonId, patch = {}) {
+  const now = new Date().toISOString();
+  const existing = getLearnProgress(d, lessonId);
+  const next = {
+    status: 'not_started', score_pct: null, apply_action_done: false,
+    started_at: null, completed_at: null,
+    ...(existing || {}), ...patch, lesson_id: lessonId, updated_at: now,
+  };
+  d.prepare(`
+    INSERT INTO learn_progress (lesson_id, status, score_pct, apply_action_done, started_at, completed_at, updated_at)
+    VALUES (?,?,?,?,?,?,?)
+    ON CONFLICT(lesson_id) DO UPDATE SET status = excluded.status, score_pct = excluded.score_pct,
+      apply_action_done = excluded.apply_action_done, started_at = excluded.started_at,
+      completed_at = excluded.completed_at, updated_at = excluded.updated_at
+  `).run(lessonId, next.status, next.score_pct, next.apply_action_done ? 1 : 0, next.started_at, next.completed_at, now);
+  return getLearnProgress(d, lessonId);
+}
+// Full-blob import (backup/seed/reset): preserves the exact row, unlike
+// upsertLearnProgress which stamps `updated_at = now` for live app writes.
+function importLearnProgress(d, row) {
+  d.prepare(`
+    INSERT INTO learn_progress (lesson_id, status, score_pct, apply_action_done, started_at, completed_at, updated_at)
+    VALUES (?,?,?,?,?,?,?)
+    ON CONFLICT(lesson_id) DO UPDATE SET status = excluded.status, score_pct = excluded.score_pct,
+      apply_action_done = excluded.apply_action_done, started_at = excluded.started_at,
+      completed_at = excluded.completed_at, updated_at = excluded.updated_at
+  `).run(
+    row.lesson_id, row.status || 'not_started', row.score_pct ?? null,
+    row.apply_action_done ? 1 : 0, row.started_at || null, row.completed_at || null,
+    row.updated_at || new Date().toISOString(),
+  );
+}
+
+const rowLearnStepProgress = (r) => ({
+  id: r.id, lesson_id: r.lesson_id, step_index: r.step_index, status: r.status,
+  answer: safeJson(r.answer, {}), updated_at: r.updated_at,
+});
+function getLearnStepProgress(d, lessonId) {
+  return d.prepare('SELECT * FROM learn_step_progress WHERE lesson_id = ? ORDER BY step_index').all(lessonId).map(rowLearnStepProgress);
+}
+function getAllLearnStepProgress(d) {
+  return d.prepare('SELECT * FROM learn_step_progress ORDER BY lesson_id, step_index').all().map(rowLearnStepProgress);
+}
+function upsertLearnStepProgress(d, lessonId, stepIndex, patch = {}) {
+  const now = new Date().toISOString();
+  const existing = d.prepare('SELECT * FROM learn_step_progress WHERE lesson_id = ? AND step_index = ?').get(lessonId, stepIndex);
+  const id = (existing && existing.id) || patch.id || newId();
+  const status = patch.status !== undefined ? patch.status : (existing ? existing.status : 'pending');
+  const answer = patch.answer !== undefined ? patch.answer : (existing ? safeJson(existing.answer, {}) : {});
+  d.prepare(`
+    INSERT INTO learn_step_progress (id, lesson_id, step_index, status, answer, updated_at) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(lesson_id, step_index) DO UPDATE SET status = excluded.status, answer = excluded.answer, updated_at = excluded.updated_at
+  `).run(id, lessonId, stepIndex, status, jsonText(answer, {}), now);
+  return d.prepare('SELECT * FROM learn_step_progress WHERE lesson_id = ? AND step_index = ?').get(lessonId, stepIndex);
+}
+function importLearnStepProgress(d, row) {
+  d.prepare(`
+    INSERT INTO learn_step_progress (id, lesson_id, step_index, status, answer, updated_at) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(lesson_id, step_index) DO UPDATE SET status = excluded.status, answer = excluded.answer, updated_at = excluded.updated_at
+  `).run(row.id || newId(), row.lesson_id, row.step_index, row.status || 'pending', jsonText(row.answer, {}), row.updated_at || new Date().toISOString());
+}
+
+const rowLearnCard = (r) => ({
+  id: r.id, lesson_id: r.lesson_id, step_index: r.step_index, due: r.due,
+  stability: r.stability, difficulty: r.difficulty, elapsed_days: r.elapsed_days,
+  scheduled_days: r.scheduled_days, learning_steps: r.learning_steps,
+  reps: r.reps, lapses: r.lapses, state: r.state, last_review: r.last_review,
+  created_at: r.created_at,
+});
+function getAllLearnCards(d) {
+  return d.prepare('SELECT * FROM learn_cards').all().map(rowLearnCard);
+}
+function getLearnCard(d, id) {
+  const r = d.prepare('SELECT * FROM learn_cards WHERE id = ?').get(id);
+  return r ? rowLearnCard(r) : null;
+}
+function getLearnCardByStep(d, lessonId, stepIndex) {
+  const r = d.prepare('SELECT * FROM learn_cards WHERE lesson_id = ? AND step_index = ?').get(lessonId, stepIndex);
+  return r ? rowLearnCard(r) : null;
+}
+function getDueLearnCards(d, { before = new Date().toISOString(), limit = 20 } = {}) {
+  return d.prepare('SELECT * FROM learn_cards WHERE due <= ? ORDER BY due LIMIT ?').all(before, limit).map(rowLearnCard);
+}
+// Upsert keyed on (lesson_id, step_index) — the FSRS Card is 1:1 with a step,
+// so re-scheduling the same step always updates the same row.
+function upsertLearnCard(d, c) {
+  const id = c.id || getLearnCardByStep(d, c.lesson_id, c.step_index)?.id || newId();
+  d.prepare(`
+    INSERT INTO learn_cards (id, lesson_id, step_index, due, stability, difficulty, elapsed_days, scheduled_days, learning_steps, reps, lapses, state, last_review, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(lesson_id, step_index) DO UPDATE SET due = excluded.due, stability = excluded.stability,
+      difficulty = excluded.difficulty, elapsed_days = excluded.elapsed_days, scheduled_days = excluded.scheduled_days,
+      learning_steps = excluded.learning_steps, reps = excluded.reps, lapses = excluded.lapses,
+      state = excluded.state, last_review = excluded.last_review
+  `).run(
+    id, c.lesson_id, c.step_index, c.due, c.stability || 0, c.difficulty || 0,
+    c.elapsed_days || 0, c.scheduled_days || 0, c.learning_steps || 0, c.reps || 0, c.lapses || 0,
+    c.state || 0, c.last_review || null, c.created_at || new Date().toISOString(),
+  );
+  return getLearnCardByStep(d, c.lesson_id, c.step_index);
+}
+
+const rowLearnReview = (r) => ({
+  id: r.id, card_id: r.card_id, rating: r.rating, state: r.state, due: r.due,
+  stability: r.stability, difficulty: r.difficulty, elapsed_days: r.elapsed_days,
+  last_elapsed_days: r.last_elapsed_days, scheduled_days: r.scheduled_days, reviewed_at: r.reviewed_at,
+});
+function getAllLearnReviews(d) {
+  return d.prepare('SELECT * FROM learn_reviews ORDER BY reviewed_at').all().map(rowLearnReview);
+}
+function getLearnReviews(d, cardId) {
+  return d.prepare('SELECT * FROM learn_reviews WHERE card_id = ? ORDER BY reviewed_at').all(cardId).map(rowLearnReview);
+}
+function appendLearnReview(d, rv) {
+  const info = d.prepare(`
+    INSERT INTO learn_reviews (id, card_id, rating, state, due, stability, difficulty, elapsed_days, last_elapsed_days, scheduled_days, reviewed_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    rv.id ?? null, rv.card_id, rv.rating, rv.state, rv.due ?? null,
+    rv.stability ?? null, rv.difficulty ?? null, rv.elapsed_days ?? null,
+    rv.last_elapsed_days ?? null, rv.scheduled_days ?? null, rv.reviewed_at || new Date().toISOString(),
+  );
+  return rowLearnReview(d.prepare('SELECT * FROM learn_reviews WHERE id = ?').get(rv.id ?? info.lastInsertRowid));
+}
+
+const rowLearnAppliedAction = (r) => ({
+  id: r.id, lesson_id: r.lesson_id, action: r.action, params: safeJson(r.params, {}),
+  entity_type: r.entity_type, entity_id: r.entity_id, activity_log_id: r.activity_log_id,
+  applied_at: r.applied_at, undone_at: r.undone_at,
+});
+function getAllLearnAppliedActions(d) {
+  return d.prepare('SELECT * FROM learn_applied_actions ORDER BY applied_at').all().map(rowLearnAppliedAction);
+}
+function getLearnAppliedAction(d, id) {
+  const r = d.prepare('SELECT * FROM learn_applied_actions WHERE id = ?').get(id);
+  return r ? rowLearnAppliedAction(r) : null;
+}
+function createLearnAppliedAction(d, a) {
+  const id = a.id || newId();
+  d.prepare(`
+    INSERT INTO learn_applied_actions (id, lesson_id, action, params, entity_type, entity_id, activity_log_id, applied_at, undone_at)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).run(
+    id, a.lesson_id || null, a.action, jsonText(a.params, {}),
+    a.entity_type || null, a.entity_id || null, a.activity_log_id ?? null,
+    a.applied_at || new Date().toISOString(), a.undone_at || null,
+  );
+  return getLearnAppliedAction(d, id);
+}
+function markLearnAppliedActionUndone(d, id, undoneAt = new Date().toISOString()) {
+  const info = d.prepare('UPDATE learn_applied_actions SET undone_at = ? WHERE id = ?').run(undoneAt, id);
+  if (!info.changes) throw new Error('Applied action not found');
+  return getLearnAppliedAction(d, id);
+}
+
+const rowLearnSettings = (r) => ({
+  daily_card_cap: r.daily_card_cap, session_minutes_cap: r.session_minutes_cap,
+  core_retention: r.core_retention, trivia_retention: r.trivia_retention, updated_at: r.updated_at,
+});
+function ensureLearnSettings(d) {
+  d.prepare("INSERT OR IGNORE INTO learn_settings (id, daily_card_cap, session_minutes_cap, core_retention, trivia_retention, updated_at) VALUES ('default', 20, 7, 0.90, 0.85, ?)")
+    .run(new Date().toISOString());
+}
+function getLearnSettings(d) {
+  ensureLearnSettings(d);
+  return rowLearnSettings(d.prepare("SELECT * FROM learn_settings WHERE id='default'").get());
+}
+function setLearnSettings(d, patch = {}) {
+  ensureLearnSettings(d);
+  const current = getLearnSettings(d);
+  const next = { ...current, ...patch };
+  d.prepare(`
+    UPDATE learn_settings SET daily_card_cap = ?, session_minutes_cap = ?, core_retention = ?, trivia_retention = ?, updated_at = ?
+    WHERE id = 'default'
+  `).run(next.daily_card_cap, next.session_minutes_cap, next.core_retention, next.trivia_retention, new Date().toISOString());
+  return getLearnSettings(d);
+}
+// Full-blob import (backup/seed/reset): sets to the given value or defaults.
+function importLearnSettings(d, s) {
+  const v = { daily_card_cap: 20, session_minutes_cap: 7, core_retention: 0.90, trivia_retention: 0.85, ...(s || {}) };
+  d.prepare(`
+    INSERT INTO learn_settings (id, daily_card_cap, session_minutes_cap, core_retention, trivia_retention, updated_at)
+    VALUES ('default', ?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET daily_card_cap = excluded.daily_card_cap, session_minutes_cap = excluded.session_minutes_cap,
+      core_retention = excluded.core_retention, trivia_retention = excluded.trivia_retention, updated_at = excluded.updated_at
+  `).run(v.daily_card_cap, v.session_minutes_cap, v.core_retention, v.trivia_retention, (s && s.updated_at) || new Date().toISOString());
+  return getLearnSettings(d);
+}
+
+const rowLearnStreak = (r) => ({
+  current_streak: r.current_streak, longest_streak: r.longest_streak,
+  last_active_date: r.last_active_date, updated_at: r.updated_at,
+});
+function ensureLearnStreak(d) {
+  d.prepare("INSERT OR IGNORE INTO learn_streak (id, current_streak, longest_streak, last_active_date, updated_at) VALUES ('default', 0, 0, NULL, ?)")
+    .run(new Date().toISOString());
+}
+function getLearnStreak(d) {
+  ensureLearnStreak(d);
+  return rowLearnStreak(d.prepare("SELECT * FROM learn_streak WHERE id='default'").get());
+}
+function setLearnStreak(d, patch = {}) {
+  ensureLearnStreak(d);
+  const current = getLearnStreak(d);
+  const next = { ...current, ...patch };
+  d.prepare(`
+    UPDATE learn_streak SET current_streak = ?, longest_streak = ?, last_active_date = ?, updated_at = ?
+    WHERE id = 'default'
+  `).run(next.current_streak, next.longest_streak, next.last_active_date, new Date().toISOString());
+  return getLearnStreak(d);
+}
+function importLearnStreak(d, s) {
+  const v = { current_streak: 0, longest_streak: 0, last_active_date: null, ...(s || {}) };
+  d.prepare(`
+    INSERT INTO learn_streak (id, current_streak, longest_streak, last_active_date, updated_at) VALUES ('default', ?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET current_streak = excluded.current_streak, longest_streak = excluded.longest_streak,
+      last_active_date = excluded.last_active_date, updated_at = excluded.updated_at
+  `).run(v.current_streak, v.longest_streak, v.last_active_date, (s && s.updated_at) || new Date().toISOString());
+  return getLearnStreak(d);
+}
+
+const rowLearnEvent = (r) => ({
+  id: r.id, reason: r.reason, source_type: r.source_type, source_id: r.source_id,
+  data: safeJson(r.data, {}), created_at: r.created_at, updated_at: r.updated_at,
+});
+function getAllLearnEvents(d) {
+  return d.prepare('SELECT * FROM learn_events ORDER BY id').all().map(rowLearnEvent);
+}
+function getLearnEvent(d, reason, sourceType, sourceId) {
+  const r = d.prepare('SELECT * FROM learn_events WHERE reason = ? AND source_type = ? AND source_id = ?').get(reason, sourceType, sourceId);
+  return r ? rowLearnEvent(r) : null;
+}
+// Idempotent on (reason, source_type, source_id): a repeat call with the same
+// key is a no-op (returns { changed: false }) unless `data` differs, in which
+// case the existing row is updated in place — never duplicated.
+function upsertLearnEvent(d, { reason, source_type, source_id, data = {} }) {
+  const now = new Date().toISOString();
+  const existing = getLearnEvent(d, reason, source_type, source_id);
+  if (existing && JSON.stringify(existing.data) === JSON.stringify(data)) {
+    return { changed: false, event: existing };
+  }
+  d.prepare(`
+    INSERT INTO learn_events (reason, source_type, source_id, data, created_at, updated_at) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(reason, source_type, source_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+  `).run(reason, source_type, source_id, jsonText(data, {}), now, now);
+  return { changed: true, event: getLearnEvent(d, reason, source_type, source_id) };
+}
+function importLearnEvent(d, e) {
+  d.prepare(`
+    INSERT INTO learn_events (reason, source_type, source_id, data, created_at, updated_at) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(reason, source_type, source_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+  `).run(e.reason, e.source_type, e.source_id, jsonText(e.data, {}), e.created_at || new Date().toISOString(), e.updated_at || new Date().toISOString());
+}
+
+// ── activity log (generic undo ledger; first writer is server/learn/apply.js) ──
+
+const rowActivityLog = (r) => ({
+  id: r.id, source: r.source, action: r.action, entity_type: r.entity_type, entity_id: r.entity_id,
+  before: safeJson(r.before, null), after: safeJson(r.after, null),
+  created_at: r.created_at, undone_at: r.undone_at,
+});
+function getAllActivityLog(d) {
+  return d.prepare('SELECT * FROM activity_log ORDER BY id').all().map(rowActivityLog);
+}
+function getActivityLogEntry(d, id) {
+  const r = d.prepare('SELECT * FROM activity_log WHERE id = ?').get(id);
+  return r ? rowActivityLog(r) : null;
+}
+function createActivityLogEntry(d, e) {
+  const info = d.prepare(`
+    INSERT INTO activity_log (id, source, action, entity_type, entity_id, before, after, created_at, undone_at)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).run(
+    e.id ?? null, e.source, e.action, e.entity_type, e.entity_id ?? null,
+    e.before === undefined ? null : jsonText(e.before, null), e.after === undefined ? null : jsonText(e.after, null),
+    e.created_at || new Date().toISOString(), e.undone_at || null,
+  );
+  return getActivityLogEntry(d, e.id ?? info.lastInsertRowid);
+}
+function markActivityLogUndone(d, id, undoneAt = new Date().toISOString()) {
+  const info = d.prepare('UPDATE activity_log SET undone_at = ? WHERE id = ?').run(undoneAt, id);
+  if (!info.changes) throw new Error('Activity log entry not found');
+  return getActivityLogEntry(d, id);
+}
+
 // ── full-blob export / import (backup, seed, reset only) ──────────────────────
 
 const BLOB_KEYS = [
   'accounts', 'transactions', 'categories', 'budgets', 'goals', 'rules', 'holdings', 'networth_snapshots', 'recurring', 'http_cache',
   'paper_account', 'paper_positions', 'paper_trades', 'paper_journal', 'agent_events', 'decisions', 'closes', 'watchlist', 'import_log',
   'price_cache', 'alert_rules', 'price_bars', 'strategies', 'backtest_runs',
+  'learn_progress', 'learn_step_progress', 'learn_cards', 'learn_reviews', 'learn_applied_actions',
+  'learn_settings', 'learn_streak', 'learn_events', 'activity_log',
 ];
 
 function readAll(d) {
@@ -898,6 +1212,15 @@ function readAll(d) {
     price_bars: d.prepare('SELECT * FROM price_bars ORDER BY symbol, date').all().map(rowPriceBar),
     strategies: getStrategies(d),
     backtest_runs: getBacktestRuns(d, { limit: 1e9 }),
+    learn_progress: getAllLearnProgress(d),
+    learn_step_progress: getAllLearnStepProgress(d),
+    learn_cards: getAllLearnCards(d),
+    learn_reviews: getAllLearnReviews(d),
+    learn_applied_actions: getAllLearnAppliedActions(d),
+    learn_settings: getLearnSettings(d),
+    learn_streak: getLearnStreak(d),
+    learn_events: getAllLearnEvents(d),
+    activity_log: getAllActivityLog(d),
   };
   // Loose top-level keys round-tripped verbatim via meta.
   const extras = d.prepare("SELECT value FROM meta WHERE key='extras'").get();
@@ -915,6 +1238,8 @@ function writeAll(d, blob) {
       'transactions', 'holdings', 'accounts', 'categories', 'budgets', 'goals', 'rules', 'networth_snapshots', 'recurring', 'http_cache',
       'paper_journal', 'paper_trades', 'paper_positions', 'agent_events', 'closes', 'decisions', 'watchlist', 'import_log',
       'price_cache', 'alert_rules', 'backtest_runs', 'strategies', 'price_bars',
+      'learn_reviews', 'learn_cards', 'learn_step_progress', 'learn_progress',
+      'learn_applied_actions', 'activity_log', 'learn_events',
     ]) {
       d.prepare(`DELETE FROM ${t}`).run();
     }
@@ -973,6 +1298,20 @@ function writeAll(d, blob) {
     for (const bySymbol of Object.entries(
       arr('price_bars').reduce((acc, b) => { (acc[b.symbol] = acc[b.symbol] || []).push(b); return acc; }, {}),
     )) upsertPriceBars(d, bySymbol[0], bySymbol[1], bySymbol[1][0]?.source || 'csv');
+
+    // Learn engine (Sprint D). FK order: activity_log before learn_applied_actions
+    // (activity_log_id FK), learn_cards before learn_reviews (card_id FK).
+    for (const a of arr('activity_log')) createActivityLogEntry(d, a);
+    for (const p of arr('learn_progress')) importLearnProgress(d, p);
+    for (const sp of arr('learn_step_progress')) importLearnStepProgress(d, sp);
+    for (const c of arr('learn_cards')) upsertLearnCard(d, c);
+    for (const rv of arr('learn_reviews')) appendLearnReview(d, rv);
+    for (const aa of arr('learn_applied_actions')) createLearnAppliedAction(d, aa);
+    for (const e of arr('learn_events')) importLearnEvent(d, e);
+    // Singletons — like paper_account, always (re)set: to the given value, or
+    // a fresh default when absent (e.g. repo.emptyData()).
+    importLearnSettings(d, blob.learn_settings);
+    importLearnStreak(d, blob.learn_streak);
 
     const extras = {};
     for (const k of Object.keys(blob)) if (!BLOB_KEYS.includes(k)) extras[k] = blob[k];
@@ -1041,4 +1380,13 @@ module.exports = {
   getPriceBars, getPriceBarSymbols, getPriceBarFingerprint, upsertPriceBars, deletePriceBars,
   getStrategies, getStrategy, createStrategy, deleteStrategy,
   getBacktestRuns, getBacktestRun, getBacktestRunsByHash, createBacktestRun,
+  getAllLearnProgress, getLearnProgress, upsertLearnProgress, importLearnProgress,
+  getLearnStepProgress, getAllLearnStepProgress, upsertLearnStepProgress, importLearnStepProgress,
+  getAllLearnCards, getLearnCard, getLearnCardByStep, getDueLearnCards, upsertLearnCard,
+  getAllLearnReviews, getLearnReviews, appendLearnReview,
+  getAllLearnAppliedActions, getLearnAppliedAction, createLearnAppliedAction, markLearnAppliedActionUndone,
+  getLearnSettings, setLearnSettings, importLearnSettings,
+  getLearnStreak, setLearnStreak, importLearnStreak,
+  getAllLearnEvents, getLearnEvent, upsertLearnEvent, importLearnEvent,
+  getAllActivityLog, getActivityLogEntry, createActivityLogEntry, markActivityLogUndone,
 };
