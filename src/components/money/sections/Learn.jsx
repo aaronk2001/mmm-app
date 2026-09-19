@@ -1,42 +1,49 @@
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { GraduationCap, Search } from 'lucide-react';
+import { lazy, Suspense } from 'react';
+import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom';
+import { GraduationCap } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
-import Card from '../shared/Card';
-import { useApi } from '../../../lib/query';
+import Skeleton from '../shared/Skeleton';
+
+const LessonList = lazy(() => import('./parts/learn/LessonList'));
+const LessonRunner = lazy(() => import('./parts/learn/LessonRunner'));
+const ReviewQueue = lazy(() => import('./parts/learn/ReviewQueue'));
+const Glossary = lazy(() => import('./parts/learn/Glossary'));
+
+const TABS = [
+  { id: '', label: 'Lessons' },
+  { id: 'review', label: 'Review' },
+  { id: 'glossary', label: 'Glossary' },
+];
 
 export default function Learn() {
-  const [params] = useSearchParams();
-  const [q, setQ] = useState(params.get('term') || '');
-  const { data, isLoading } = useApi('money/glossary');
-  const terms = data?.terms || [];
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return terms;
-    return terms.filter(t => t.term.toLowerCase().includes(s) || t.plain.toLowerCase().includes(s));
-  }, [terms, q]);
+  const location = useLocation();
+  // The lesson runner is an immersive, one-step-per-screen experience (see
+  // LessonRunner.jsx) — the tab bar and section chrome step aside while a
+  // lesson is in progress, same as the pattern gives it its own Esc-to-exit.
+  const inRunner = /^\/learn\/lesson\//.test(location.pathname);
 
   return (
     <div>
-      <SectionHeader icon={GraduationCap} title="Learn" subtitle="Glossary today. Lessons, reviews and programs arrive in a later build." />
-      <div style={{ position: 'relative', maxWidth: 420, marginBottom: 16 }}>
-        <Search size={16} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--m-muted)' }} />
-        <input className="m-input" style={{ paddingLeft: 32 }} placeholder="Search terms…" value={q} onChange={e => setQ(e.target.value)} autoFocus />
-      </div>
-      {isLoading ? (
-        <div style={{ color: 'var(--m-muted)' }}>Loading…</div>
-      ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {filtered.map(t => (
-            <Card key={t.term} className="m-card-sm m-card-no-hover" style={{ padding: 16 }}>
-              <div style={{ fontWeight: 600, color: 'var(--m-ink)', marginBottom: 4 }}>{t.term}</div>
-              <div style={{ color: 'var(--m-ink-2)', fontSize: 14 }}>{t.plain}</div>
-              {t.more && <div style={{ color: 'var(--m-muted)', fontSize: 13, marginTop: 6 }}>{t.more}</div>}
-            </Card>
-          ))}
-          {!filtered.length && <div style={{ color: 'var(--m-muted)' }}>No terms match "{q}".</div>}
-        </div>
+      {!inRunner && (
+        <>
+          <SectionHeader icon={GraduationCap} title="Learn" subtitle="Short, personalized lessons on your own numbers, plus spaced review and a glossary." />
+          <div className="m-tabs" role="tablist">
+            {TABS.map((t) => (
+              <NavLink key={t.id || 'index'} to={`/learn/${t.id}`} end={t.id === ''}
+                className={({ isActive }) => `m-tab ${isActive ? 'active' : ''}`}>{t.label}</NavLink>
+            ))}
+          </div>
+        </>
       )}
+      <Suspense fallback={<Skeleton height={280} style={{ marginTop: inRunner ? 0 : 16 }} />}>
+        <Routes>
+          <Route path="/" element={<LessonList />} />
+          <Route path="lesson/:id" element={<LessonRunner />} />
+          <Route path="review" element={<ReviewQueue />} />
+          <Route path="glossary" element={<Glossary />} />
+          <Route path="*" element={<Navigate to="." replace />} />
+        </Routes>
+      </Suspense>
     </div>
   );
 }

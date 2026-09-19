@@ -14,6 +14,7 @@ const backupRoutes = require('./backup/routes');
 const tradingRoutes = require('./trading/routes');
 const marketRoutes = require('./market/routes');
 const backtestRoutes = require('./backtest/routes');
+const learnRoutes = require('./learn/routes');
 const { startBackupScheduler } = require('./backup/scheduler');
 const { startMarketSnapshotJob } = require('./jobs');
 const { checkpoint } = require('./db/connection');
@@ -73,6 +74,7 @@ app.use('/api/online', onlineRoutes);
 app.use('/api/trading', tradingRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/backtest', backtestRoutes);
+app.use('/api/learn', learnRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
@@ -107,6 +109,19 @@ const server = app.listen(PORT, '127.0.0.1', () => {
       if (truncated.length) console.warn(`[MMM] ${truncated.length} recurring item(s) still have periods due`);
     } catch (e) {
       console.error('[MMM] recurring auto-post failed:', e.message);
+    }
+    // Idempotent by id + content hash — safe to re-run on every launch so a
+    // content-authoring update is picked up without a manual step.
+    try {
+      const { db } = require('./db/connection');
+      const repo = require('./db/repo');
+      const content = require('./learn/content');
+      const contentDir = path.join(__dirname, '..', 'content');
+      const { results } = content.syncContent({ repo, d: db(), contentDir });
+      const changed = results.filter((r) => r.changed).length;
+      if (changed) console.log(`[MMM] learn content sync: ${changed}/${results.length} lesson(s) changed`);
+    } catch (e) {
+      console.error('[MMM] learn content sync failed:', e.message);
     }
   });
 });
