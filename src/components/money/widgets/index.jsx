@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import InsightsWidget from './InsightsWidget';
 import Grade from '../shared/Grade';
+import { reduced } from '../shared/AnimatedNumber';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, YAxis, PieChart, Pie, Cell } from 'recharts';
 
 const CHART_COLORS = ['var(--m-chart-1)', 'var(--m-chart-2)', 'var(--m-chart-3)', 'var(--m-chart-4)', 'var(--m-chart-5)', 'var(--m-chart-6)', 'var(--m-chart-7)', 'var(--m-chart-8)'];
@@ -84,7 +85,7 @@ function NetWorthTrend({ config = {} }) {
           contentStyle={{ background: 'var(--m-surface)', border: '1px solid var(--m-border)', borderRadius: 8, fontSize: 12 }}
           labelStyle={{ color: 'var(--m-muted)' }}
         />
-        <Area type="monotone" dataKey="net" stroke="var(--m-accent)" strokeWidth={2} fill="url(#nwFill)" />
+        <Area type="monotone" dataKey="net" stroke="var(--m-accent)" strokeWidth={2} fill="url(#nwFill)" isAnimationActive={!reduced()} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -266,7 +267,7 @@ function CustomMetric() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ fontSize: 12, color: 'var(--m-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{cfg.label}</div>
-        <button className="m-no-drag" onClick={startEdit} title="Edit formula"
+        <button type="button" className="m-no-drag" onClick={startEdit} title="Edit formula" aria-label="Edit formula"
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--m-muted)', display: 'flex', padding: 2 }}><Pencil size={13} /></button>
       </div>
       <div style={{ fontSize: 28, fontWeight: 700, color: error ? 'var(--m-red)' : 'var(--m-ink)', marginTop: 6, ...num }}>
@@ -291,7 +292,7 @@ function SpendingDonut() {
       <div style={{ position: 'relative', width: 116, height: 116, flexShrink: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={cats} dataKey="spent" nameKey="category" cx="50%" cy="50%" innerRadius={38} outerRadius={56} paddingAngle={2} stroke="none">
+            <Pie data={cats} dataKey="spent" nameKey="category" cx="50%" cy="50%" innerRadius={38} outerRadius={56} paddingAngle={2} stroke="none" isAnimationActive={!reduced()}>
               {cats.map((c, i) => <Cell key={c.category} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
             </Pie>
             <Tooltip contentStyle={{ background: 'var(--m-surface)', border: '1px solid var(--m-border)', borderRadius: 8, color: 'var(--m-ink)' }} formatter={(v) => f$(v)} />

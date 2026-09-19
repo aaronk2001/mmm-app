@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
-const reduced = () =>
+// Shared reduced-motion check — exported because motion/react tweens and
+// Recharts' own entrance animation both run on rAF/WAAPI, not CSS
+// transition/animation, so the blanket `prefers-reduced-motion` override in
+// theme.css/money-theme.css (which only zeroes CSS animation/transition
+// durations) never reaches them. Anywhere that drives motion outside CSS
+// needs this same check.
+export const reduced = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 const ease = (p) => 1 - Math.pow(1 - p, 3);
