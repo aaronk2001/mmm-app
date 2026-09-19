@@ -3,6 +3,7 @@ import { Target } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
 import AdviceTip from '../shared/AdviceTip';
 import Card from '../shared/Card';
+import ErrorState from '../shared/ErrorState';
 import CustomFieldFilters from './parts/CustomFieldFilters';
 import { api, useApi } from '../../../lib/query';
 import { toast } from '../../../lib/toast';
@@ -157,9 +158,7 @@ export default function Goals() {
     return (
       <div>
         <SectionHeader icon={Target} title="Goals & Savings" subtitle="Track goals and financial milestones" />
-        <Card className="m-card-sm" style={{ color: 'var(--m-red)' }}>
-          Error: {error}
-        </Card>
+        <ErrorState message={`Error: ${error}`} />
       </div>
     );
   }
