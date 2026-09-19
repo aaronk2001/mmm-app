@@ -153,6 +153,33 @@ describe('GET /review/session + grading', () => {
   });
 });
 
+describe('C1 — Learn variables agree with the app\'s own runway computation', () => {
+  it('computes runway_days from detected (not just declared) recurring, matching store.getRunway()', async () => {
+    const acc = store.createAccount('Checking', 'checking', 5000);
+    const ymd = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+    // Rent posted twice, ~monthly cadence, but BOTH postings are older than the
+    // 90-day actual-spend window runway.js scores burn from — so there is zero
+    // "actual" spend in-window, and the only way to see this bill at all is by
+    // running store.detectRecurring() over full transaction history (as every
+    // other money route does) rather than reading declared-only recurring
+    // (store.readData().recurring, which is empty here — never manually
+    // declared). Declared-only would score this 'unknown'/sample; detection
+    // should score it a real (non-sample) recurring-driven runway.
+    store.createTransaction(acc.id, ymd(170), -1800, 'Landlord LLC');
+    store.createTransaction(acc.id, ymd(200), -1800, 'Landlord LLC');
+
+    const appRunway = store.getRunway();
+    expect(appRunway.burnSource).toBe('recurring'); // sanity: only visible via detection
+    const { body } = await get(`/lessons/${LESSON_ID}`);
+
+    expect(body.variables.runway_days.sample).toBe(false);
+    expect(body.variables.runway_days.value).toBe(appRunway.daysLeft);
+    expect(body.variables.runway_days.formatted).toBe(`${appRunway.daysLeft} days`);
+    // Sanity: declared-only recurring is empty, so this genuinely exercises detection.
+    expect(store.getDeclaredRecurring()).toHaveLength(0);
+  });
+});
+
 describe('streak / settings / sync', () => {
   it('GET /streak returns the singleton row', async () => {
     const { status, body } = await get('/streak');
