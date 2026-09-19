@@ -13,4 +13,5 @@ const dryRun = process.argv.includes('--dry-run');
 const result = runNexusImport({ dryRun });
 
 console.log(JSON.stringify(result, null, 2));
+if (result.sourceMissing) console.log(`\n${result.message}`);
 if (dryRun) console.log('\n(dry run — no rows were written)');
