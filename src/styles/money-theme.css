@@ -15,6 +15,11 @@
   --m-border: var(--border);
   --m-accent: var(--accent);
   --m-accent-soft: var(--accent-soft);
+  /* Added Sprint C Track 1: legible text/icon colour on an --m-accent fill.
+     Flips dark-on-light in the light theme (accent-ink is #fff there) so
+     literal '#fff'/'white' on accent chips in Debt.jsx/CashFlow.jsx can
+     become a real token instead of a hardcoded literal. */
+  --m-accent-ink: var(--accent-ink);
   --m-green: var(--positive);
   --m-green-bg: color-mix(in srgb, var(--positive) 10%, transparent);
   --m-red: var(--negative);
