@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "build:portable": "node scripts/build-portable.mjs",
     "package": "npm run build && electron-builder",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:learn-content": "node scripts/build-learn-index.mjs"
   },
   "build": {
     "appId": "com.mmm.money",
@@ -64,6 +65,7 @@
     "react-router-dom": "^7.18.1",
     "recharts": "^3.8.1",
     "tailwindcss": "^4.3.2",
+    "ts-fsrs": "^5.4.2",
     "yahoo-finance2": "^4.0.2"
   },
   "devDependencies": {

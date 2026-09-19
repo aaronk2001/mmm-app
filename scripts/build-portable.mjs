@@ -28,7 +28,8 @@ const APP = path.join(OUT, 'resources', 'app');
 // yahoo-finance2 added for Sprint A, Track 2 (server/market/providers.js) —
 // this array MUST land in the same commit as the package.json dependency, or
 // the packaged app 500s on every market route the moment it's opened.
-const SERVER_DEPS = ['better-sqlite3', 'compression', 'cors', 'dotenv', 'express', 'express-rate-limit', 'helmet', 'papaparse', 'yahoo-finance2'];
+// ts-fsrs added for Sprint D, Track 1 (server/learn/fsrs.js) — same rule.
+const SERVER_DEPS = ['better-sqlite3', 'compression', 'cors', 'dotenv', 'express', 'express-rate-limit', 'helmet', 'papaparse', 'ts-fsrs', 'yahoo-finance2'];
 
 const run = (cmd, opts = {}) => execSync(cmd, { cwd: ROOT, stdio: 'inherit', ...opts });
 
@@ -56,6 +57,19 @@ for (const f of ['electron.js', 'preload.js', 'package.json']) {
 fs.cpSync(path.join(ROOT, 'server'), path.join(APP, 'server'), { recursive: true });
 fs.cpSync(path.join(ROOT, 'src', 'dist'), path.join(APP, 'src', 'dist'), { recursive: true });
 fs.cpSync(path.join(ROOT, 'assets'), path.join(APP, 'assets'), { recursive: true }); // icon.ico, tray.png
+// Lesson content (Sprint D, Track 1/2) — server/learn/content.js reads this
+// at runtime, so it must ship inside the payload, not just node_modules deps.
+if (fs.existsSync(path.join(ROOT, 'content'))) {
+  fs.cpSync(path.join(ROOT, 'content'), path.join(APP, 'content'), { recursive: true });
+}
+// Verify the copy actually landed — if it silently misses the payload,
+// content.js:loadLessons() returns [] and the packaged Learn section ships
+// empty with a green build (the same trap class the require scan below
+// exists to close, left open for content). Fail the build loudly instead.
+if (!fs.existsSync(path.join(APP, 'content', 'learn', 'sources.yaml'))) {
+  console.error('[3/6] FATAL: content/learn/sources.yaml missing from the packaged app — Learn would ship empty. Aborting.');
+  process.exit(1);
+}
 // Never ship a database, legacy blob, or backups inside the app folder — user
 // data lives in %APPDATA%\mmm and a fresh install must start empty.
 for (const junk of ['mmm.db', 'mmm.db-wal', 'mmm.db-shm', 'data.json', 'data.json.migrated.bak', 'backups']) {

@@ -1,0 +1,57 @@
+# content/learn/sources.yaml
+#
+# Every lesson in content/learn/**/*.md names one of these ids in its
+# `source_id` front matter field. The Learn engine renders an attribution
+# footer from this file automatically — do not hand-write attribution text
+# in lesson bodies.
+#
+# Licensing rules this file enforces (see docs/superpowers/plans/2026-09-18-sprintD-learn.md):
+#   - CFPB / FDIC: US federal government works, public domain. Cite, never reproduce logos.
+#   - OpenStax: 1st edition ONLY. 2nd edition is forbidden and must never be added here.
+#   - Wikipedia: CC BY-SA — must be marked as such wherever used.
+#   - Bogleheads: licence unverified — deliberately NOT included in this file. No lesson in
+#     M0-M2 cites Bogleheads; if a future module wants it, write original prose and link out,
+#     never copy a sentence, and do not set allows_verbatim: true for it.
+
+sources:
+  - id: original-mmm
+    title: "MMM app documentation (this product)"
+    url: ""
+    license: "Original — written for this app"
+    attribution: "Written by the MMM team. No external source."
+    allows_verbatim: true
+
+  - id: cfpb-emergency-savings
+    title: "Emergency savings / Your Money, Your Goals — Consumer Financial Protection Bureau"
+    url: "https://www.consumerfinance.gov/consumer-tools/save/emergency-savings/"
+    license: "US Government Work — Public Domain"
+    attribution: "Consumer Financial Protection Bureau (CFPB). U.S. federal government work, public domain."
+    allows_verbatim: true
+
+  - id: fdic-money-smart
+    title: "Money Smart for Adults — Federal Deposit Insurance Corporation"
+    url: "https://www.fdic.gov/consumer-resource-center/money-smart"
+    license: "US Government Work — Public Domain"
+    attribution: "Federal Deposit Insurance Corporation (FDIC). U.S. federal government work, public domain."
+    allows_verbatim: true
+
+  - id: openstax-principles-of-finance-1e
+    title: "Principles of Finance, 1st Edition — OpenStax (Dahlquist & Knight)"
+    url: "https://openstax.org/details/books/principles-finance"
+    license: "CC BY 4.0"
+    attribution: "Access for free at openstax.org. Principles of Finance (1st ed.) is licensed under CC BY 4.0. Adapted with modification for this lesson."
+    allows_verbatim: true
+
+  - id: wikipedia-emergency-fund
+    title: "Emergency fund — Wikipedia"
+    url: "https://en.wikipedia.org/wiki/Emergency_fund"
+    license: "CC BY-SA 4.0"
+    attribution: "Adapted from Wikipedia, \"Emergency fund,\" CC BY-SA 4.0. Content has been modified from the original."
+    allows_verbatim: false
+
+  - id: wikipedia-fixed-variable-costs
+    title: "Fixed cost / Variable cost — Wikipedia"
+    url: "https://en.wikipedia.org/wiki/Fixed_cost"
+    license: "CC BY-SA 4.0"
+    attribution: "Adapted from Wikipedia, \"Fixed cost,\" CC BY-SA 4.0. Content has been modified from the original."
+    allows_verbatim: false
