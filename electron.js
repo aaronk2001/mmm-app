@@ -150,6 +150,11 @@ function startServer() {
   const env = { ...process.env, PORT: SERVER_PORT };
   if (app.isPackaged && !env.MMM_DATA_DIR) {
     env.MMM_DATA_DIR = path.join(app.getPath('appData'), 'mmm');
+  } else if (!app.isPackaged && !env.MMM_DATA_DIR) {
+    // server/db/connection.js now refuses the in-repo dev-DB fallback unless
+    // this is set — this is the one deliberate place that opts in, so
+    // `npm run dev` / `npm start` keep using the dev DB exactly as before.
+    env.MMM_ALLOW_DEV_DB = '1';
   }
   serverProcess = fork(serverPath, [], {
     env,

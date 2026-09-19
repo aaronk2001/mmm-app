@@ -11,7 +11,31 @@ const repo = require('./repo');
 // (%APPDATA%\mmm) so user data lives outside the app folder and survives
 // rebuilds/updates.
 const ASSET_DIR = path.join(__dirname, '..', 'store', 'money');
-const DATA_DIR = process.env.MMM_DATA_DIR || ASSET_DIR;
+
+// Sprint E, Track 1: MMM_DATA_DIR used to silently fall back to ASSET_DIR —
+// the real in-repo dev database — whenever it wasn't set. That fallback fired
+// for anything that required this module without knowing about the env var
+// (a `node -e` one-liner, a stray sanity-check script) and once wiped the dev
+// DB outright (see scripts/restore-dev-db.sh). The fallback is still here —
+// npm run dev / npm start need it — but it now requires an explicit opt-in
+// (MMM_ALLOW_DEV_DB) instead of firing implicitly. electron.js sets that
+// opt-in itself when launching the dev server; tests/setup.mjs and the
+// packaged app both set MMM_DATA_DIR directly and never touch this branch.
+const DEV_DB_OPT_IN = 'MMM_ALLOW_DEV_DB';
+
+function resolveDataDir() {
+  if (process.env.MMM_DATA_DIR) return process.env.MMM_DATA_DIR;
+  if (process.env[DEV_DB_OPT_IN]) return ASSET_DIR;
+  throw new Error(
+    `MMM_DATA_DIR is not set. Refusing to fall back to the in-repo dev database at ${ASSET_DIR} ` +
+    `implicitly — that footgun has wiped the dev DB before (see scripts/restore-dev-db.sh). ` +
+    `Set MMM_DATA_DIR explicitly (a temp dir for a one-off script, %APPDATA%\\mmm for the packaged ` +
+    `app), or set ${DEV_DB_OPT_IN}=1 if you deliberately want the in-repo dev database ` +
+    `(npm run dev / npm start do this automatically).`
+  );
+}
+
+const DATA_DIR = resolveDataDir();
 const DB_FILE = process.env.MMM_DB_FILE || path.join(DATA_DIR, 'mmm.db');
 const JSON_FILE = path.join(ASSET_DIR, 'data.json');
 const SCHEMA = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');

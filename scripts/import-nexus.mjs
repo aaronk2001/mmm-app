@@ -12,6 +12,14 @@
 // module directly, since that bypasses this file's env/argv handling.
 import { createRequire } from 'node:module';
 
+// This is a deliberate, documented CLI invocation (not the ad-hoc `node -e`
+// case server/db/connection.js's guard exists for) — its long-standing
+// default has been to land in the in-repo dev DB when MMM_DATA_DIR isn't set
+// (see archive-nexus.sh's UNDO step for the explicit-MMM_DATA_DIR case).
+// Preserve that default by opting in on the caller's behalf; a caller who
+// wants the packaged app's real data dir instead still sets MMM_DATA_DIR.
+if (!process.env.MMM_DATA_DIR) process.env.MMM_ALLOW_DEV_DB = '1';
+
 const require = createRequire(import.meta.url);
 const { runNexusImport } = require('../server/trading/import-nexus');
 
