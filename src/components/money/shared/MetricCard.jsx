@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import Grade from './Grade';
 
-export default function MetricCard({ label, value, sublabel, delta, grade, icon: Icon }) {
+export default function MetricCard({ label, value, sublabel, delta, grade, gradeLabel, icon: Icon }) {
   const up = Number(delta) > 0;
   const down = Number(delta) < 0;
   return (
@@ -9,7 +9,7 @@ export default function MetricCard({ label, value, sublabel, delta, grade, icon:
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
         {Icon && <Icon size={14} style={{ color: 'var(--m-muted)' }} aria-hidden="true" />}
         <span style={{ fontSize: 12, color: 'var(--m-ink-2)' }}>{label}</span>
-        {grade && <Grade grade={grade} style={{ marginLeft: 'auto' }} />}
+        {grade && <Grade grade={grade} label={gradeLabel} style={{ marginLeft: 'auto' }} />}
       </div>
       <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--m-ink)', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       {(sublabel || delta !== undefined) && (
