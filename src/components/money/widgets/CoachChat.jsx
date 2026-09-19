@@ -107,10 +107,12 @@ export default function CoachChat() {
           style={{ flex: 1 }}
         />
         <button
+          type="button"
           className="m-btn m-btn-primary m-btn-sm m-no-drag"
           onClick={() => send()}
           disabled={loading || !input.trim()}
           title="Send"
+          aria-label="Send"
           style={{ flexShrink: 0 }}
         >
           <Send size={14} />

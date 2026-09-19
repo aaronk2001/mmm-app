@@ -32,7 +32,7 @@ export default function DigestModal({ digest, onClose }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <Sparkles size={18} style={{ color: 'var(--m-accent)' }} />
           <span style={{ fontSize: 12, color: 'var(--m-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Your week</span>
-          <button onClick={onClose} title="Close" style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--m-muted)', display: 'flex', padding: 2 }}>
+          <button type="button" onClick={onClose} title="Close" aria-label="Close" style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--m-muted)', display: 'flex', padding: 2 }}>
             <X size={16} />
           </button>
         </div>
