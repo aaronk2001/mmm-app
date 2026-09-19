@@ -299,6 +299,7 @@ export default function Settings() {
     setNexusBusy(true);
     try {
       const out = await api('trading/import-nexus', { method: 'POST', body: JSON.stringify({}) });
+      if (out.sourceMissing) { setNexusMsg({ ok: false, text: out.message }); toast.error('NEXUS store not found.'); return; }
       const c = out.counts;
       const imported = c.paper_trades.imported + c.watchlist.imported + c.decisions.imported + c.closes.imported + c.profile.imported;
       setNexusMsg({
