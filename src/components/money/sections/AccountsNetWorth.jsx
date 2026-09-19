@@ -8,6 +8,7 @@ import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
 import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
+import ErrorState from '../shared/ErrorState';
 import { api, useApi } from '../../../lib/query';
 import { fieldsFor, matchesFilter } from '../../../lib/customFields';
 import CustomFieldFilters from './parts/CustomFieldFilters';
@@ -88,9 +89,7 @@ export default function AccountsNetWorth() {
     return (
       <div>
         <SectionHeader icon={Wallet} title="Accounts & Net Worth" subtitle="Your financial snapshot" />
-        <Card style={{ background: 'rgba(220, 38, 38, 0.05)', borderColor: 'var(--m-red)' }}>
-          <div style={{ color: 'var(--m-red)', fontWeight: 600 }}>Error: {error}</div>
-        </Card>
+        <ErrorState message={`Error: ${error}`} />
       </div>
     );
   }

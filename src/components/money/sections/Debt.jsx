@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { reduced } from '../shared/AnimatedNumber';
 import {
   TrendingDown,
   DollarSign,
@@ -29,6 +30,7 @@ import Money from '../shared/Money';
 import Term from '../shared/Term';
 import BigStat from '../shared/BigStat';
 import EmptyState from '../shared/EmptyState';
+import ErrorState from '../shared/ErrorState';
 import CalcPanel from './parts/debt/CalcPanel';
 
 // URL slugs for the ?calc= deep link (ruling R7) — display names are what
@@ -164,9 +166,7 @@ export default function Debt() {
           title="Debt Payoff"
           subtitle="Strategy and timeline"
         />
-        <Card className="m-card-sm">
-          <div style={{ color: 'var(--m-red)' }}>Error: {error}</div>
-        </Card>
+        <ErrorState message={`Error: ${error}`} />
       </div>
     );
   }
@@ -408,7 +408,7 @@ export default function Debt() {
                     borderRadius: '8px',
                     border: '1px solid var(--m-border)',
                     background: strategy === s ? 'var(--m-accent)' : 'var(--m-surface)',
-                    color: strategy === s ? '#fff' : 'var(--m-ink)',
+                    color: strategy === s ? 'var(--m-accent-ink)' : 'var(--m-ink)',
                     fontWeight: 600,
                     cursor: 'pointer',
                     transition: 'all 150ms ease',
@@ -494,7 +494,7 @@ export default function Debt() {
                       height: '28px',
                       borderRadius: '50%',
                       background: 'var(--m-accent)',
-                      color: '#fff',
+                      color: 'var(--m-accent-ink)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -559,7 +559,7 @@ export default function Debt() {
                   stroke="var(--m-accent)"
                   dot={false}
                   strokeWidth={2}
-                  isAnimationActive={true}
+                  isAnimationActive={!reduced()}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -618,7 +618,7 @@ export default function Debt() {
                     borderRadius: '6px',
                     border: '1px solid var(--m-border)',
                     background: activeCalculator === calc ? 'var(--m-accent)' : 'var(--m-surface-2)',
-                    color: activeCalculator === calc ? '#fff' : 'var(--m-ink)',
+                    color: activeCalculator === calc ? 'var(--m-accent-ink)' : 'var(--m-ink)',
                     fontWeight: 500,
                     cursor: 'pointer',
                     fontSize: '13px',

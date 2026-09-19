@@ -34,7 +34,33 @@ function readReflectionDb(file) {
 // transaction for a --dry-run — counts computed so far are kept, no rows land.
 class DryRunAbort extends Error {}
 
+const EMPTY_COUNTS = () => ({
+  decisions: { imported: 0, skipped: 0 },
+  closes: { imported: 0, skipped: 0 },
+  paper_trades: { imported: 0, skipped: 0 },
+  watchlist: { imported: 0, skipped: 0 },
+  profile: { imported: 0, skipped: 0 },
+});
+
 function runNexusImport({ dataDir = DEFAULT_NEXUS_DIR, dryRun = false } = {}) {
+  // Without this check, a missing dataDir silently falls through every
+  // readJsonSafe/readReflectionDb fallback below and reports a "successful"
+  // run with zero rows imported — indistinguishable from the normal
+  // already-fully-imported case. That's fine while nexus-app exists (Aaron
+  // has already run this once — 2 trades, 2 watchlist tickers), but once
+  // nexus-app is archived (scripts/archive-nexus.sh) the default path is
+  // gone for good, so callers need an unambiguous signal rather than a
+  // quiet no-op. Pass an explicit `dataDir` (e.g. the archive location) to
+  // import from somewhere else instead.
+  if (!fs.existsSync(dataDir)) {
+    return {
+      dryRun,
+      sourceMissing: true,
+      message: `NEXUS store not found at ${dataDir}. If nexus-app was archived, re-run with { dataDir } pointing at the archived copy noted by scripts/archive-nexus.sh — otherwise there is nothing left to import.`,
+      counts: EMPTY_COUNTS(),
+    };
+  }
+
   const d = db();
   const journal = readJsonSafe(path.join(dataDir, 'journal.json'), { entries: [] });
   const watchlist = readJsonSafe(path.join(dataDir, 'watchlist.json'), { tickers: [] });

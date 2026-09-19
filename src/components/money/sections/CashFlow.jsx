@@ -17,6 +17,7 @@ import Card from '../shared/Card';
 import Money from '../shared/Money';
 import Term from '../shared/Term';
 import EmptyState from '../shared/EmptyState';
+import ErrorState from '../shared/ErrorState';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../../../lib/query';
 import { toast } from '../../../lib/toast';
@@ -272,9 +273,7 @@ export default function CashFlow() {
     return (
       <div>
         <SectionHeader icon={Zap} title="Cash Flow" subtitle="Forecast your daily balance" />
-        <Card className="m-card-sm" style={{ color: 'var(--m-red)' }}>
-          Error: {error}
-        </Card>
+        <ErrorState message={`Error: ${error}`} />
       </div>
     );
   }
@@ -533,7 +532,7 @@ export default function CashFlow() {
               <Card
                 hoverable={false}
                 className="m-card-sm"
-                style={{ background: 'rgba(217, 119, 6, 0.05)', border: '1px solid var(--m-amber)' }}
+                style={{ background: 'var(--m-amber-bg)', border: '1px solid var(--m-amber)' }}
               >
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                   <AlertTriangle size={18} style={{ color: 'var(--m-amber)', marginTop: '2px', flexShrink: 0 }} />
@@ -560,7 +559,7 @@ export default function CashFlow() {
               <Card
                 hoverable={false}
                 className="m-card-sm"
-                style={{ background: 'rgba(220, 38, 38, 0.05)', border: '1px solid var(--m-red)' }}
+                style={{ background: 'var(--m-red-bg)', border: '1px solid var(--m-red)' }}
               >
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                   <AlertTriangle size={18} style={{ color: 'var(--m-red)', marginTop: '2px', flexShrink: 0 }} />
@@ -672,7 +671,7 @@ export default function CashFlow() {
                     borderRadius: '6px',
                     border: 'none',
                     background: 'var(--m-accent)',
-                    color: 'white',
+                    color: 'var(--m-accent-ink)',
                     fontSize: '12px',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -842,7 +841,7 @@ export default function CashFlow() {
                         borderRadius: '6px',
                         border: 'none',
                         background: 'var(--m-accent)',
-                        color: 'white',
+                        color: 'var(--m-accent-ink)',
                         fontSize: '13px',
                         fontWeight: 600,
                         cursor: formLoading ? 'not-allowed' : 'pointer',

@@ -151,7 +151,7 @@ export default function AccountForm({ showAddForm, setShowAddForm, onAccountAdde
           </div>
 
           {formError && (
-            <div style={{ padding: '12px', background: 'rgba(220, 38, 38, 0.05)', borderRadius: '8px', color: 'var(--m-red)', fontSize: '14px' }}>
+            <div style={{ padding: '12px', background: 'var(--m-red-bg)', borderRadius: '8px', color: 'var(--m-red)', fontSize: '14px' }}>
               {formError}
             </div>
           )}
