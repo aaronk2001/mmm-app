@@ -14,7 +14,7 @@
 const { db } = require('../db/connection');
 const repo = require('../db/repo');
 
-const FEATURES = ['market', 'news', 'youtube', 'predictionMarkets', 'sportsOdds', 'telegram', 'cloudLlm'];
+const FEATURES = require('./features');
 
 function defaultOnlineSettings() {
   return Object.fromEntries(FEATURES.map((f) => [f, false]));
