@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ResponsiveContainer, ComposedChart, LineChart, AreaChart, BarChart,
   Line, Area, Bar, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
@@ -20,6 +20,10 @@ const fmtDate = (ymd) => { const [, m, d] = String(ymd).split('-'); return `${MO
 const num = { fontVariantNumeric: 'tabular-nums' };
 const PALETTE = ['var(--m-chart-1)', 'var(--m-chart-2)', 'var(--m-chart-3)', 'var(--m-chart-4)', 'var(--m-chart-5)', 'var(--m-chart-6)', 'var(--m-chart-7)', 'var(--m-chart-8)'];
 const f$ = (cents) => (cents == null ? '—' : '$' + Math.round(cents / 100).toLocaleString());
+// Whole-dollar rounding hides small-but-real cost figures (M6): $12.50 of
+// commission rendered as "$13" on the cost waterfall. Cost figures always
+// use two decimals.
+const f$2 = (cents) => (cents == null ? '—' : '$' + (cents / 100).toFixed(2));
 const fPct = (v, digits = 2) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(digits)}%`);
 const signColor = (v) => (v == null ? 'var(--m-ink-2)' : v >= 0 ? 'var(--m-green)' : 'var(--m-red)');
 
@@ -103,10 +107,20 @@ function computeMonthlyReturns(equityCurve) {
     if (!byMonth.has(key)) byMonth.set(key, { first: p.equity_cents, last: p.equity_cents });
     byMonth.get(key).last = p.equity_cents;
   }
-  return [...byMonth.entries()].map(([key, { first, last }]) => ({
-    key, year: key.slice(0, 4), month: Number(key.slice(5, 7)),
-    retPct: first > 0 ? (last / first - 1) * 100 : null,
-  }));
+  // Each month's return is measured off the PRIOR month's last close, not
+  // its own first bar — otherwise gap-ups/downs between the last bar of one
+  // month and the first bar of the next (e.g. a weekend, or simply the
+  // bar-to-bar move itself) vanish from every month, and the per-month
+  // returns stop compounding to the actual total. The very first month has
+  // no prior bucket, so it keeps its own first point as its base.
+  const entries = [...byMonth.entries()];
+  let prevLast = null;
+  return entries.map(([key, { first, last }], i) => {
+    const base = i === 0 ? first : prevLast;
+    const retPct = base > 0 ? (last / base - 1) * 100 : null;
+    prevLast = last;
+    return { key, year: key.slice(0, 4), month: Number(key.slice(5, 7)), retPct };
+  });
 }
 
 function computeRollingSharpe(equityCurve, window = 21) {
@@ -313,18 +327,31 @@ function Results({ run, config }) {
   // Best-effort supplementary fetches for the equity-vs-benchmark and
   // trade-marker charts — a failure here degrades those two charts to their
   // no-benchmark / no-price-context form, it never blocks the run itself.
-  useState(() => {
+  // This must be a useEffect (not a render-phase useState initializer): under
+  // React.StrictMode the initializer double-fires, and — worse — a second
+  // backtest run that reuses the mounted Results component would never
+  // re-run it at all, plotting the new run's equity/trades against the
+  // PREVIOUS run's benchmark/price data. Keying <Results> on the run id
+  // (see Backtest below) forces a remount on every new run; this effect's
+  // own dependency array covers the same inputs so a config-only change
+  // (no new run) still refetches correctly.
+  useEffect(() => {
+    let cancelled = false;
+    setBenchmarkCurve(null);
+    setPrimaryBars(null);
+    setSupportError(null);
     (async () => {
       try {
         if (config.benchmarkSymbol) {
           const rows = await api(`backtest/bars/${encodeURIComponent(config.benchmarkSymbol)}${config.from ? `?from=${config.from}` : ''}`);
-          setBenchmarkCurve(rows);
+          if (!cancelled) setBenchmarkCurve(rows);
         }
         const rows = await api(`backtest/bars/${encodeURIComponent(primarySymbol)}${config.from ? `?from=${config.from}` : ''}`);
-        setPrimaryBars(rows);
-      } catch (err) { setSupportError(err.message); }
+        if (!cancelled) setPrimaryBars(rows);
+      } catch (err) { if (!cancelled) setSupportError(err.message); }
     })();
-  });
+    return () => { cancelled = true; };
+  }, [config.benchmarkSymbol, primarySymbol, config.from]);
 
   const equityCurve = result.equityCurve;
   const drawdown = computeDrawdown(equityCurve);
@@ -372,7 +399,7 @@ function Results({ run, config }) {
         <MetricCard label="Sharpe" value={metrics.sharpe != null ? metrics.sharpe.toFixed(2) : '—'} grade={metrics.sharpe != null ? 'A' : 'C'} gradeLabel={metrics.sharpe != null ? 'Computed from the run’s daily returns' : 'Not computable — zero-volatility or too-short a run'} />
         <MetricCard label="Max drawdown" value={fPct(metrics.maxDrawdown?.pct)} grade={metrics.maxDrawdown?.pct != null ? 'A' : 'C'} gradeLabel={metrics.maxDrawdown?.pct != null ? 'Computed from the run’s equity curve' : 'Not computable'} />
         <MetricCard label="Win rate" value={metrics.winRate != null ? `${(metrics.winRate * 100).toFixed(0)}%` : '—'} grade={metrics.winRate != null ? 'A' : 'C'} gradeLabel={metrics.winRate != null ? 'Computed from closed trades in this run' : 'No closed trades to compute a win rate'} />
-        <MetricCard label="Total costs" value={f$(metrics.totalCostsCents)} grade="A" gradeLabel="Sum of commission + slippage across all fills" />
+        <MetricCard label="Total costs" value={f$2(metrics.totalCostsCents)} grade="A" gradeLabel="Sum of commission + slippage across all fills" />
       </div>
 
       {supportError && (
@@ -512,12 +539,12 @@ function Results({ run, config }) {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--m-border)" />
               <XAxis dataKey="name" stroke="var(--m-muted)" style={{ fontSize: 11 }} />
               <YAxis stroke="var(--m-muted)" style={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 100).toFixed(0)}`} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v) => f$(v)} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => f$2(v)} />
               <Bar dataKey="cents" name="Cost" fill="var(--m-red)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         }
-        table={<DataTable columns={[{ key: 'name', label: 'Cost' }, { key: 'cents', label: 'Amount', align: 'right', strong: true, render: (r) => f$(r.cents) }]} rows={costBars} />}
+        table={<DataTable columns={[{ key: 'name', label: 'Cost' }, { key: 'cents', label: 'Amount', align: 'right', strong: true, render: (r) => f$2(r.cents) }]} rows={costBars} />}
       />
     </div>
   );
@@ -577,7 +604,7 @@ export default function Backtest() {
   return (
     <div>
       <RunForm onResult={(res, body) => { setRun(res); setConfig({ ...body, symbols: body.symbols }); }} />
-      {run && run.outcome === 'completed' && config && <Results run={run.run} config={config} />}
+      {run && run.outcome === 'completed' && config && <Results key={run.run.id} run={run.run} config={config} />}
       {run && run.outcome !== 'completed' && <OutcomeBanner run={run} />}
       {!run && <EmptyState title="No backtest yet" message="Load bars (CSV or Yahoo sync) and configure a strategy above, then run." />}
     </div>
