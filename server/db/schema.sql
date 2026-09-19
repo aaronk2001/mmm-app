@@ -321,3 +321,133 @@ CREATE TABLE IF NOT EXISTS backtest_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_backtest_runs_hash ON backtest_runs(config_hash);
 CREATE INDEX IF NOT EXISTS idx_backtest_runs_created ON backtest_runs(created_at);
+
+-- Learn engine (Sprint D, Track 1). Single local user, same spirit as
+-- paper_account's singleton row — no user_id columns. Lesson CONTENT lives in
+-- content/learn/**/*.md (Track 2), never in these tables; every figure a
+-- lesson quotes is computed live by server/learn/variables.js.
+
+CREATE TABLE IF NOT EXISTS learn_progress (
+  lesson_id          TEXT PRIMARY KEY,
+  status             TEXT    NOT NULL DEFAULT 'not_started', -- not_started | in_progress | completed | mastered
+  score_pct          REAL,
+  apply_action_done  INTEGER NOT NULL DEFAULT 0,
+  started_at         TEXT,
+  completed_at       TEXT,
+  updated_at         TEXT    NOT NULL
+);
+
+-- Per-step position within a lesson (the "Esc saves position" resume point
+-- and closed-book check answers). One row per (lesson, step).
+CREATE TABLE IF NOT EXISTS learn_step_progress (
+  id          TEXT PRIMARY KEY,
+  lesson_id   TEXT    NOT NULL,
+  step_index  INTEGER NOT NULL,
+  status      TEXT    NOT NULL DEFAULT 'pending', -- pending | correct | wrong | skipped
+  answer      TEXT    DEFAULT '{}',
+  updated_at  TEXT    NOT NULL,
+  UNIQUE (lesson_id, step_index)
+);
+CREATE INDEX IF NOT EXISTS idx_learn_step_progress_lesson ON learn_step_progress(lesson_id);
+
+-- 1:1 with ts-fsrs's Card shape (server/learn/fsrs.js). A card is created the
+-- first time a lesson's ::check step is answered Wrong/Hard and enters the
+-- spaced-repetition review queue.
+CREATE TABLE IF NOT EXISTS learn_cards (
+  id              TEXT    PRIMARY KEY,
+  lesson_id       TEXT    NOT NULL,
+  step_index      INTEGER NOT NULL,
+  due             TEXT    NOT NULL,
+  stability       REAL    NOT NULL DEFAULT 0,
+  difficulty      REAL    NOT NULL DEFAULT 0,
+  elapsed_days    INTEGER NOT NULL DEFAULT 0,
+  scheduled_days  INTEGER NOT NULL DEFAULT 0,
+  learning_steps  INTEGER NOT NULL DEFAULT 0,
+  reps            INTEGER NOT NULL DEFAULT 0,
+  lapses          INTEGER NOT NULL DEFAULT 0,
+  state           INTEGER NOT NULL DEFAULT 0,   -- ts-fsrs State enum (0 New .. 3 Relearning)
+  last_review     TEXT,
+  created_at      TEXT    NOT NULL,
+  UNIQUE (lesson_id, step_index)
+);
+CREATE INDEX IF NOT EXISTS idx_learn_cards_due ON learn_cards(due);
+
+-- Append-only ts-fsrs review history, one row per grading.
+CREATE TABLE IF NOT EXISTS learn_reviews (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id            TEXT    NOT NULL REFERENCES learn_cards(id) ON DELETE CASCADE,
+  rating             INTEGER NOT NULL,          -- ts-fsrs Rating enum (1 Again .. 4 Easy)
+  state              INTEGER NOT NULL,
+  due                TEXT,
+  stability          REAL,
+  difficulty         REAL,
+  elapsed_days       INTEGER,
+  last_elapsed_days  INTEGER,
+  scheduled_days     INTEGER,
+  reviewed_at        TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_learn_reviews_card ON learn_reviews(card_id);
+
+-- Apply-action registry ledger (server/learn/apply.js). Every write a lesson
+-- triggers goes through the existing validators/store functions and is
+-- recorded here; undo replays the `before` snapshot in activity_log.
+CREATE TABLE IF NOT EXISTS learn_applied_actions (
+  id                TEXT PRIMARY KEY,
+  lesson_id         TEXT,
+  action            TEXT    NOT NULL,
+  params            TEXT    DEFAULT '{}',
+  entity_type       TEXT,
+  entity_id         TEXT,
+  activity_log_id   INTEGER REFERENCES activity_log(id) ON DELETE SET NULL,
+  applied_at        TEXT    NOT NULL,
+  undone_at         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_learn_applied_actions_lesson ON learn_applied_actions(lesson_id);
+
+CREATE TABLE IF NOT EXISTS learn_settings (
+  id                   TEXT PRIMARY KEY DEFAULT 'default',
+  daily_card_cap       INTEGER NOT NULL DEFAULT 20,
+  session_minutes_cap  INTEGER NOT NULL DEFAULT 7,
+  core_retention       REAL    NOT NULL DEFAULT 0.90,
+  trivia_retention     REAL    NOT NULL DEFAULT 0.85,
+  updated_at           TEXT
+);
+
+CREATE TABLE IF NOT EXISTS learn_streak (
+  id                TEXT PRIMARY KEY DEFAULT 'default',
+  current_streak    INTEGER NOT NULL DEFAULT 0,
+  longest_streak    INTEGER NOT NULL DEFAULT 0,
+  last_active_date  TEXT,
+  updated_at        TEXT
+);
+
+-- Generic idempotent event log for the Learn engine — unique on
+-- (reason, source_type, source_id); re-processing the same source updates
+-- `data`/`updated_at` in place rather than duplicating a row. Used by
+-- content.js's content-sync idempotency and by lesson-completion events.
+CREATE TABLE IF NOT EXISTS learn_events (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  reason        TEXT    NOT NULL,
+  source_type   TEXT    NOT NULL,
+  source_id     TEXT    NOT NULL,
+  data          TEXT    DEFAULT '{}',
+  created_at    TEXT    NOT NULL,
+  updated_at    TEXT    NOT NULL,
+  UNIQUE (reason, source_type, source_id)
+);
+
+-- General-purpose undo ledger. apply.js is the first writer; the shape is
+-- generic on purpose (source/action/entity + before/after JSON snapshots) so
+-- any future "apply a change, allow undo" surface can reuse it.
+CREATE TABLE IF NOT EXISTS activity_log (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  source        TEXT    NOT NULL,               -- e.g. 'learn'
+  action        TEXT    NOT NULL,
+  entity_type   TEXT    NOT NULL,
+  entity_id     TEXT,
+  before        TEXT,                           -- JSON snapshot pre-write (null = row didn't exist)
+  after         TEXT,                           -- JSON snapshot post-write (null = row was deleted)
+  created_at    TEXT    NOT NULL,
+  undone_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_activity_log_source ON activity_log(source);
