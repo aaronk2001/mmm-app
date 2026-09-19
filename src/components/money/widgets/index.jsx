@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Wallet, TrendingUp, Zap, PiggyBank, Target, Landmark, Receipt,
-  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3, Sparkles, Hourglass,
+  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3, Sparkles, Hourglass, GraduationCap, ArrowRight,
 } from 'lucide-react';
 import InsightsWidget from './InsightsWidget';
 import Grade from '../shared/Grade';
@@ -370,6 +371,49 @@ function Runway() {
   );
 }
 
+// Picks the lesson to resume/start: an in-progress one first (so the widget
+// never abandons a half-finished lesson), else the first not-started lesson
+// in module order. `null` means every lesson is done — a genuinely positive
+// state, not an error.
+function pickTodaysLesson(lessons) {
+  return lessons.find((l) => l.status === 'in_progress') || lessons.find((l) => l.status === 'not_started') || null;
+}
+
+function TodaysLesson() {
+  const { data, isLoading } = useApi('learn/lessons');
+  const { data: due } = useApi('learn/review/session');
+  if (isLoading) return <Loading />;
+  const lessons = data?.lessons || [];
+  const lesson = pickTodaysLesson(lessons);
+  const dueCount = due?.cards?.length || 0;
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {lesson ? (
+        <Link to={`/learn/lesson/${lesson.id}`} className="m-no-drag" style={{ textDecoration: 'none', display: 'block' }}>
+          <div style={{ fontSize: 11, color: 'var(--m-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+            {lesson.status === 'in_progress' ? 'Continue' : "Today's lesson"}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--m-ink)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {lesson.title}
+            <ArrowRight size={15} style={{ color: 'var(--m-accent)', flexShrink: 0 }} aria-hidden="true" />
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--m-ink-2)', marginTop: 4 }}>{lesson.est_minutes} min</div>
+        </Link>
+      ) : (
+        <Empty>You've worked through every lesson — nice going.</Empty>
+      )}
+      <Link to="/learn/review" className="m-no-drag" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderTop: '1px solid var(--m-border)', paddingTop: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--m-ink-2)' }}>Spaced review</span>
+        <span style={{ color: dueCount > 0 ? 'var(--m-accent)' : 'var(--m-muted)', fontWeight: 600, ...num }}>
+          {dueCount > 0 ? `${dueCount} due` : 'All caught up'}
+        </span>
+      </Link>
+    </div>
+  );
+}
+
 // ── registry ─────────────────────────────────────────────────────────────────
 // defaultLayout uses a 12-col grid; rowHeight ~80px. `scroll` => content area
 // gets its own overflow; chart widgets fill height instead.
@@ -386,6 +430,7 @@ export const WIDGETS = {
   spendingDonut:      { title: 'Spending by Category',  icon: PieIcon,       layout: { w: 4, h: 3, minW: 3, minH: 3 }, Component: SpendingDonut },
   incomeExpense:      { title: 'Income vs. Expenses',   icon: BarChart3,     layout: { w: 4, h: 3, minW: 3, minH: 2 }, Component: IncomeExpense },
   customMetric:       { title: 'Custom Metric',        icon: Calculator,    layout: { w: 4, h: 3, minW: 3, minH: 3 }, Component: CustomMetric, scroll: true },
+  todaysLesson:       { title: "Today's Lesson",       icon: GraduationCap, layout: { w: 4, h: 3, minW: 3, minH: 3 }, Component: TodaysLesson },
 };
 
 // Dashboard presets — quick layouts users can apply from the Overview toolbar.
@@ -424,4 +469,5 @@ export const DEFAULT_LAYOUT = [
   { i: 'budgets',            x: 0, y: 10, w: 4, h: 4 },
   { i: 'goals',              x: 4, y: 10, w: 4, h: 4 },
   { i: 'recentTransactions', x: 8, y: 10, w: 4, h: 5 },
+  { i: 'todaysLesson',       x: 0, y: 15, w: 4, h: 3 },
 ];
