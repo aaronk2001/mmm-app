@@ -13,9 +13,20 @@ roadmap), **Cut** (deliberately not being rebuilt — see reason).
 
 ## Dashboard
 
+`src/components/dashboard/DashboardTab.jsx` mounts `MarketStrip`, four
+trading `MetricCard`s, `QuickActions`, `PortfolioSummary`, `MacroDashboard`,
+`DashboardBettingCard`, `ChartPanel`, `Watchlist`, and `MarketHeatmap` — a
+market/trading-heavy dashboard, not a net-worth one.
+
 | NEXUS feature | Status | Where it lives now / why cut |
 |---|---|---|
-| Dashboard tab (net worth, quick stats) | Ported | `src/components/money/sections/Overview.jsx` + `AccountsNetWorth.jsx` — rebuilt on mmm-app's own ledger data, not a straight code port. |
+| Net worth, quick stats (the finance-relevant slice of the dashboard) | Ported | `src/components/money/sections/Overview.jsx` + `AccountsNetWorth.jsx` — rebuilt on mmm-app's own ledger data, not a straight code port. |
+| `MarketStrip` (ticker strip) | Cut | No mmm-app equivalent. Market data in mmm-app is opt-in/on-request (see Markets section below), not surfaced as an always-visible dashboard strip. |
+| `PortfolioSummary` | Cut | No mmm-app equivalent. Paper-trading summary data exists (`server/trading/routes.js` `/summary`) but isn't surfaced as a dashboard card outside the Trades tab. |
+| `MarketHeatmap` | Cut | No mmm-app equivalent. |
+| `DashboardBettingCard` | Cut | Betting is cut entirely (see Betting section below); this dashboard card goes with it. |
+| `ChartPanel`, `Watchlist` (as dashboard cards) | Ported (elsewhere) | Both live on, and are only reachable from, `sections/Markets.jsx` (`parts/markets/Chart.jsx`, `parts/markets/Watchlist.jsx`) — not surfaced on mmm-app's Overview/Dashboard equivalent. |
+| `QuickActions` | Cut | No dashboard quick-action shortcuts in mmm-app; each section is reached via the sidebar/command palette instead. |
 
 ## Markets (`MARKETS_TABS`: chart, screener, macro, sectors, futures, crypto, forex)
 
@@ -53,6 +64,7 @@ Net: the entire Intelligence tab is gone. Nothing in mmm-app replaces it yet.
 | War Room (`WarRoom`, multi-agent debate) | Cut | AI/Desk. Depended on `server/routes/desk.js` → `nexus/desk-engine.js` (SSE agent debate stream). No LLM contract. |
 | Ensemble mode (`EnsembleMode`) | Cut | AI/Desk. `server/ensemble/routes.js`. Same reason. |
 | ML signals (`MLSignalCard`) | Cut | Depended on a local Python sidecar at `127.0.0.1:5003` (`server/routes/ml.js`, `predict.js`) — that sidecar isn't part of mmm-app and wasn't rebuilt. |
+| Trade card (`TradeCard`, Signals sub-tab, `src/App.jsx:25`) | Cut | No mmm-app equivalent. Renders an AI-generated trade signal (direction/entry/stop/target/thesis, labeled "NEXUS Module 1 — Trade Signal" in its own source) fed by the same signal-generation backend as ML signals/War Room; not rebuilt. |
 | Trend card (`TrendCard`) | Cut | Same Python-sidecar dependency as ML signals. |
 | Backtest panel | **Ported** | `sections/Trades.jsx` → `parts/trades/Backtest.jsx`; server `server/backtest/routes.js` — rebuilt as a pure-JS backtester (Sprint B), not a proxy to any external service. This is the one AI-adjacent-sounding feature that survived, because it never actually needed an LLM. |
 | Analytics panel | Cut | Portfolio analytics tied to the AI analyst engine — not rebuilt standalone. |
@@ -129,6 +141,7 @@ instead of staying a standalone section.
 | Onboarding modal | Ported (mmm-native) | `shared/OnboardingModal.jsx` exists in mmm-app independent of NEXUS. |
 | Command palette | Ported (mmm-native) | `shared/CommandPalette.jsx`, consumes `MoneyHub.jsx`'s `SECTIONS`. |
 | Keyboard shortcuts modal | Ported (mmm-native) | `shared/KeyboardShortcuts.jsx`. |
+| Market header (`MarketHeader`, persistent market ticker header, `src/App.jsx:7`) | Cut | No mmm-app equivalent. Consistent with market data being opt-in/on-request in mmm-app rather than an always-on background feed (see Markets and Dashboard sections above). |
 
 ## Summary of deliberate cuts (per the sprint plan's explicit list)
 
