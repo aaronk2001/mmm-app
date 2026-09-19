@@ -158,10 +158,10 @@ function computeVariables({
   const noExpenseSignal = ef.monthlyExpenses <= 0;
   out.ef_months_covered = noExpenseSignal
     ? { value: SAMPLE_DATA.ef_months_covered, formatted: `${SAMPLE_DATA.ef_months_covered} months`, grade: 'C', sample: true }
-    : { value: ef.monthsCovered, formatted: `${ef.monthsCovered} months`, grade: 'B', sample: false };
+    : { value: ef.monthsCovered, formatted: `${ef.monthsCovered} months`, grade: gradeFromHistoryDays(historyDays60), sample: false };
   out.ef_target = noExpenseSignal
     ? { value: SAMPLE_DATA.ef_target, formatted: usd0.format(SAMPLE_DATA.ef_target), grade: 'C', sample: true }
-    : { value: ef.targetAmount, formatted: usd0.format(ef.targetAmount), grade: 'B', sample: false };
+    : { value: ef.targetAmount, formatted: usd0.format(ef.targetAmount), grade: gradeFromHistoryDays(historyDays60), sample: false };
 
   // ── budget_variance_top3 ─────────────────────────────────────────────────
   // Rows carry {name, formatted} (in addition to raw fields) because lesson
@@ -181,15 +181,19 @@ function computeVariables({
           limit: b.limit,
           spent: b.spent,
           variance,
-          formatted: `${usd0.format(Math.abs(variance))} ${variance >= 0 ? 'over' : 'under'}`,
+          formatted: variance === 0 ? 'on budget' : `${usd0.format(Math.abs(variance))} ${variance > 0 ? 'over' : 'under'}`,
         };
       })
       .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))
       .slice(0, 3);
+    // computeBudgetStatus only evaluates period === 'monthly' budgets, so a
+    // user with only weekly/annual budgets lands here too — that's an absence
+    // of evidence (the filter, not the data), not a graded-A "no variance"
+    // result, so it can't claim grade A.
     const formatted = rows.length
       ? rows.map((r) => `${r.name}: ${r.formatted}`).join('; ')
       : 'No budget activity yet this month';
-    out.budget_variance_top3 = { value: rows, formatted, grade: 'A', sample: false };
+    out.budget_variance_top3 = { value: rows, formatted, grade: rows.length ? 'A' : 'C', sample: false };
   }
 
   // ── recurring_monthly ────────────────────────────────────────────────────
@@ -197,21 +201,34 @@ function computeVariables({
     out.recurring_monthly = { value: SAMPLE_DATA.recurring_monthly, formatted: usd0.format(SAMPLE_DATA.recurring_monthly), grade: 'C', sample: true };
   } else {
     const total = recurring.filter((r) => r.kind !== 'income').reduce((s, r) => s + perMonth(r.amount, r.cadence), 0);
-    out.recurring_monthly = { value: Math.round(total * 100) / 100, formatted: usd0.format(total), grade: 'A', sample: false };
+    // recurring includes payees whose "recurring" status is itself inferred
+    // from transaction history (server/learn/routes.js runs detection before
+    // handing this in) — ground the grade in the same trailing-60-day history
+    // depth used for savings_rate/monthly_surplus, rather than asserting A
+    // regardless of how little history backs the detection.
+    out.recurring_monthly = { value: Math.round(total * 100) / 100, formatted: usd0.format(total), grade: gradeFromHistoryDays(historyDays60), sample: false };
   }
 
   // ── largest_outflow ──────────────────────────────────────────────────────
+  // This is a SUM of a payee's outflows across the trailing 90-day window
+  // (server/money/runway.js), not a single current bill — the formatted
+  // string must say so, or lesson prose that quotes it back as "your largest
+  // outflow right now" states a 3x-inflated number as fact (e.g. rent posted
+  // 3x in 90 days reads as one $5,400 outflow). Grade follows the same
+  // history-depth evidence runway_days uses for the identical window
+  // (server/money/runway.js's own A/B/C doc comment: full 90-day history
+  // earns A, >=14 days earns B, thinner is C) rather than a flat 'A'.
   out.largest_outflow = !runway.largestOutflow
     ? {
         value: SAMPLE_DATA.largest_outflow,
-        formatted: `${SAMPLE_DATA.largest_outflow.payee} — ${usd0.format(SAMPLE_DATA.largest_outflow.amount)}`,
+        formatted: `${SAMPLE_DATA.largest_outflow.payee} — ${usd0.format(SAMPLE_DATA.largest_outflow.amount)} over the last 90 days`,
         grade: 'C',
         sample: true,
       }
     : {
         value: runway.largestOutflow,
-        formatted: `${runway.largestOutflow.payee} — ${usd0.format(runway.largestOutflow.amount)}`,
-        grade: 'A',
+        formatted: `${runway.largestOutflow.payee} — ${usd0.format(runway.largestOutflow.amount)} over the last 90 days`,
+        grade: gradeFromHistoryDays(runway.historyDays, 90),
         sample: false,
       };
 

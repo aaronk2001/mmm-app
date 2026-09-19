@@ -23,7 +23,7 @@ function toNum(v, fallback = 0) {
 // invented number) — the user can edit anything before confirming, and
 // nothing is written until they press Confirm. See server/learn/apply.js
 // for what each action actually validates and writes.
-function buildDefaults(action, variables) {
+export function buildDefaults(action, variables) {
   const v = (name) => variables?.[name]?.value;
   if (action === 'create_goal') {
     const target = toNum(v('ef_target'), 6000);
@@ -35,8 +35,14 @@ function buildDefaults(action, variables) {
     return { category_id: top?.category_id || '', period: 'monthly', limit: top ? Math.round(Math.max(top.limit || 0, top.spent || 0)) : 200, rollover: false };
   }
   if (action === 'add_recurring') {
+    // `largest_outflow.amount` is a 90-day TOTAL for the payee (see
+    // server/money/runway.js), not a single bill amount — pre-filling it
+    // straight into a monthly recurring amount silently writes a guess that
+    // can be several times the real bill (e.g. rent posted 3x in 90 days).
+    // The payee name is safe to carry over; the amount is left for the user
+    // to enter from the actual bill.
     const outflow = v('largest_outflow') || {};
-    return { payee: outflow.payee || '', amount: outflow.amount ? Math.round(outflow.amount * 100) / 100 : 0, cadence: 'monthly', kind: 'bill', next_date: '', account_id: '' };
+    return { payee: outflow.payee || '', amount: '', cadence: 'monthly', kind: 'bill', next_date: '', account_id: '' };
   }
   if (action === 'enable_rollover') {
     return { budget_id: '' };
@@ -146,7 +152,10 @@ export default function ApplyConfirm({ action, variables, onCancel, onConfirm, s
         <>
           <div style={{ display: 'flex', gap: 12 }}>
             <Field label="Payee"><input className="m-input" value={form.payee} onChange={set('payee')} required /></Field>
-            <Field label="Amount"><input className="m-input" type="number" step="0.01" value={form.amount} onChange={set('amount')} required /></Field>
+            <Field label="Amount"><input className="m-input" type="number" step="0.01" min="0.01" value={form.amount} onChange={set('amount')} required /></Field>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--m-ink-2)' }}>
+            Enter the actual bill amount — the lesson's outflow figure is a 90-day total, not a single month's charge, so it isn't pre-filled here.
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <Field label="Cadence">

@@ -19,7 +19,7 @@ The committed part is easiest to see in your recurring bills: right now those ad
 **{{recurring_monthly.formatted}} per month**, showing up whether you think about them or not.
 Everything else is discretionary — spending you actually choose each time.
 
-Your single largest outflow right now is **{{largest_outflow.formatted}}**. That's worth knowing
+Your largest single-payee outflow over the last 90 days is **{{largest_outflow.formatted}}**. That's worth knowing
 by name, because a burn rate is not one undifferentiated number — it's dominated by a small number
 of large items, and this is the largest one currently working against your {{runway_days.formatted}}-day runway.
 
