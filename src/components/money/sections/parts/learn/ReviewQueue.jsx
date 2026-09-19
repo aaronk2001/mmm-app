@@ -5,6 +5,7 @@ import { api, useApi } from '../../../../../lib/query';
 import { toast } from '../../../../../lib/toast';
 import Skeleton from '../../../shared/Skeleton';
 import ErrorState from '../../../shared/ErrorState';
+import { shouldHandleEscapeKey } from './resume';
 
 // Mirrors server/learn/fsrs.js's SESSION_CARD_CAP/SESSION_MINUTES_CAP. Those
 // constants live in a server-only module (it requires ts-fsrs, a server
@@ -59,7 +60,7 @@ export default function ReviewQueue() {
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') navigate('/learn');
+      if (shouldHandleEscapeKey(e)) navigate('/learn');
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

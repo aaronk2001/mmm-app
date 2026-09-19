@@ -4,7 +4,7 @@
 // resume-index + mastery-gate logic the runner calls directly, against the
 // same step-progress shape GET /lessons/:id returns.
 import { describe, it, expect } from 'vitest';
-import { findResumeStepIndex, allStepsDone, passesMasteryGate } from '../src/components/money/sections/parts/learn/resume.js';
+import { findResumeStepIndex, allStepsDone, passesMasteryGate, shouldHandleEscapeKey } from '../src/components/money/sections/parts/learn/resume.js';
 
 function steps(statuses) {
   return statuses.map((status, index) => ({ index, progress: { status } }));
@@ -57,5 +57,39 @@ describe('passesMasteryGate', () => {
   });
   it('treats a null score as 0 for a gated lesson', () => {
     expect(passesMasteryGate({ gate: true, scorePct: null, applyActionDone: true })).toBe(false);
+  });
+});
+
+// I5: LessonRunner.jsx / ReviewQueue.jsx bind a global Escape-to-leave
+// listener — this must not fire while the user is typing in a form field
+// (e.g. ApplyConfirm's amount input), or it silently discards their edit.
+describe('shouldHandleEscapeKey (I5)', () => {
+  it('handles Escape when focus is not in a form field', () => {
+    expect(shouldHandleEscapeKey({ key: 'Escape', target: { tagName: 'DIV' } })).toBe(true);
+  });
+
+  it('handles Escape when there is no event target at all', () => {
+    expect(shouldHandleEscapeKey({ key: 'Escape', target: null })).toBe(true);
+  });
+
+  it('ignores Escape while focus is inside an input', () => {
+    expect(shouldHandleEscapeKey({ key: 'Escape', target: { tagName: 'INPUT' } })).toBe(false);
+  });
+
+  it('ignores Escape while focus is inside a textarea', () => {
+    expect(shouldHandleEscapeKey({ key: 'Escape', target: { tagName: 'TEXTAREA' } })).toBe(false);
+  });
+
+  it('ignores Escape while focus is inside a contentEditable element', () => {
+    expect(shouldHandleEscapeKey({ key: 'Escape', target: { tagName: 'DIV', isContentEditable: true } })).toBe(false);
+  });
+
+  it('ignores any other key regardless of focus', () => {
+    expect(shouldHandleEscapeKey({ key: 'Enter', target: { tagName: 'DIV' } })).toBe(false);
+  });
+
+  it('never throws on a missing/malformed event', () => {
+    expect(shouldHandleEscapeKey(undefined)).toBe(false);
+    expect(shouldHandleEscapeKey({})).toBe(false);
   });
 });

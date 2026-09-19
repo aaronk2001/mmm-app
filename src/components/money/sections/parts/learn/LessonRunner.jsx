@@ -6,7 +6,7 @@ import { toast } from '../../../../../lib/toast';
 import Skeleton from '../../../shared/Skeleton';
 import ErrorState from '../../../shared/ErrorState';
 import StepView from './StepView';
-import { findResumeStepIndex, passesMasteryGate } from './resume';
+import { findResumeStepIndex, passesMasteryGate, shouldHandleEscapeKey } from './resume';
 
 function EndScreen({ lesson, lessonProgress, onReview, onBackToLessons }) {
   const gateOk = passesMasteryGate({ gate: lesson.gate, scorePct: lessonProgress?.score_pct, applyActionDone: lessonProgress?.apply_action_done });
@@ -74,7 +74,7 @@ export default function LessonRunner() {
   // which is correct — it was never "finished".
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') navigate('/learn');
+      if (shouldHandleEscapeKey(e)) navigate('/learn');
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
