@@ -30,7 +30,12 @@ const ALLOWED_FIELDS = new Set(['value', 'formatted', 'grade', 'sample']);
 // consumed (Mustache "standalone tag" convention), matching how real lesson
 // content is authored (each tag on its own line).
 const SECTION_RE = /\{\{#([a-zA-Z0-9_]+)\}\}\r?\n?([\s\S]*?)\{\{\/\1\}\}\r?\n?/g;
-const SCALAR_RE = /\{\{([a-zA-Z0-9_.]+)\}\}/g;
+// Loose enough to also CATCH a malformed tag like `{{ liquid }}` (stray
+// inner whitespace) or `{{}}` (empty) — renderScalars below rejects anything
+// that isn't byte-for-byte the strict `{{name}}`/`{{name.field}}` form and
+// reports it in `missing`, rather than leaving the literal braces unmatched
+// (and therefore silently unreported) in the rendered output.
+const SCALAR_RE = /\{\{\s*([a-zA-Z0-9_.]*)\s*\}\}/g;
 
 function getOwn(obj, key) {
   return obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
@@ -46,7 +51,16 @@ function escapeHtml(s) {
 }
 
 function renderScalars(text, item, variables, missing) {
-  return text.replace(SCALAR_RE, (full, path) => {
+  return text.replace(SCALAR_RE, (full, rawPath) => {
+    const path = rawPath.trim();
+    // Reject anything not written in the exact supported `{{name}}` /
+    // `{{name.field}}` form — e.g. `{{ liquid }}` (stray inner whitespace)
+    // or `{{}}` (empty) — so the authoring typo is reported instead of
+    // shipping literal braces to the user.
+    if (path === '' || full !== `{{${path}}}`) {
+      missing.push(path || full);
+      return '';
+    }
     const parts = path.split('.');
     let value;
 
@@ -69,6 +83,14 @@ function renderScalars(text, item, variables, missing) {
     }
 
     if (value === undefined || value === null) {
+      missing.push(path);
+      return '';
+    }
+    // A field like `debt_ledger.value` (a per-lender breakdown array) or a
+    // variable's own `.value` object has no sensible scalar rendering —
+    // escapeHtml would silently stringify it to "[object Object]"/"a,b,c"
+    // instead of surfacing the authoring mistake.
+    if (typeof value === 'object') {
       missing.push(path);
       return '';
     }

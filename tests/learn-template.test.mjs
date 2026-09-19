@@ -31,6 +31,29 @@ describe('learn/template — scalar substitution', () => {
     expect(html).toBe('');
     expect(missing).toContain('not_a_real_variable');
   });
+
+  // Minor fixes: an object-valued `.value` field and a stray-whitespace tag
+  // both used to render silently-wrong output (`[object Object]` / the
+  // literal `{{ liquid }}` braces) with nothing surfaced in `missing` for
+  // check:learn-content to catch.
+  it('reports an object-valued field (e.g. debt_ledger.value) as missing instead of rendering [object Object]', () => {
+    const vars = { debt_ledger: { value: [{ lender: 'Visa', apr: 24 }], formatted: '1 debt', grade: 'B', sample: false } };
+    const { html, missing } = render('{{debt_ledger.value}}', vars);
+    expect(html).toBe('');
+    expect(html).not.toContain('[object Object]');
+    expect(missing).toContain('debt_ledger.value');
+  });
+
+  it('reports a tag with stray inner whitespace (e.g. {{ liquid }}) as missing instead of leaving it unrendered', () => {
+    const { html, missing } = render('You have {{ liquid }} on hand.', VARS);
+    expect(html).toBe('You have  on hand.');
+    expect(html).not.toContain('{{');
+    expect(missing).toContain('liquid');
+  });
+
+  it('a well-formed tag with no inner whitespace still renders normally', () => {
+    expect(render('{{runway_days}}', VARS).html).toBe('42 days');
+  });
 });
 
 describe('learn/template — sections (array iteration)', () => {
