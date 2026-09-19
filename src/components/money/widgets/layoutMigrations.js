@@ -1,6 +1,6 @@
 // Ordered, idempotent dashboard-layout migrations. Replaces the old
 // insightsSeeded / insightsGrown / isCollapsedLayout flag pile.
-export const LAYOUT_VERSION = 3;
+export const LAYOUT_VERSION = 4;
 
 const RIGHT_COL_X = 8;
 function pushDown(layout, pred, by) { return layout.map(l => (pred(l) ? { ...l, y: l.y + by } : l)); }
@@ -11,6 +11,12 @@ const MIGRATIONS = [
   { v: 2, up: (layout) => layout.map(l => (l.i === 'insights' && l.h < 6 ? { ...l, h: 6 } : l)) },
   { v: 3, up: (layout, defs) => (!defs.runway || layout.some(l => l.i === 'runway') ? layout
       : [{ i: 'runway', x: RIGHT_COL_X, y: 0, w: defs.runway.w, h: defs.runway.h }, ...pushDown(layout, l => l.x + l.w > RIGHT_COL_X, defs.runway.h)]) },
+  // Sprint D, Wave 2: appends the new Today's Lesson widget below whatever
+  // an existing user already has, rather than inserting into the middle of
+  // their layout — avoids reflowing rows they've already arranged, unlike
+  // the runway migration above (which had a specific column to slot into).
+  { v: 4, up: (layout, defs) => (!defs.todaysLesson || layout.some(l => l.i === 'todaysLesson') ? layout
+      : [...layout, { i: 'todaysLesson', x: 0, y: layout.reduce((max, l) => Math.max(max, l.y + l.h), 0), w: defs.todaysLesson.w, h: defs.todaysLesson.h }]) },
 ];
 
 export function migrateLayout(saved, fromVersion, defs) {
