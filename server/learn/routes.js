@@ -29,7 +29,8 @@ const CONTENT_DIR = path.join(__dirname, '..', '..', 'content');
 const router = express.Router();
 
 function currentVariables() {
-  return variables.computeVariables(store.readData());
+  const data = store.readData();
+  return variables.computeVariables({ ...data, recurring: store.detectRecurring(data.transactions, data.recurring) });
 }
 
 function findLesson(id) {
