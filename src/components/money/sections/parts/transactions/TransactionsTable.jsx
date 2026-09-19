@@ -90,7 +90,7 @@ export default function TransactionsTable({
           {filteredTransactions.map((txn, idx) => {
             const sel = selectedIds.has(txn.id);
             return (
-              <tr key={txn.id} style={{ borderBottom: '1px solid var(--m-border)', backgroundColor: sel ? 'rgba(0,113,227,0.08)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,113,227,0.02)') }}>
+              <tr key={txn.id} style={{ borderBottom: '1px solid var(--m-border)', backgroundColor: sel ? 'var(--m-accent-soft)' : (idx % 2 === 0 ? 'transparent' : 'var(--m-table-stripe)') }}>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
                   <input type="checkbox" checked={sel} onChange={() => onToggleRow(txn.id)} aria-label="Select row" style={{ cursor: 'pointer' }} />
                 </td>
@@ -118,8 +118,8 @@ export default function TransactionsTable({
                 <td style={{ padding: '8px 12px', color: 'var(--m-ink-2)', fontSize: 13 }}>{getAccountLabel(txn.account_id)}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                   {editing(txn.id, 'amount') ? cellInput('number', 'right') : (
-                    <div onClick={() => onStartEdit(txn.id, 'amount')} title="Click to edit" style={{ cursor: 'text' }}>
-                      <Money value={txn.amount} className={txn.amount > 0 ? 'positive' : 'negative'} style={{ color: txn.amount > 0 ? 'var(--m-green)' : 'var(--m-red)', fontWeight: 600 }} />
+                    <div onClick={() => onStartEdit(txn.id, 'amount')} title="Click to edit" style={{ cursor: 'text', color: txn.amount > 0 ? 'var(--m-green)' : 'var(--m-red)', fontWeight: 600 }}>
+                      <Money value={txn.amount} />
                     </div>
                   )}
                 </td>

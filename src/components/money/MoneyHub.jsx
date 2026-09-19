@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom';
+import { MotionConfig } from 'motion/react';
 import {
   LayoutDashboard,
   Wallet,
@@ -14,9 +15,7 @@ import {
   Settings,
   Compass,
   LineChart,
-  Brain,
   CandlestickChart,
-  Newspaper,
   ChevronDown,
 } from 'lucide-react';
 import '../../styles/money-theme.css';
@@ -84,10 +83,8 @@ const SECTIONS = [
   { id: 'reports',      label: 'Reports',              icon: FileText,        group: 'money' },
   { id: 'plan',         label: 'Plan',                 icon: Compass,         group: 'plan' },
   { id: 'markets',      label: 'Markets',              icon: LineChart,       group: 'invest' },
-  { id: 'desk',         label: 'Desk',                 icon: Brain,           group: 'invest', soon: 'The research desk lands after the LLM contract.' },
   { id: 'trades',       label: 'Trades',               icon: CandlestickChart, group: 'invest' },
   { id: 'learn',        label: 'Learn',                icon: GraduationCap,   group: 'grow' },
-  { id: 'media',        label: 'Media',                icon: Newspaper,       group: 'grow', soon: 'News and video land with the media rebuild.' },
   { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },      // ungrouped, pinned to the bottom
 ];
 
@@ -271,6 +268,7 @@ export default function MoneyHub() {
   };
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="money-hub" style={{ minHeight: '100vh', display: 'flex' }}>
       <nav
         style={{
@@ -384,5 +382,6 @@ export default function MoneyHub() {
       <Toasts />
       <ConfirmHost />
     </div>
+    </MotionConfig>
   );
 }

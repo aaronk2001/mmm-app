@@ -15,6 +15,11 @@
   --m-border: var(--border);
   --m-accent: var(--accent);
   --m-accent-soft: var(--accent-soft);
+  /* Added Sprint C Track 1: legible text/icon colour on an --m-accent fill.
+     Flips dark-on-light in the light theme (accent-ink is #fff there) so
+     literal '#fff'/'white' on accent chips in Debt.jsx/CashFlow.jsx can
+     become a real token instead of a hardcoded literal. */
+  --m-accent-ink: var(--accent-ink);
   --m-green: var(--positive);
   --m-green-bg: color-mix(in srgb, var(--positive) 10%, transparent);
   --m-red: var(--negative);
@@ -36,6 +41,13 @@
   --m-shadow: var(--shadow-card);
   --m-shadow-md: 0 2px 8px rgba(16, 24, 40, 0.1);
   --m-shadow-lg: 0 10px 32px rgba(16, 24, 40, 0.12);
+  /* A switch knob is a fixed light puck in both themes, not a surface color —
+     --m-surface is near-black in dark (#151920) with --m-shadow resolving to
+     `none` there (flat cards), which made a dark-on-dark knob invisible
+     (~1.15:1) when off. Bridge token so both Toggle implementations can use
+     the same literal instead of one hardcoding #fff and one using
+     --m-surface. */
+  --m-switch-knob: #fff;
 
   background: var(--m-bg);
   color: var(--m-ink);
@@ -328,6 +340,7 @@
   font-weight: 600;
   color: var(--m-ink);
   line-height: 1.3;
+  margin-top: 0;
   margin-bottom: 4px;
   min-width: 0;
   overflow: hidden;

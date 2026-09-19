@@ -7,6 +7,7 @@ import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
 import Card from '../shared/Card';
 import EmptyState from '../shared/EmptyState';
+import ErrorState from '../shared/ErrorState';
 import { useApi, api } from '../../../lib/query';
 import { fieldsFor, matchesFilter } from '../../../lib/customFields';
 import { useTransactionsData } from './parts/transactions/useTransactionsData';
@@ -404,9 +405,7 @@ export default function Transactions() {
     return (
       <div>
         <SectionHeader icon={TrendingDown} title="Spending" subtitle="Track your transactions" />
-        <Card style={{ background: 'rgba(220, 38, 38, 0.05)', borderColor: 'var(--m-red)' }}>
-          <div style={{ color: 'var(--m-red)', fontWeight: 600 }}>Error: {error}</div>
-        </Card>
+        <ErrorState message={`Error: ${error}`} />
       </div>
     );
   }
