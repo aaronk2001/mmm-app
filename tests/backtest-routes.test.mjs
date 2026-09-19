@@ -144,6 +144,62 @@ describe('POST /run', () => {
     expect(third.body.run.config_hash).not.toBe(first.body.run.config_hash);
   });
 
+  // I6: the config hash used to exclude bar CONTENT (only row shape/config
+  // mattered), so re-uploading corrected bars under an identical config
+  // returned the stale cached run instead of recomputing. The hash now folds
+  // in a cheap per-symbol {count, maxDate} fingerprint of price_bars.
+  it('recomputes (does not reuse) after bars are re-uploaded under an identical config (I6)', async () => {
+    await post('/bars/csv', { symbol: 'AAPL', csv: csvFor(100) });
+    const req = {
+      symbols: ['AAPL'],
+      strategy: { kind: 'buyAndHold', params: { symbol: 'AAPL' } },
+      initialCashCents: 1_000_000,
+    };
+    const first = await post('/run', req);
+    expect(first.body.outcome).toBe('completed');
+
+    // Re-upload one extra bar for the same symbol — same config, different
+    // bar content.
+    const extraCsv = `${csvFor(100)}\n2024-01-19,119.5,120.5,119,120,1000`;
+    await post('/bars/csv', { symbol: 'AAPL', csv: extraCsv });
+
+    const second = await post('/run', req);
+    expect(second.status).toBe(200);
+    expect(second.body.outcome).toBe('completed');
+    expect(second.body.reused).toBeFalsy();
+    expect(second.body.run.config_hash).not.toBe(first.body.run.config_hash);
+    expect(second.body.run.id).not.toBe(first.body.run.id);
+    expect(second.body.run.result.equityCurve.length).toBe(13);
+  });
+
+  // I7: a typo'd strategy symbol (not in the run's own symbol universe)
+  // silently placed no orders and produced a "completed" 0% backtest. Now
+  // rejected as invalid_config, matching the unknown-strategy-kind case.
+  it('reports "invalid_config" when the strategy references a symbol outside the run\'s universe (I7)', async () => {
+    await post('/bars/csv', { symbol: 'AAPL', csv: csvFor(100) });
+    const { status, body } = await post('/run', {
+      symbols: ['AAPL'],
+      strategy: { kind: 'buyAndHold', params: { symbol: 'APPL' } }, // typo
+      initialCashCents: 1_000_000,
+    });
+    expect(status).toBe(400);
+    expect(body.outcome).toBe('invalid_config');
+    expect(body.run.outcome).toBe('invalid_config');
+    expect(body.error).toMatch(/APPL/);
+  });
+
+  it('reports "invalid_config" when a fixedWeightRebalance weight key is outside the universe (I7)', async () => {
+    await post('/bars/csv', { symbol: 'AAPL', csv: csvFor(100) });
+    const { status, body } = await post('/run', {
+      symbols: ['AAPL'],
+      strategy: { kind: 'fixedWeightRebalance', params: { weights: { AAPL: 0.5, MSFT: 0.5 }, everyNBars: 5 } },
+      initialCashCents: 1_000_000,
+    });
+    expect(status).toBe(400);
+    expect(body.outcome).toBe('invalid_config');
+    expect(body.error).toMatch(/MSFT/);
+  });
+
   it('force:true recomputes even when a completed run with the same hash exists', async () => {
     await post('/bars/csv', { symbol: 'AAPL', csv: csvFor(100) });
     const req = {

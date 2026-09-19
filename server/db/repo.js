@@ -765,6 +765,18 @@ function getPriceBars(d, symbol, { from = null, to = null } = {}) {
 function getPriceBarSymbols(d) {
   return d.prepare('SELECT DISTINCT symbol FROM price_bars ORDER BY symbol').all().map((r) => r.symbol);
 }
+// Cheap (COUNT/MAX, no row payload) fingerprint of one symbol's bar content
+// over a date range — used to fold bar CONTENT into a backtest config hash
+// so a re-upload of corrected bars under an unchanged config is recognised
+// as a new run instead of matching a stale cached one.
+function getPriceBarFingerprint(d, symbol, { from = null, to = null } = {}) {
+  let sql = 'SELECT COUNT(*) as count, MAX(date) as maxDate FROM price_bars WHERE symbol = ?';
+  const params = [String(symbol).toUpperCase()];
+  if (from) { sql += ' AND date >= ?'; params.push(from); }
+  if (to) { sql += ' AND date <= ?'; params.push(to); }
+  const row = d.prepare(sql).get(...params);
+  return { count: row.count, maxDate: row.maxDate };
+}
 // Bulk upsert — one call per CSV upload or Yahoo sync. Returns rows written.
 function upsertPriceBars(d, symbol, bars, source = 'csv') {
   const sym = String(symbol).toUpperCase();
@@ -1026,7 +1038,7 @@ module.exports = {
   getImportLog, hasImported, markImported,
   getPriceCache, getPriceCacheEntry, upsertPriceCache,
   getAlertRules, getAlertRule, createAlertRule, updateAlertRule, deleteAlertRule,
-  getPriceBars, getPriceBarSymbols, upsertPriceBars, deletePriceBars,
+  getPriceBars, getPriceBarSymbols, getPriceBarFingerprint, upsertPriceBars, deletePriceBars,
   getStrategies, getStrategy, createStrategy, deleteStrategy,
   getBacktestRuns, getBacktestRun, getBacktestRunsByHash, createBacktestRun,
 };
