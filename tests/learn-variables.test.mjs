@@ -124,13 +124,18 @@ describe('learn/variables — full data', () => {
     expect(vars.recurring_monthly.sample).toBe(false);
     expect(vars.recurring_monthly.value).toBeCloseTo(866.67, 2);
     expect(vars.recurring_monthly.formatted).toBe('$867');
-    expect(vars.recurring_monthly.grade).toBe('A');
+    // grade is grounded in the same trailing-60-day history depth as
+    // monthly_surplus/savings_rate (41 days: >=14, <60) rather than a flat 'A'.
+    expect(vars.recurring_monthly.grade).toBe('B');
   });
 
-  it('largest_outflow picks the biggest payee, excluding transfers', () => {
+  it('largest_outflow picks the biggest payee, excluding transfers, and states its 90-day window', () => {
     expect(vars.largest_outflow.sample).toBe(false);
     expect(vars.largest_outflow.value).toEqual({ payee: 'Landlord LLC', amount: 3000 });
-    expect(vars.largest_outflow.formatted).toBe('Landlord LLC — $3,000');
+    expect(vars.largest_outflow.formatted).toBe('Landlord LLC — $3,000 over the last 90 days');
+    // grade is grounded in runway.js's own historyDays for this window (36
+    // days of spend history here: >=14, <90 => 'B'), not a flat 'A'.
+    expect(vars.largest_outflow.grade).toBe('B');
   });
 
   it('debt_ledger lists loan/credit accounts as positive balances', () => {
@@ -197,5 +202,32 @@ describe('learn/variables — partial data (accounts but no ledger history)', ()
   it('ef_months_covered/ef_target are sample when there is no expense signal', () => {
     expect(vars.ef_months_covered.sample).toBe(true);
     expect(vars.ef_target.sample).toBe(true);
+  });
+});
+
+describe('learn/variables — budget_variance_top3 edge cases (Minor)', () => {
+  it('does not claim grade A when the only budgets are non-monthly (filtered out, not "no variance")', () => {
+    // computeBudgetStatus only evaluates period === 'monthly' budgets, so a
+    // weekly-only budget set produces zero rows here for a filter reason, not
+    // because spend is genuinely on target — that's not gradeable evidence.
+    const vars = computeVariables({
+      accounts: FULL_ACCOUNTS, transactions: FULL_TRANSACTIONS, categories: FULL_CATEGORIES,
+      recurring: FULL_RECURRING, budgets: [{ id: 'b1', category_id: 'fod', period: 'weekly', limit: 100 }],
+    });
+    expect(vars.budget_variance_top3.sample).toBe(false);
+    expect(vars.budget_variance_top3.value).toEqual([]);
+    expect(vars.budget_variance_top3.formatted).toBe('No budget activity yet this month');
+    expect(vars.budget_variance_top3.grade).toBe('C');
+  });
+
+  it('formats an exact-zero variance as "on budget", not "$0 over"', () => {
+    const vars = computeVariables({
+      accounts: FULL_ACCOUNTS, transactions: FULL_TRANSACTIONS, categories: FULL_CATEGORIES,
+      recurring: FULL_RECURRING, budgets: [{ id: 'b1', category_id: 'fod', period: 'monthly', limit: 640 }],
+    });
+    expect(vars.budget_variance_top3.value).toEqual([
+      { category_id: 'fod', name: 'Food', limit: 640, spent: 640, variance: 0, formatted: 'on budget' },
+    ]);
+    expect(vars.budget_variance_top3.grade).toBe('A');
   });
 });

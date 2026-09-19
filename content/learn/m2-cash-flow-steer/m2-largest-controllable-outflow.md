@@ -15,7 +15,7 @@ Not every large expense is worth your attention — a mortgage payment is large 
 scrutinizing it monthly wastes effort. What's worth finding is your largest *controllable* outflow:
 the biggest recurring drain that you actually have a choice about, month to month.
 
-Your single largest outflow right now is **{{largest_outflow.formatted}}**. Whether it belongs on
+Your largest single-payee outflow over the last 90 days is **{{largest_outflow.formatted}}**. Whether it belongs on
 your "worth steering" list depends on one question: is it fixed, or is it a pattern of choices you
 could make differently? Cross-reference it against your current variance list:
 
