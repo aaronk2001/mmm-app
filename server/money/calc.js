@@ -171,6 +171,16 @@ function addMonthsClamped(d, n) {
 
 // Returns a new Date advanced by one cadence period, or null for an
 // unrecognized cadence (caller stops advancing rather than guessing monthly).
+// Local-calendar helpers — mirrors server/money/runway.js. Everything in this
+// file that keys off a day must agree on local time; see projectCashflow.
+function ymdLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function localDateFromStr(s) {
+  const [y, mo, dd] = String(s).slice(0, 10).split('-').map(Number);
+  return new Date(y, mo - 1, dd);
+}
+
 function advanceCadence(d, cadence) {
   if (cadence === 'weekly') { const nd = new Date(d); nd.setDate(nd.getDate() + 7); return nd; }
   if (cadence === 'biweekly') { const nd = new Date(d); nd.setDate(nd.getDate() + 14); return nd; }
@@ -190,19 +200,24 @@ function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary =
   const projection = [];
   const lowBalanceWarnings = [];
   let currentBalance = startBalance;
-  const today = new Date();
+  // Local midnight, not `new Date()`. Dates in this app compare as local
+  // YYYY-MM-DD strings; the previous version built day keys with
+  // toISOString() (UTC) while `new Date('YYYY-MM-DD')` parses as UTC
+  // midnight, and advanceCadence advances with LOCAL getters. West of
+  // Greenwich those three disagree, so an occurrence could land on a day key
+  // that never matched and silently vanish from the forecast.
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   for (let d = 0; d <= days; d++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() + d);
-    const dateStr = date.toISOString().split('T')[0];
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + d);
+    const dateStr = ymdLocal(date);
 
     recurring.forEach(r => {
-      const nextDate = new Date(r.next_date);
-      let checkDate = nextDate;
+      let checkDate = localDateFromStr(r.next_date);
 
       while (checkDate <= date) {
-        if (checkDate.toISOString().split('T')[0] === dateStr) {
+        if (ymdLocal(checkDate) === dateStr) {
           const delta = r.kind === 'income' ? parseFloat(r.amount) : -parseFloat(r.amount);
           currentBalance += delta;
         }

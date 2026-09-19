@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -31,6 +31,64 @@ function applyLoginItem() {
   if (!app.isPackaged) return;
   try { app.setLoginItemSettings({ openAtLogin: !!prefs.launchOnBoot, path: app.getPath('exe') }); }
   catch (e) { console.error('[MMM] setLoginItemSettings failed:', e.message); }
+}
+
+// ─── Online seam — encrypted API keys (Sprint A, Track 1) ───────────────────
+// Keys touch disk only here, only through safeStorage. Never localStorage,
+// never .env, never SQLite — keys.enc lives beside desktop-prefs.json in
+// %APPDATA%\mmm and is excluded from repo.readAll/writeAll, so the backup/
+// export path can never pick it up. The decrypted map is kept in this
+// process's memory only and is pushed to the forked server over the existing
+// fork() IPC channel; it is never written back out by the server.
+const KEYS_FILE = path.join(PREFS_DIR, 'keys.enc');
+const DEV_SECRETS_FILE = path.join(PREFS_DIR, 'secrets.dev.json'); // plaintext — only when safeStorage is unavailable
+let secretsCache = null;
+
+function loadSecrets() {
+  if (secretsCache) return secretsCache;
+  try {
+    if (fs.existsSync(KEYS_FILE) && safeStorage.isEncryptionAvailable()) {
+      const decrypted = safeStorage.decryptString(fs.readFileSync(KEYS_FILE));
+      secretsCache = JSON.parse(decrypted);
+      return secretsCache;
+    }
+  } catch (e) {
+    console.error('[MMM] keys.enc unreadable, starting with no saved keys:', e.message);
+  }
+  try {
+    if (fs.existsSync(DEV_SECRETS_FILE)) {
+      console.warn('[MMM] WARNING: reading secrets.dev.json — keys are stored in PLAINTEXT (OS key encryption is unavailable on this machine).');
+      secretsCache = JSON.parse(fs.readFileSync(DEV_SECRETS_FILE, 'utf8'));
+      return secretsCache;
+    }
+  } catch { /* corrupt or missing — fall through to empty */ }
+  secretsCache = {};
+  return secretsCache;
+}
+
+function saveSecrets(map) {
+  secretsCache = { ...map };
+  try {
+    fs.mkdirSync(PREFS_DIR, { recursive: true });
+    if (safeStorage.isEncryptionAvailable()) {
+      fs.writeFileSync(KEYS_FILE, safeStorage.encryptString(JSON.stringify(secretsCache)));
+      // Drop any stale plaintext fallback now that real encryption is available.
+      try { fs.unlinkSync(DEV_SECRETS_FILE); } catch { /* not present */ }
+    } else {
+      console.warn('[MMM] WARNING: OS key encryption unavailable — saving secrets.dev.json in PLAINTEXT. Do not store real keys on a shared machine like this.');
+      fs.writeFileSync(DEV_SECRETS_FILE, JSON.stringify(secretsCache));
+    }
+  } catch (e) {
+    console.error('[MMM] failed to persist keys:', e.message);
+  }
+}
+
+// Pushes the decrypted map to the forked server over Node's fork() IPC
+// channel — never over HTTP, never to disk from the server's side.
+function pushSecretsToServer() {
+  if (serverProcess && serverProcess.connected) {
+    serverProcess.send({ type: 'secrets', keys: loadSecrets() });
+  }
 }
 
 // Inline LIGHT splash shown instantly while the local server cold-starts, so the
@@ -243,6 +301,7 @@ if (!gotTheLock) {
     createTray();                  // tray presence (enables close-to-tray)
     startServer();
     await waitForServer();         // wait for the server to bind :5006
+    pushSecretsToServer();         // hand any saved keys to the fresh server process
     loadApp();                     // swap splash -> real UI
   });
 }
@@ -272,6 +331,25 @@ ipcMain.handle('set-launch-on-boot', (_e, enabled) => {
 ipcMain.handle('set-close-to-tray', (_e, enabled) => {
   prefs.closeToTray = !!enabled; savePrefs();
   return prefs.closeToTray;
+});
+
+// GET returns presence booleans only — the renderer must never be able to
+// read a saved key value back out, only whether one is set.
+ipcMain.handle('secrets:get', () => {
+  const map = loadSecrets();
+  const presence = {};
+  for (const k of Object.keys(map)) presence[k] = !!map[k];
+  return presence;
+});
+ipcMain.handle('secrets:set', (_e, payload) => {
+  const provider = payload && payload.provider;
+  if (!provider || typeof provider !== 'string') throw new Error('provider is required');
+  const value = payload.value;
+  const next = { ...loadSecrets() };
+  if (value) next[provider] = String(value); else delete next[provider];
+  saveSecrets(next);
+  pushSecretsToServer();
+  return true;
 });
 
 // Native OS notification for a critical coach finding. Clicking it focuses MMM.

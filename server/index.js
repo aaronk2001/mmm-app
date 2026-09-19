@@ -9,8 +9,12 @@ const path        = require('path');
 const moneyRoutes = require('./money/routes');
 const planRoutes = require('./tools/routes');
 const settingsRoutes = require('./settings/routes');
+const onlineRoutes = require('./online/routes');
 const backupRoutes = require('./backup/routes');
+const tradingRoutes = require('./trading/routes');
+const marketRoutes = require('./market/routes');
 const { startBackupScheduler } = require('./backup/scheduler');
+const { startMarketSnapshotJob } = require('./jobs');
 const { checkpoint } = require('./db/connection');
 
 const app  = express();
@@ -64,6 +68,9 @@ app.use('/api/money/backups', backupRoutes);
 app.use('/api/money', moneyRoutes);
 app.use('/api/plan', planRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/online', onlineRoutes);
+app.use('/api/trading', tradingRoutes);
+app.use('/api/market', marketRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
@@ -88,6 +95,7 @@ process.on('unhandledRejection', (reason) =>
 const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`MMM server running on http://127.0.0.1:${PORT}`);
   startBackupScheduler();
+  startMarketSnapshotJob();
   // Post any recurring items that came due while the app was closed — after
   // /api/health is answerable, so a large catch-up never delays first paint.
   setImmediate(() => {

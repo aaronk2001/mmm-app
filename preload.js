@@ -11,4 +11,10 @@ contextBridge.exposeInMainWorld('mmm', {
   // Native OS notification for a critical coach finding — reaches the user even
   // when MMM is minimized to the tray.
   notify: (payload) => ipcRenderer.invoke('coach-notify', payload),
+  // Online & Keys (Sprint A, Track 1). get() returns presence booleans only —
+  // never a key value. set(provider, '') deletes that provider's key.
+  secrets: {
+    get: () => ipcRenderer.invoke('secrets:get'),
+    set: (provider, value) => ipcRenderer.invoke('secrets:set', { provider, value }),
+  },
 });

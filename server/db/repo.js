@@ -42,6 +42,18 @@ function emptyData() {
     holdings: [],
     networth_snapshots: [],
     recurring: [],
+    http_cache: [],
+    paper_account: null,
+    paper_positions: [],
+    paper_trades: [],
+    paper_journal: [],
+    agent_events: [],
+    decisions: [],
+    closes: [],
+    watchlist: [],
+    import_log: [],
+    price_cache: [],
+    alert_rules: [],
   };
 }
 
@@ -82,6 +94,7 @@ const rowHolding = (r) => ({
 });
 const rowSnapshot = (r) => ({ date: r.date, assets: toDollars(r.assets_cents), liabilities: toDollars(r.liabilities_cents), net: toDollars(r.net_cents) });
 const rowRecurring = (r) => ({ id: r.id, payee: r.payee, amount: toDollars(r.amount_cents), cadence: r.cadence, kind: r.kind, next_date: r.next_date, note: r.note, account_id: r.account_id || null });
+const rowHttpCache = (r) => ({ cache_key: r.cache_key, feature: r.feature, url: r.url, data: safeJson(r.data, null), cached_at: r.cached_at });
 
 // Derived balance: opening + sum of the account's transactions, in cents.
 const ACCOUNT_SELECT = `
@@ -378,6 +391,7 @@ function updateHolding(d, id, patch) {
   if (patch.shares !== undefined) { sets.push('shares = ?'); vals.push(parseFloat(patch.shares) || 0); }
   if (patch.cost_basis !== undefined) { sets.push('cost_basis_cents = ?'); vals.push(toCents(patch.cost_basis)); }
   if (patch.current_price !== undefined) { sets.push('current_price_cents = ?'); vals.push(toCents(patch.current_price)); }
+  if (patch.price_source !== undefined) { sets.push('price_source = ?'); vals.push(patch.price_source); }
   sets.push('updated_at = ?');
   vals.push(new Date().toISOString().slice(0, 10));
   d.prepare(`UPDATE holdings SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
@@ -430,9 +444,321 @@ function deleteRecurring(d, id) {
   if (!info.changes) throw new Error('Recurring item not found');
 }
 
+// ── online seam http cache (Sprint A, Track 1) ──────────────────────────────
+
+function getHttpCacheEntry(d, cacheKey) {
+  const r = d.prepare('SELECT * FROM http_cache WHERE cache_key = ?').get(cacheKey);
+  return r ? rowHttpCache(r) : null;
+}
+function getAllHttpCache(d) {
+  return d.prepare('SELECT * FROM http_cache').all().map(rowHttpCache);
+}
+function upsertHttpCache(d, entry) {
+  d.prepare(`
+    INSERT INTO http_cache (cache_key, feature, url, data, cached_at) VALUES (?,?,?,?,?)
+    ON CONFLICT(cache_key) DO UPDATE SET feature = excluded.feature, url = excluded.url, data = excluded.data, cached_at = excluded.cached_at
+  `).run(entry.cache_key, entry.feature || null, entry.url || null, jsonText(entry.data, null), entry.cached_at);
+  return getHttpCacheEntry(d, entry.cache_key);
+}
+
+// ── paper trading ledger (Sprint A, Track 3) ────────────────────────────────
+// Paper-only forever. Money is INTEGER cents at rest; this layer converts to
+// dollars at its boundary like every other table here. paper_account is a
+// singleton (id='default'), so it is handled outside the BLOB_KEYS array
+// loop — same spirit as meta['settings'].
+
+const rowPaperAccount = (r) => ({
+  capital: toDollars(r.capital_cents),
+  starting_capital: toDollars(r.starting_capital_cents),
+  created_at: r.created_at,
+});
+const rowPaperPosition = (r) => ({
+  id: r.id, ticker: r.ticker, direction: r.direction, shares: r.shares,
+  entry_price: toDollars(r.entry_price_cents),
+  stop_price: toDollars(r.stop_price_cents),
+  target1: toDollars(r.target1_cents), target2: toDollars(r.target2_cents),
+  thesis: r.thesis, decision_id: r.decision_id, sector: r.sector,
+  risk_amount: toDollars(r.risk_amount_cents),
+  opened_at: r.opened_at, source: r.source, source_id: r.source_id,
+});
+const rowPaperTrade = (r) => ({
+  id: r.id, ticker: r.ticker, direction: r.direction, shares: r.shares,
+  entry_price: toDollars(r.entry_price_cents), exit_price: toDollars(r.exit_price_cents),
+  pnl: toDollars(r.pnl_cents), pnl_pct: r.pnl_pct,
+  thesis: r.thesis, sector: r.sector, decision_id: r.decision_id,
+  opened_at: r.opened_at, closed_at: r.closed_at,
+  what_happened: r.what_happened, lesson: r.lesson,
+  source: r.source, source_id: r.source_id,
+});
+const rowPaperJournal = (r) => ({ id: r.id, trade_id: r.trade_id, note: r.note, tag: r.tag, created_at: r.created_at });
+const rowAgentEvent = (r) => ({ id: r.id, ts: r.ts, event: r.event, ticker: r.ticker, sector: r.sector, outcome: r.outcome, data: safeJson(r.data, {}) });
+const rowDecision = (r) => ({
+  id: r.id, ticker: r.ticker, direction: r.direction,
+  entry_price: toDollars(r.entry_price_cents),
+  thesis: r.thesis, consensus: r.consensus, pm: r.pm, context: r.context,
+  created_at: r.created_at, status: r.status,
+});
+const rowClose = (r) => ({
+  decision_id: r.decision_id, exit_price: toDollars(r.exit_price_cents),
+  pnl: toDollars(r.pnl_cents), return_pct: r.return_pct, alpha_vs_spy: r.alpha_vs_spy,
+  lesson: r.lesson, closed_at: r.closed_at,
+});
+const rowWatchlistItem = (r) => ({ id: r.id, symbol: r.symbol, note: r.note, source: r.source, added_at: r.added_at });
+const rowImportLog = (r) => ({ source: r.source, source_id: r.source_id, imported_at: r.imported_at });
+
+function ensurePaperAccount(d) {
+  d.prepare("INSERT OR IGNORE INTO paper_account (id, capital_cents, starting_capital_cents, created_at) VALUES ('default', 10000000, 10000000, ?)")
+    .run(new Date().toISOString());
+}
+function getPaperAccount(d) {
+  ensurePaperAccount(d);
+  return rowPaperAccount(d.prepare("SELECT * FROM paper_account WHERE id='default'").get());
+}
+// Sets both capital and starting_capital (fresh-start reset, or blob import).
+function importPaperAccount(d, pa) {
+  const capitalCents = toCents(pa.capital ?? pa.starting_capital ?? 100000);
+  const startingCents = toCents(pa.starting_capital ?? pa.capital ?? 100000);
+  d.prepare(`
+    INSERT INTO paper_account (id, capital_cents, starting_capital_cents, created_at) VALUES ('default', ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET capital_cents = excluded.capital_cents, starting_capital_cents = excluded.starting_capital_cents, created_at = excluded.created_at
+  `).run(capitalCents, startingCents, pa.created_at || new Date().toISOString());
+  return getPaperAccount(d);
+}
+// In-place capital adjustment (open/close cash flows). deltaDollars may be negative.
+function adjustPaperAccountCapital(d, deltaDollars) {
+  ensurePaperAccount(d);
+  d.prepare("UPDATE paper_account SET capital_cents = capital_cents + ? WHERE id='default'").run(toCents(deltaDollars));
+  return getPaperAccount(d);
+}
+
+function getPaperPositions(d) {
+  return d.prepare('SELECT * FROM paper_positions ORDER BY opened_at').all().map(rowPaperPosition);
+}
+function getPaperPosition(d, id) {
+  const r = d.prepare('SELECT * FROM paper_positions WHERE id = ?').get(id);
+  return r ? rowPaperPosition(r) : null;
+}
+function createPaperPosition(d, p) {
+  const id = p.id || newId();
+  d.prepare(`
+    INSERT INTO paper_positions (id, ticker, direction, shares, entry_price_cents, stop_price_cents, target1_cents, target2_cents, thesis, decision_id, sector, risk_amount_cents, opened_at, source, source_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    id, String(p.ticker).toUpperCase(), p.direction, parseFloat(p.shares) || 0,
+    toCents(p.entry_price), p.stop_price != null ? toCents(p.stop_price) : null,
+    p.target1 != null ? toCents(p.target1) : null, p.target2 != null ? toCents(p.target2) : null,
+    p.thesis || '', p.decision_id ?? null, p.sector || null,
+    p.risk_amount != null ? toCents(p.risk_amount) : null,
+    p.opened_at || new Date().toISOString(), p.source || 'app', p.source_id ?? null,
+  );
+  return getPaperPosition(d, id);
+}
+function deletePaperPosition(d, id) {
+  const info = d.prepare('DELETE FROM paper_positions WHERE id = ?').run(id);
+  if (!info.changes) throw new Error('Position not found');
+}
+
+function getPaperTrades(d) {
+  return d.prepare('SELECT * FROM paper_trades ORDER BY closed_at DESC').all().map(rowPaperTrade);
+}
+function getPaperTrade(d, id) {
+  const r = d.prepare('SELECT * FROM paper_trades WHERE id = ?').get(id);
+  return r ? rowPaperTrade(r) : null;
+}
+function createPaperTrade(d, t) {
+  const id = t.id || newId();
+  d.prepare(`
+    INSERT INTO paper_trades (id, ticker, direction, shares, entry_price_cents, exit_price_cents, pnl_cents, pnl_pct, thesis, sector, decision_id, opened_at, closed_at, what_happened, lesson, source, source_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    id, String(t.ticker).toUpperCase(), t.direction, parseFloat(t.shares) || 0,
+    toCents(t.entry_price), toCents(t.exit_price), toCents(t.pnl), t.pnl_pct || 0,
+    t.thesis || '', t.sector || null, t.decision_id ?? null,
+    t.opened_at, t.closed_at || new Date().toISOString(),
+    t.what_happened || '', t.lesson || '', t.source || 'app', t.source_id ?? null,
+  );
+  return getPaperTrade(d, id);
+}
+function updatePaperTrade(d, id, patch) {
+  const existing = d.prepare('SELECT * FROM paper_trades WHERE id = ?').get(id);
+  if (!existing) throw new Error('Trade not found');
+  const sets = [];
+  const vals = [];
+  if (patch.what_happened !== undefined) { sets.push('what_happened = ?'); vals.push(patch.what_happened); }
+  if (patch.lesson !== undefined) { sets.push('lesson = ?'); vals.push(patch.lesson); }
+  if (sets.length) d.prepare(`UPDATE paper_trades SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
+  return getPaperTrade(d, id);
+}
+
+function getPaperJournal(d, tradeId = null) {
+  const rows = tradeId
+    ? d.prepare('SELECT * FROM paper_journal WHERE trade_id = ? ORDER BY created_at').all(tradeId)
+    : d.prepare('SELECT * FROM paper_journal ORDER BY created_at').all();
+  return rows.map(rowPaperJournal);
+}
+function createPaperJournalEntry(d, j) {
+  const id = j.id || newId();
+  d.prepare('INSERT INTO paper_journal (id, trade_id, note, tag, created_at) VALUES (?,?,?,?,?)')
+    .run(id, j.trade_id ?? null, j.note, j.tag || null, j.created_at || new Date().toISOString());
+  return rowPaperJournal(d.prepare('SELECT * FROM paper_journal WHERE id = ?').get(id));
+}
+
+function getAgentEvents(d, { since = null, event = null, limit = null } = {}) {
+  let sql = 'SELECT * FROM agent_events WHERE 1=1';
+  const args = [];
+  if (since) { sql += ' AND ts >= ?'; args.push(since); }
+  if (event) { sql += ' AND event = ?'; args.push(event); }
+  sql += ' ORDER BY ts DESC';
+  if (limit) { sql += ' LIMIT ?'; args.push(limit); }
+  return d.prepare(sql).all(...args).map(rowAgentEvent);
+}
+function appendAgentEvent(d, e) {
+  const info = d.prepare('INSERT INTO agent_events (id, ts, event, ticker, sector, outcome, data) VALUES (?,?,?,?,?,?,?)')
+    .run(e.id ?? null, e.ts || new Date().toISOString(), e.event, e.ticker || null, e.sector || null, e.outcome || null, jsonText(e.data, {}));
+  return rowAgentEvent(d.prepare('SELECT * FROM agent_events WHERE id = ?').get(e.id ?? info.lastInsertRowid));
+}
+
+function getDecisions(d) {
+  return d.prepare('SELECT * FROM decisions ORDER BY created_at').all().map(rowDecision);
+}
+function getDecision(d, id) {
+  const r = d.prepare('SELECT * FROM decisions WHERE id = ?').get(id);
+  return r ? rowDecision(r) : null;
+}
+function createDecision(d, dec) {
+  const info = d.prepare(`
+    INSERT INTO decisions (id, ticker, direction, entry_price_cents, thesis, consensus, pm, context, created_at, status)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    dec.id ?? null, String(dec.ticker).toUpperCase(), dec.direction,
+    dec.entry_price != null ? toCents(dec.entry_price) : null,
+    dec.thesis || '', dec.consensus || '', dec.pm || '', dec.context || '',
+    dec.created_at || new Date().toISOString(), dec.status || 'open',
+  );
+  return getDecision(d, dec.id ?? info.lastInsertRowid);
+}
+function updateDecisionStatus(d, id, status) {
+  const info = d.prepare('UPDATE decisions SET status = ? WHERE id = ?').run(status, id);
+  if (!info.changes) throw new Error('Decision not found');
+  return getDecision(d, id);
+}
+
+function getCloses(d) {
+  return d.prepare('SELECT * FROM closes ORDER BY closed_at').all().map(rowClose);
+}
+function createClose(d, c) {
+  d.prepare(`
+    INSERT INTO closes (decision_id, exit_price_cents, pnl_cents, return_pct, alpha_vs_spy, lesson, closed_at)
+    VALUES (?,?,?,?,?,?,?)
+  `).run(
+    c.decision_id, c.exit_price != null ? toCents(c.exit_price) : null,
+    c.pnl != null ? toCents(c.pnl) : null, c.return_pct ?? null, c.alpha_vs_spy ?? null,
+    c.lesson || '', c.closed_at || new Date().toISOString(),
+  );
+  return rowClose(d.prepare('SELECT * FROM closes WHERE decision_id = ?').get(c.decision_id));
+}
+
+function getWatchlist(d) {
+  return d.prepare('SELECT * FROM watchlist ORDER BY added_at').all().map(rowWatchlistItem);
+}
+function createWatchlistItem(d, w) {
+  const id = w.id || newId();
+  d.prepare('INSERT INTO watchlist (id, symbol, note, source, added_at) VALUES (?,?,?,?,?)')
+    .run(id, String(w.symbol).toUpperCase(), w.note || '', w.source || 'manual', w.added_at || new Date().toISOString());
+  return rowWatchlistItem(d.prepare('SELECT * FROM watchlist WHERE id = ?').get(id));
+}
+function deleteWatchlistItem(d, id) {
+  const info = d.prepare('DELETE FROM watchlist WHERE id = ?').run(id);
+  if (!info.changes) throw new Error('Watchlist item not found');
+}
+
+// ── market price cache (Sprint A, Track 2) ──────────────────────────────────
+// Written only by server/market/snapshots.js (interval job or explicit
+// Refresh) — never read-triggers-a-fetch. Money is INTEGER cents at rest;
+// this layer converts to dollars at its boundary like every other table.
+
+const rowPriceCache = (r) => ({
+  id: r.id, kind: r.kind, symbol: r.symbol,
+  price: toDollars(r.price_cents), change_pct: r.change_pct,
+  data: safeJson(r.data, {}), source: r.source, fetched_at: r.fetched_at,
+});
+function getPriceCache(d, kind = null) {
+  const rows = kind
+    ? d.prepare('SELECT * FROM price_cache WHERE kind = ? ORDER BY symbol').all(kind)
+    : d.prepare('SELECT * FROM price_cache ORDER BY kind, symbol').all();
+  return rows.map(rowPriceCache);
+}
+function getPriceCacheEntry(d, id) {
+  const r = d.prepare('SELECT * FROM price_cache WHERE id = ?').get(id);
+  return r ? rowPriceCache(r) : null;
+}
+function upsertPriceCache(d, entry) {
+  d.prepare(`
+    INSERT INTO price_cache (id, kind, symbol, price_cents, change_pct, data, source, fetched_at) VALUES (?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, symbol = excluded.symbol, price_cents = excluded.price_cents,
+      change_pct = excluded.change_pct, data = excluded.data, source = excluded.source, fetched_at = excluded.fetched_at
+  `).run(
+    entry.id, entry.kind, entry.symbol,
+    entry.price == null ? null : toCents(entry.price), entry.change_pct ?? null,
+    jsonText(entry.data, {}), entry.source || 'yahoo', entry.fetched_at || new Date().toISOString(),
+  );
+  return getPriceCacheEntry(d, entry.id);
+}
+
+// ── price alert rules (Sprint A, Track 2) ───────────────────────────────────
+
+const rowAlertRule = (r) => ({
+  id: r.id, symbol: r.symbol, condition: r.condition,
+  target: toDollars(r.target_cents), active: !!r.active,
+  created_at: r.created_at, triggered_at: r.triggered_at,
+});
+function getAlertRules(d) {
+  return d.prepare('SELECT * FROM alert_rules ORDER BY created_at').all().map(rowAlertRule);
+}
+function createAlertRule(d, a) {
+  const id = a.id || newId();
+  d.prepare('INSERT INTO alert_rules (id, symbol, condition, target_cents, active, created_at, triggered_at) VALUES (?,?,?,?,?,?,?)')
+    .run(id, String(a.symbol).toUpperCase(), a.condition, toCents(a.target), a.active === false ? 0 : 1, a.created_at || new Date().toISOString(), a.triggered_at || null);
+  return getAlertRule(d, id);
+}
+function getAlertRule(d, id) {
+  const r = d.prepare('SELECT * FROM alert_rules WHERE id = ?').get(id);
+  return r ? rowAlertRule(r) : null;
+}
+function updateAlertRule(d, id, patch) {
+  const existing = getAlertRule(d, id);
+  if (!existing) throw new Error('Alert rule not found');
+  const sets = [];
+  const vals = [];
+  if (patch.condition !== undefined) { sets.push('condition = ?'); vals.push(patch.condition); }
+  if (patch.target !== undefined) { sets.push('target_cents = ?'); vals.push(toCents(patch.target)); }
+  if (patch.active !== undefined) { sets.push('active = ?'); vals.push(patch.active ? 1 : 0); }
+  if (patch.triggered_at !== undefined) { sets.push('triggered_at = ?'); vals.push(patch.triggered_at); }
+  if (sets.length) d.prepare(`UPDATE alert_rules SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
+  return getAlertRule(d, id);
+}
+function deleteAlertRule(d, id) {
+  const info = d.prepare('DELETE FROM alert_rules WHERE id = ?').run(id);
+  if (!info.changes) throw new Error('Alert rule not found');
+}
+
+function getImportLog(d) {
+  return d.prepare('SELECT * FROM import_log').all().map(rowImportLog);
+}
+function hasImported(d, source, sourceId) {
+  return !!d.prepare('SELECT 1 FROM import_log WHERE source = ? AND source_id = ?').get(source, sourceId);
+}
+function markImported(d, source, sourceId, importedAt = new Date().toISOString()) {
+  d.prepare('INSERT OR IGNORE INTO import_log (source, source_id, imported_at) VALUES (?,?,?)').run(source, sourceId, importedAt);
+}
+
 // ── full-blob export / import (backup, seed, reset only) ──────────────────────
 
-const BLOB_KEYS = ['accounts', 'transactions', 'categories', 'budgets', 'goals', 'rules', 'holdings', 'networth_snapshots', 'recurring'];
+const BLOB_KEYS = [
+  'accounts', 'transactions', 'categories', 'budgets', 'goals', 'rules', 'holdings', 'networth_snapshots', 'recurring', 'http_cache',
+  'paper_account', 'paper_positions', 'paper_trades', 'paper_journal', 'agent_events', 'decisions', 'closes', 'watchlist', 'import_log',
+  'price_cache', 'alert_rules',
+];
 
 function readAll(d) {
   const out = {
@@ -445,6 +771,18 @@ function readAll(d) {
     holdings: getHoldings(d),
     networth_snapshots: getSnapshots(d),
     recurring: getRecurring(d),
+    http_cache: getAllHttpCache(d),
+    paper_account: getPaperAccount(d),
+    paper_positions: getPaperPositions(d),
+    paper_trades: getPaperTrades(d),
+    paper_journal: getPaperJournal(d),
+    agent_events: getAgentEvents(d),
+    decisions: getDecisions(d),
+    closes: getCloses(d),
+    watchlist: getWatchlist(d),
+    import_log: getImportLog(d),
+    price_cache: getPriceCache(d),
+    alert_rules: getAlertRules(d),
   };
   // Loose top-level keys round-tripped verbatim via meta.
   const extras = d.prepare("SELECT value FROM meta WHERE key='extras'").get();
@@ -458,7 +796,11 @@ function writeAll(d, blob) {
   const arr = (k) => (Array.isArray(blob[k]) ? blob[k] : []);
   const run = d.transaction(() => {
     // FK-safe delete order (children first).
-    for (const t of ['transactions', 'holdings', 'accounts', 'categories', 'budgets', 'goals', 'rules', 'networth_snapshots', 'recurring']) {
+    for (const t of [
+      'transactions', 'holdings', 'accounts', 'categories', 'budgets', 'goals', 'rules', 'networth_snapshots', 'recurring', 'http_cache',
+      'paper_journal', 'paper_trades', 'paper_positions', 'agent_events', 'closes', 'decisions', 'watchlist', 'import_log',
+      'price_cache', 'alert_rules',
+    ]) {
       d.prepare(`DELETE FROM ${t}`).run();
     }
 
@@ -494,6 +836,23 @@ function writeAll(d, blob) {
         .run(s.date, toCents(s.assets), toCents(s.liabilities), toCents(s.net));
     }
     for (const r of arr('recurring')) createRecurring(d, { cadence: 'monthly', kind: 'bill', ...r });
+    for (const c of arr('http_cache')) upsertHttpCache(d, c);
+
+    // writeAll is always a full-state operation (backup/seed/reset), so
+    // paper_account is always (re)set — to the given value, or a fresh
+    // $100k default when absent (e.g. repo.emptyData()) — never left as
+    // whatever a prior DB state happened to have.
+    importPaperAccount(d, blob.paper_account || { capital: 100000, starting_capital: 100000 });
+    for (const dec of arr('decisions')) createDecision(d, dec);
+    for (const c of arr('closes')) createClose(d, c);
+    for (const p of arr('paper_positions')) createPaperPosition(d, p);
+    for (const t of arr('paper_trades')) createPaperTrade(d, t);
+    for (const j of arr('paper_journal')) createPaperJournalEntry(d, j);
+    for (const e of arr('agent_events')) appendAgentEvent(d, e);
+    for (const w of arr('watchlist')) createWatchlistItem(d, w);
+    for (const i of arr('import_log')) markImported(d, i.source, i.source_id, i.imported_at);
+    for (const p of arr('price_cache')) upsertPriceCache(d, p);
+    for (const a of arr('alert_rules')) createAlertRule(d, a);
 
     const extras = {};
     for (const k of Object.keys(blob)) if (!BLOB_KEYS.includes(k)) extras[k] = blob[k];
@@ -547,4 +906,16 @@ module.exports = {
   getHoldings, createHolding, updateHolding, deleteHolding,
   getSnapshots, insertSnapshotIfMissing,
   getRecurring, createRecurring, updateRecurring, deleteRecurring,
+  getHttpCacheEntry, getAllHttpCache, upsertHttpCache,
+  getPaperAccount, importPaperAccount, adjustPaperAccountCapital,
+  getPaperPositions, getPaperPosition, createPaperPosition, deletePaperPosition,
+  getPaperTrades, getPaperTrade, createPaperTrade, updatePaperTrade,
+  getPaperJournal, createPaperJournalEntry,
+  getAgentEvents, appendAgentEvent,
+  getDecisions, getDecision, createDecision, updateDecisionStatus,
+  getCloses, createClose,
+  getWatchlist, createWatchlistItem, deleteWatchlistItem,
+  getImportLog, hasImported, markImported,
+  getPriceCache, getPriceCacheEntry, upsertPriceCache,
+  getAlertRules, getAlertRule, createAlertRule, updateAlertRule, deleteAlertRule,
 };
