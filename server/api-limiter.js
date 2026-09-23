@@ -6,7 +6,7 @@
 // server binds 127.0.0.1, so limiting local reads protects nothing. Writes stay
 // limited, and so do /market and /online reads, which can reach the network
 // (e.g. GET /market/quote/:symbol). `path` is relative to the /api mount.
-const NETWORK_READS = /^\/(market|online)\//;
+const NETWORK_READS = /^\/(market|online|betting|news)\//;
 
 function skipApiLimiter(req) {
   return req.method === 'GET' && !NETWORK_READS.test(req.path);

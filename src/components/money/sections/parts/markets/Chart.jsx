@@ -4,7 +4,7 @@ import { api } from '../../../../../lib/query';
 import Card from '../../../shared/Card';
 import Skeleton from '../../../shared/Skeleton';
 import ErrorState from '../../../shared/ErrorState';
-import { StatusChip, f$, fPct, changeColor, num, cssVar } from './common';
+import { StatusChip, UpdatedAt, f$, fPct, fVol, changeColor, num, cssVar, rangeStr } from './common';
 
 const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '5y'];
 const INTERVALS = ['1d', '1wk', '1mo'];
@@ -128,7 +128,20 @@ export default function Chart() {
               <div style={{ fontSize: 14, fontWeight: 600, ...num, color: changeColor(q?.changePct) }}>
                 {fPct(q?.changePct)} ({q?.change != null ? (q.change >= 0 ? '+' : '') + q.change.toFixed(2) : '—'})
               </div>
+              <div style={{ flex: 1 }} />
+              <UpdatedAt cached_at={env.cached_at} />
             </div>
+            {q && (
+              <div style={{
+                padding: '0 14px 14px', display: 'grid', gap: 10,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              }}>
+                <Stat label="Prev. close" value={f$(q.previousClose)} />
+                <Stat label="Day range" value={rangeStr(q.dayLow, q.dayHigh)} />
+                <Stat label="52-week range" value={rangeStr(q.weekLow52, q.weekHigh52)} />
+                <Stat label="Volume" value={fVol(q.volume)} />
+              </div>
+            )}
             {!env.series?.length ? (
               <div style={{ padding: 14 }}>
                 <EmptyChart />
@@ -171,6 +184,15 @@ export default function Chart() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: 'var(--m-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--m-ink)', ...num }}>{value}</div>
     </div>
   );
 }

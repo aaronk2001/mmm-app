@@ -1,6 +1,6 @@
 // Ordered, idempotent dashboard-layout migrations. Replaces the old
 // insightsSeeded / insightsGrown / isCollapsedLayout flag pile.
-export const LAYOUT_VERSION = 4;
+export const LAYOUT_VERSION = 5;
 
 const RIGHT_COL_X = 8;
 function pushDown(layout, pred, by) { return layout.map(l => (pred(l) ? { ...l, y: l.y + by } : l)); }
@@ -17,6 +17,11 @@ const MIGRATIONS = [
   // the runway migration above (which had a specific column to slot into).
   { v: 4, up: (layout, defs) => (!defs.todaysLesson || layout.some(l => l.i === 'todaysLesson') ? layout
       : [...layout, { i: 'todaysLesson', x: 0, y: layout.reduce((max, l) => Math.max(max, l.y + l.h), 0), w: defs.todaysLesson.w, h: defs.todaysLesson.h }]) },
+  // v5: Top News. Appends below the existing layout, exactly like v4 — an
+  // existing user gets the widget without any of their rows reflowing, and
+  // the `layout.some(...)` guard means removing it never resurrects it.
+  { v: 5, up: (layout, defs) => (!defs.topNews || layout.some(l => l.i === 'topNews') ? layout
+      : [...layout, { i: 'topNews', x: 0, y: layout.reduce((max, l) => Math.max(max, l.y + l.h), 0), w: defs.topNews.w, h: defs.topNews.h }]) },
 ];
 
 export function migrateLayout(saved, fromVersion, defs) {

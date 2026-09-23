@@ -3,7 +3,7 @@ import { useApi } from '../../../../../lib/query';
 import Card from '../../../shared/Card';
 import Skeleton from '../../../shared/Skeleton';
 import ErrorState from '../../../shared/ErrorState';
-import { StatusChip, num } from './common';
+import { StatusChip, UpdatedAt, num } from './common';
 
 const DEFAULT_SYMBOLS = 'EUR,GBP,JPY,CAD,AUD,CHF';
 
@@ -24,7 +24,9 @@ export default function Forex() {
   }
 
   const rates = env?.data?.rates || {};
-  const pairs = Object.entries(rates);
+  // Alphabetical is the "sensible" default here — Frankfurter's /latest gives
+  // no change/volume signal to rank by, unlike the other tabs.
+  const pairs = Object.entries(rates).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -50,6 +52,7 @@ export default function Forex() {
               <tr style={{ borderBottom: '2px solid var(--m-border)' }}>
                 <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--m-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em' }}>Pair</th>
                 <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em' }}>Rate</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em' }}>Inverse</th>
               </tr>
             </thead>
             <tbody>
@@ -57,11 +60,15 @@ export default function Forex() {
                 <tr key={sym} style={{ borderBottom: '1px solid var(--m-border)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--m-ink)' }}>{env.data.base}/{sym}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink)', ...num }}>{Number(rate).toFixed(4)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink-2)', ...num }}>{rate ? (1 / Number(rate)).toFixed(4) : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {env.data?.date && <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--m-muted)' }}>As of {env.data.date}</div>}
+          <div style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--m-muted)' }}>
+            {env.data?.date ? <span>As of {env.data.date}</span> : <span />}
+            <UpdatedAt cached_at={env.cached_at} />
+          </div>
         </Card>
       )}
     </div>
