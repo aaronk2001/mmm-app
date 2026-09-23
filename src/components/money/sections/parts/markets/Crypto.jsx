@@ -3,7 +3,7 @@ import { useApi } from '../../../../../lib/query';
 import Card from '../../../shared/Card';
 import Skeleton from '../../../shared/Skeleton';
 import ErrorState from '../../../shared/ErrorState';
-import { StatusChip, f$, fPct, changeColor, num, tileStyle } from './common';
+import { StatusChip, UpdatedAt, f$, fPct, fVol, changeColor, num, tileStyle, sortByPctDesc } from './common';
 
 const DEFAULT_IDS = 'bitcoin,ethereum,solana,dogecoin';
 
@@ -18,7 +18,8 @@ export default function Crypto() {
     if (cleaned) setIds(cleaned);
   }
 
-  const coins = env?.data ? Object.keys(env.data) : [];
+  const coinIds = env?.data ? Object.keys(env.data) : [];
+  const coins = sortByPctDesc(coinIds, (id) => env.data[id]?.usd_24h_change);
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -54,6 +55,8 @@ export default function Crypto() {
                 <div style={{ fontSize: 13, color: 'var(--m-ink-2)', textTransform: 'capitalize' }}>{id}</div>
                 <div style={{ marginTop: 8, fontSize: 20, fontWeight: 700, color: 'var(--m-ink)', ...num }}>{f$(c?.usd)}</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: changeColor(c?.usd_24h_change), ...num }}>{fPct(c?.usd_24h_change)}</div>
+                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--m-muted)', ...num }}>24h vol {c?.usd_24h_vol != null ? '$' + fVol(Math.round(c.usd_24h_vol)) : '—'}</div>
+                <div style={{ marginTop: 4 }}><UpdatedAt cached_at={c?.last_updated_at ? c.last_updated_at * 1000 : null} /></div>
               </Card>
             );
           })}
