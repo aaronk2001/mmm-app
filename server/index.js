@@ -15,6 +15,7 @@ const backupRoutes = require('./backup/routes');
 const tradingRoutes = require('./trading/routes');
 const marketRoutes = require('./market/routes');
 const newsRoutes = require('./news/routes');
+const bettingRoutes = require('./betting/routes');
 const backtestRoutes = require('./backtest/routes');
 const learnRoutes = require('./learn/routes');
 const { startBackupScheduler } = require('./backup/scheduler');
@@ -93,6 +94,7 @@ app.use('/api/online', onlineRoutes);
 app.use('/api/trading', tradingRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/news', newsRoutes);
+app.use('/api/betting', bettingRoutes);
 app.use('/api/backtest', backtestRoutes);
 app.use('/api/learn', learnRoutes);
 
