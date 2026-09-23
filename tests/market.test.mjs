@@ -23,11 +23,11 @@ function setMarket(on) {
   repo.setSettings(db(), { online: { market: on } });
 }
 
-function fakeChartJson(symbol, price = 150, prevClose = 140) {
+function fakeChartJson(symbol, price = 150, prevClose = 140, metaExtra = {}) {
   return {
     chart: {
       result: [{
-        meta: { symbol, regularMarketPrice: price, chartPreviousClose: prevClose, currency: 'USD', regularMarketTime: 1_700_000_000 },
+        meta: { symbol, regularMarketPrice: price, chartPreviousClose: prevClose, currency: 'USD', regularMarketTime: 1_700_000_000, ...metaExtra },
         timestamp: [1_699_900_000, 1_699_986_400],
         indicators: { quote: [{ open: [140, 145], high: [146, 151], low: [139, 144], close: [141, price], volume: [1000, 2000] }] },
       }],
@@ -119,6 +119,29 @@ describe('providers.yahoo — feature-on fetches through online.fetch and shapes
     expect(c.series).toHaveLength(2);
     expect(c.series[0]).toMatchObject({ open: 140, high: 146, low: 139, close: 141 });
     expect(c.series[1].close).toBe(500);
+  });
+
+  it('quote() maps day range, 52-week range, and volume off chart meta when present', async () => {
+    setMarket(true);
+    // Distinct symbols per test — providers.js's chart() caches by
+    // `yahoo:chart:<symbol>:<range>:<interval>` in http_cache, and a
+    // symbol reused across tests in this file (e.g. AAPL, above) would
+    // silently serve that earlier cached payload instead of this mock.
+    vi.spyOn(global, 'fetch').mockResolvedValue(okResponse(fakeChartJson('RNGE', 150, 140, {
+      regularMarketDayHigh: 152, regularMarketDayLow: 148,
+      fiftyTwoWeekHigh: 200, fiftyTwoWeekLow: 120, regularMarketVolume: 45_000_000,
+    })));
+    const q = await providers.yahoo.quote('RNGE');
+    expect(q.quote).toMatchObject({
+      dayHigh: 152, dayLow: 148, weekHigh52: 200, weekLow52: 120, volume: 45_000_000,
+    });
+  });
+
+  it('quote() falls back to null range/volume fields when chart meta omits them', async () => {
+    setMarket(true);
+    vi.spyOn(global, 'fetch').mockResolvedValue(okResponse(fakeChartJson('NORNG', 150, 140)));
+    const q = await providers.yahoo.quote('NORNG');
+    expect(q.quote).toMatchObject({ dayHigh: null, dayLow: null, weekHigh52: null, weekLow52: null, volume: null });
   });
 });
 
