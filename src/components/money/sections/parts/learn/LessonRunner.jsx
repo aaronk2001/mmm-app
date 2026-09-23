@@ -14,7 +14,10 @@ function SourceFooter({ source, licenseNote }) {
     <div style={{ marginTop: 20, paddingTop: 12, borderTop: '1px solid var(--m-border)', fontSize: 11, color: 'var(--m-muted)', lineHeight: 1.5 }}>
       {licenseNote && <div>{licenseNote}</div>}
       <div>
-        Source: <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--m-muted)' }}>{source.title}</a> — {source.license}. {source.attribution}
+        Source: <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--m-muted)' }}>{source.title}</a> —{' '}
+        {source.license_url ? (
+          <a href={source.license_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--m-muted)' }}>{source.license}</a>
+        ) : source.license}. {source.attribution}
       </div>
     </div>
   );

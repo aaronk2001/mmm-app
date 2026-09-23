@@ -128,7 +128,7 @@ router.get('/lessons/:id', (req, res) => {
     res.json({
       ...lessonSummary(lesson), source_id: lesson.source_id, license_note: lesson.license_note,
       requires_data: lesson.requires_data, personalizes: lesson.personalizes || [], variables: vars, steps,
-      source: source ? { id: source.id, title: source.title, url: source.url, license: source.license, attribution: source.attribution } : null,
+      source: source ? { id: source.id, title: source.title, url: source.url, license: source.license, license_url: source.license_url, attribution: source.attribution } : null,
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
