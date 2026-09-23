@@ -180,7 +180,10 @@ async function screener(screenId, { count = 25 } = {}) {
 async function series(seriesId, { ttl = SLOW_TTL, limit = 60 } = {}) {
   const apiKey = keys.getKey('market') || '';
   const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json&sort_order=desc&limit=${limit}`;
-  return online.fetch(url, { feature: 'market', cacheKey: `fred:${seriesId}`, ttl });
+  // limit belongs in the key: the Macro tiles ask for limit=1 and the detail
+  // table for limit=24, and a shared row let whichever landed first serve both
+  // for the whole TTL — the full-history table could render one observation.
+  return online.fetch(url, { feature: 'market', cacheKey: `fred:${seriesId}:${limit}`, ttl });
 }
 
 // ── coingecko: crypto simple price (keyless) ───────────────────────────────

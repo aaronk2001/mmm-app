@@ -291,3 +291,22 @@ describe('routes: /api/market', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// A FRED cache row must be keyed by limit: the Macro tiles request limit=1 and
+// the detail table limit=24, and a shared row served whichever landed first for
+// the whole TTL.
+describe('fred cache key', () => {
+  it('keys the cached row by series AND limit', async () => {
+    const online = require('../server/online/index.js');
+    const seen = [];
+    vi.spyOn(online, 'fetch').mockImplementation((url, opts) => {
+      seen.push(opts.cacheKey);
+      return Promise.resolve({ data: { observations: [] }, cached: false });
+    });
+    await providers.fred.series('FEDFUNDS', { limit: 1 });
+    await providers.fred.series('FEDFUNDS', { limit: 24 });
+    expect(new Set(seen).size).toBe(2);
+    expect(seen).toEqual(['fred:FEDFUNDS:1', 'fred:FEDFUNDS:24']);
+    vi.restoreAllMocks();
+  });
+});
