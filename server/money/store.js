@@ -469,7 +469,7 @@ function importTransactions(account_id, rows, csvText, mapping) {
     // would silently vanish from month filters. Unparseable dates become today.
     toInsert.push({
       account_id,
-      date: row.date ? parsers.normalizeQifDate(row.date) : new Date().toISOString().split('T')[0],
+      date: row.date ? parsers.normalizeQifDate(row.date) : calc.localDate(),
       amount,
       payee,
       category_id: calc.autoCategorize(payee, amount),
@@ -507,7 +507,11 @@ function seedSample(sampleFile) {
       const shift = (Date.now() - 2 * 86400000) - Math.max(...times);
       for (const t of txs) {
         const d = Date.parse(t.date);
-        if (!Number.isNaN(d)) t.date = new Date(d + shift).toISOString().slice(0, 10);
+        // LOCAL calendar day of the shifted instant, not toISOString() (UTC) —
+        // the shift anchors the newest transaction to "now minus 2 days" and
+        // Date.now() carries a time-of-day component, so a UTC-keyed result
+        // would land a day off from local "today" west of Greenwich.
+        if (!Number.isNaN(d)) t.date = calc.ymdLocal(new Date(d + shift));
       }
     }
     // Synthesize a daily net-worth history over the last 30 days (ending at the
@@ -523,7 +527,9 @@ function seedSample(sampleFile) {
         const wobble = i === 0 ? 0 : Math.sin(i * 1.3) * 0.012;
         const assets = Math.round(nw.assets * (0.94 + 0.06 * t + wobble) * 100) / 100;
         const liabilities = Math.round(nw.liabilities * (1.04 - 0.04 * t) * 100) / 100;
-        snaps.push({ date: d.toISOString().slice(0, 10), assets, liabilities, net: Math.round((assets - liabilities) * 100) / 100 });
+        // LOCAL calendar day, matching the note above — `d` is built straight
+        // from Date.now() so its UTC date can already be "tomorrow" locally.
+        snaps.push({ date: calc.ymdLocal(d), assets, liabilities, net: Math.round((assets - liabilities) * 100) / 100 });
       }
       sample.networth_snapshots = snaps;
     }

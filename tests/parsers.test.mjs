@@ -1,5 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { parseCSV, parseQIF, parseOFX, normalizeQifDate } from '../server/money/parsers.js';
+
+// Both fallbacks below force TZ west of UTC + a fake evening local time so
+// `new Date().toISOString().slice(0, 10)` (UTC) and the LOCAL calendar day
+// disagree — Sep 23, 8pm Phoenix local is already Sep 24 in UTC.
+function withPhoenixEvening(fn) {
+  const prevTZ = process.env.TZ;
+  process.env.TZ = 'America/Phoenix';
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(2026, 8, 23, 20, 0));
+  try {
+    return fn();
+  } finally {
+    vi.useRealTimers();
+    if (prevTZ === undefined) delete process.env.TZ; else process.env.TZ = prevTZ;
+  }
+}
 
 describe('parseCSV (papaparse)', () => {
   it('parses simple rows with default headers', () => {
@@ -43,6 +59,15 @@ describe('normalizeQifDate (Y2K pivot at 70)', () => {
   });
 });
 
+describe('normalizeQifDate fallback', () => {
+  it('falls back to LOCAL today (not UTC) for an unparseable date', () => {
+    withPhoenixEvening(() => {
+      expect(new Date().toISOString().slice(0, 10)).toBe('2026-09-24'); // the bug this fallback exists to avoid
+      expect(normalizeQifDate('not a date')).toBe('2026-09-23');
+    });
+  });
+});
+
 describe('parseQIF', () => {
   it('parses records split by ^', () => {
     const qif = '!Type:Bank\nD07/01/26\nT-1200.00\nPRent Co\nMjuly\n^\nD07/02/26\nT2000\nPEmployer\n^\n';
@@ -69,5 +94,12 @@ describe('parseOFX', () => {
 
   it('skips blocks without an amount', () => {
     expect(parseOFX('<STMTTRN><DTPOSTED>20260701<NAME>Junk</STMTTRN>')).toHaveLength(0);
+  });
+
+  it('falls back to LOCAL today (not UTC) when DTPOSTED is missing', () => {
+    withPhoenixEvening(() => {
+      const rows = parseOFX('<OFX><STMTTRN><TRNAMT>-10.00<NAME>Mystery</STMTTRN></OFX>');
+      expect(rows[0].date).toBe('2026-09-23');
+    });
   });
 });

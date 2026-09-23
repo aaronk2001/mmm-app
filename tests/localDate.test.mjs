@@ -1,8 +1,8 @@
 // Pins parseYmd to LOCAL midnight. TZ is forced west of UTC so the naive
 // new Date('YYYY-MM-DD') (UTC midnight = previous evening in Phoenix) fails here
 // on any machine.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { parseYmd } from '../src/lib/localDate.js';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { parseYmd, todayYmd } from '../src/lib/localDate.js';
 
 let prevTZ;
 beforeAll(() => { prevTZ = process.env.TZ; process.env.TZ = 'America/Phoenix'; });
@@ -25,5 +25,19 @@ describe('parseYmd', () => {
 
   it('orders and compares like the calendar', () => {
     expect(parseYmd('2026-03-01') - parseYmd('2026-02-28')).toBe(86400000);
+  });
+});
+
+describe('todayYmd', () => {
+  it('returns the LOCAL calendar day, not the UTC one, in the evening west of UTC', () => {
+    // Sep 23, 8pm Phoenix local = Sep 24, 03:00 UTC — toISOString() would say the 24th.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 23, 20, 0));
+    try {
+      expect(new Date().toISOString().slice(0, 10)).toBe('2026-09-24'); // the bug this helper exists for
+      expect(todayYmd()).toBe('2026-09-23');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

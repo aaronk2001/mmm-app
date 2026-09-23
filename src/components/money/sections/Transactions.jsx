@@ -10,6 +10,7 @@ import EmptyState from '../shared/EmptyState';
 import ErrorState from '../shared/ErrorState';
 import { useApi, api } from '../../../lib/query';
 import { fieldsFor, matchesFilter } from '../../../lib/customFields';
+import { todayYmd } from '../../../lib/localDate';
 import { useTransactionsData } from './parts/transactions/useTransactionsData';
 import FiltersBar from './parts/transactions/FiltersBar';
 import TransactionsTable from './parts/transactions/TransactionsTable';
@@ -80,7 +81,7 @@ export default function Transactions() {
 
   // Add form
   const [addForm, setAddForm] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: todayYmd(),
     amount: '',
     payee: '',
     account_id: '',
@@ -195,7 +196,7 @@ export default function Transactions() {
     setAddLoading(false);
     if (success) {
       setAddForm({
-        date: new Date().toISOString().split('T')[0],
+        date: todayYmd(),
         amount: '',
         payee: '',
         account_id: '',

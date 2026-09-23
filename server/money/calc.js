@@ -367,6 +367,8 @@ module.exports = {
   DEFAULT_FX_RATES,
   AVAILABLE_CURRENCIES,
   localDate,
+  ymdLocal,
+  localDateFromStr,
   convertAmount,
   computeNetWorth,
   computeBudgetStatus,
