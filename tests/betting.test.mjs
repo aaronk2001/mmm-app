@@ -168,6 +168,31 @@ describe('providers — feature on, key stored: the key must not leak', () => {
     expect(events[0].board).toEqual([]);
   });
 
+  // A three-way (soccer) h2h has home/away/DRAW. Treating it as two-way makes
+  // home+away imply ~75%, which reads as a ~35% risk-free arb that does not
+  // exist — a draw loses the whole stake. Three-way books must not reach the
+  // two-way board, consensus, or arbitrage scan.
+  it('does not treat a three-way soccer market as two-way', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(() => Promise.resolve(okResponse([{
+      ...ODDS_EVENTS[0],
+      id: 'evt-soccer',
+      sport_key: 'soccer_epl',
+      home_team: 'Arsenal',
+      away_team: 'Chelsea',
+      bookmakers: [
+        { key: 'a', title: 'Book A', markets: [{ key: 'h2h', outcomes: [
+          { name: 'Arsenal', price: 140 }, { name: 'Chelsea', price: 200 }, { name: 'Draw', price: 250 }] }] },
+        { key: 'b', title: 'Book B', markets: [{ key: 'h2h', outcomes: [
+          { name: 'Arsenal', price: 135 }, { name: 'Chelsea', price: 210 }, { name: 'Draw', price: 260 }] }] },
+      ],
+    }])));
+    const { events } = await providers.sportsOdds('soccer_epl');
+    const e = events[0];
+    expect(e.threeWay).toBe(true);
+    expect(e.board).toEqual([]);
+    expect(e.consensus).toBeNull();
+  });
+
   it('arbitrage finds the cross-book pair and sizes stakes to a matched payout', async () => {
     vi.spyOn(global, 'fetch').mockImplementation((url) => Promise.resolve(routeFor(url)));
     const out = await providers.arbitrage({ sports: ['basketball_nba'], totalStake: 1000 });

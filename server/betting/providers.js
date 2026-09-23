@@ -29,7 +29,9 @@ const ODDS_TTL = 60 * 1000;            // live lines — 1 min (paid quota)
 const SPORTS_LIST_TTL = 6 * 60 * 60 * 1000;
 
 const ODDS_HOST = 'https://api.the-odds-api.com/v4';
-const ARB_SPORTS = ['americanfootball_nfl', 'basketball_nba', 'baseball_mlb', 'icehockey_nhl', 'soccer_epl'];
+// Two-way h2h only — the arb/value math assumes two outcomes, so three-way
+// (soccer) leagues are deliberately excluded from the scan. See normalizeEvent.
+const ARB_SPORTS = ['americanfootball_nfl', 'basketball_nba', 'baseball_mlb', 'icehockey_nhl'];
 
 // Shown when no key is stored (or the request failed and nothing is cached) so
 // the Sports tab still has a sport picker instead of an empty select.
@@ -273,7 +275,13 @@ function normalizeEvent(event) {
     return acc && acc.odds >= price ? acc : { odds: price, book: bk.name, impliedProb: odds.impliedProb(price) };
   }, null);
 
-  const board = bookmakers
+  // Soccer and similar three-way h2h markets quote a draw. consensusProbs and
+  // findArbitrage both assume the two sides exhaust the outcome space, so a
+  // three-way book on the two-way board implies only ~75% and reports a ~35%
+  // "risk-free" arb that a draw wipes out. Keep them off the board entirely —
+  // the raw per-book odds below still render.
+  const threeWay = bookmakers.some((bk) => Number.isFinite(bk.markets.h2h?.drawOdds));
+  const board = threeWay ? [] : bookmakers
     .filter((bk) => Number.isFinite(bk.markets.h2h?.homeOdds) && Number.isFinite(bk.markets.h2h?.awayOdds))
     .map((bk) => ({ name: bk.name, home: bk.markets.h2h.homeOdds, away: bk.markets.h2h.awayOdds }));
 
@@ -285,8 +293,9 @@ function normalizeEvent(event) {
     commenceTime: event.commence_time,
     bookmakers,
     board,
-    bestOdds: { home: best('homeOdds'), away: best('awayOdds') },
-    consensus: odds.consensusProbs(board),
+    threeWay,
+    bestOdds: { home: best('homeOdds'), away: best('awayOdds'), draw: best('drawOdds') },
+    consensus: board.length ? odds.consensusProbs(board) : null,
   };
 }
 
