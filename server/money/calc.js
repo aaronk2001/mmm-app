@@ -136,7 +136,7 @@ function detectRecurring(transactions, declaredRecurring = []) {
 
     const kind = parseFloat(txns[0].amount) > 0 ? 'income' : 'bill';
     const lastTxn = txns[txns.length - 1];
-    const lastDate = new Date(lastTxn.date);
+    const lastDate = localDateFromStr(lastTxn.date);
 
     let nextDate = new Date(lastDate);
     if (cadence === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
@@ -149,7 +149,7 @@ function detectRecurring(transactions, declaredRecurring = []) {
       cadence,
       kind,
       last_date: lastTxn.date,
-      next_date: nextDate.toISOString().split('T')[0],
+      next_date: ymdLocal(nextDate),
     });
   });
 

@@ -10,6 +10,8 @@ const crypto = require('crypto');
 
 const toCents = (v) => Math.round((parseFloat(v) || 0) * 100);
 const toDollars = (c) => (c == null ? null : Math.round(c) / 100);
+// Local YYYY-MM-DD. toISOString() is UTC and names tomorrow on an Arizona evening.
+const todayLocal = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function newId() {
   return crypto.randomUUID();
@@ -390,7 +392,7 @@ function getHoldings(d, accountId = null) {
 function createHolding(d, h) {
   const id = h.id || newId();
   d.prepare('INSERT INTO holdings (id, account_id, symbol, shares, cost_basis_cents, current_price_cents, price_source, updated_at) VALUES (?,?,?,?,?,?,?,?)')
-    .run(id, h.account_id || null, String(h.symbol).toUpperCase().trim(), parseFloat(h.shares) || 0, toCents(h.cost_basis), toCents(h.current_price), h.price_source || 'manual', h.updated_at || new Date().toISOString().slice(0, 10));
+    .run(id, h.account_id || null, String(h.symbol).toUpperCase().trim(), parseFloat(h.shares) || 0, toCents(h.cost_basis), toCents(h.current_price), h.price_source || 'manual', h.updated_at || todayLocal());
   return rowHolding(d.prepare('SELECT * FROM holdings WHERE id = ?').get(id));
 }
 function updateHolding(d, id, patch) {
@@ -405,7 +407,7 @@ function updateHolding(d, id, patch) {
   if (patch.current_price !== undefined) { sets.push('current_price_cents = ?'); vals.push(toCents(patch.current_price)); }
   if (patch.price_source !== undefined) { sets.push('price_source = ?'); vals.push(patch.price_source); }
   sets.push('updated_at = ?');
-  vals.push(new Date().toISOString().slice(0, 10));
+  vals.push(todayLocal());
   d.prepare(`UPDATE holdings SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
   return rowHolding(d.prepare('SELECT * FROM holdings WHERE id = ?').get(id));
 }
