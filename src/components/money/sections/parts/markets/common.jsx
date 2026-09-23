@@ -16,6 +16,55 @@ export const fPct = (n) => (n == null ? '—' : (n >= 0 ? '+' : '') + Number(n).
 
 export const changeColor = (n) => (n == null ? 'var(--m-muted)' : n >= 0 ? 'var(--m-green)' : 'var(--m-red)');
 
+export const fVol = (n) => (n == null ? '—' : Number(n).toLocaleString('en-US'));
+
+// "$low – $high", or '—' when either side is missing (e.g. day/52-week range
+// fields that Yahoo's chart `meta` doesn't always carry for every symbol).
+export function rangeStr(low, high, decimals = 2) {
+  if (low == null || high == null) return '—';
+  return `${f$(low, decimals)} – ${f$(high, decimals)}`;
+}
+
+// Sorts a copy of `items` by a numeric getter, biggest first, nulls last —
+// used to put the day's gainers before losers in the Sectors/Futures/Crypto
+// grids instead of leaving them in raw symbol-map insertion order.
+export function sortByPctDesc(items, getPct) {
+  return [...items].sort((a, b) => {
+    const pa = getPct(a);
+    const pb = getPct(b);
+    if (pa == null && pb == null) return 0;
+    if (pa == null) return 1;
+    if (pb == null) return -1;
+    return pb - pa;
+  });
+}
+
+// A compact, human "how fresh is this" label for a tile/table header —
+// StatusChip already carries the exact timestamp in its title tooltip, but
+// that's hover-only; this renders a short visible string next to it.
+export function formatUpdatedAt(cachedAt, now = Date.now()) {
+  if (!cachedAt) return null;
+  const then = new Date(cachedAt).getTime();
+  if (Number.isNaN(then)) return null;
+  const diffMs = now - then;
+  if (diffMs < 60_000) return 'Updated just now';
+  if (diffMs < 3_600_000) return `Updated ${Math.floor(diffMs / 60_000)}m ago`;
+  const thenDate = new Date(then);
+  const nowDate = new Date(now);
+  const sameDay = thenDate.getFullYear() === nowDate.getFullYear()
+    && thenDate.getMonth() === nowDate.getMonth()
+    && thenDate.getDate() === nowDate.getDate();
+  return sameDay
+    ? `Updated ${thenDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : `Updated ${thenDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+}
+
+export function UpdatedAt({ cached_at }) {
+  const label = formatUpdatedAt(cached_at);
+  if (!label) return null;
+  return <span style={{ fontSize: 11, color: 'var(--m-muted)' }}>{label}</span>;
+}
+
 // envelope: the { data, cached_at, stale, offline } shape every online.fetch
 // call and every provider wrapper in server/market/providers.js returns.
 export function StatusChip({ stale, offline, cached_at }) {

@@ -25,6 +25,22 @@ describe('migrateLayout', () => {
     expect(layout.some(l => l.i === 'runway')).toBe(true);
   });
 
+  it('v5 appends Top News below an existing layout without reflowing it', () => {
+    const withNews = { ...defs, topNews: { w: 4, h: 4 } };
+    const saved = [{ i: 'runway', x: 8, y: 0, w: 4, h: 2 }, { i: 'netWorth', x: 0, y: 2, w: 4, h: 2 }];
+    const { layout, version } = migrateLayout(saved, 4, withNews);
+    expect(version).toBe(LAYOUT_VERSION);
+    expect(layout.find(l => l.i === 'topNews')).toMatchObject({ i: 'topNews', x: 0, y: 4, w: 4, h: 4 });
+    expect(layout.find(l => l.i === 'runway')).toEqual(saved[0]);   // untouched
+    expect(layout.find(l => l.i === 'netWorth')).toEqual(saved[1]); // untouched
+  });
+
+  it('v5 does not resurrect Top News once the user removes it', () => {
+    const withNews = { ...defs, topNews: { w: 4, h: 4 } };
+    const saved = [{ i: 'runway', x: 8, y: 0, w: 4, h: 2 }];
+    expect(migrateLayout(saved, 5, withNews).layout).toEqual(saved);
+  });
+
   it('v3 pushes a widget that spans into the right column, not only ones starting there', () => {
     const saved = [{ i: 'netWorth', x: 6, y: 0, w: 6, h: 2 }, { i: 'insights', x: 0, y: 2, w: 6, h: 6 }];
     const { layout } = migrateLayout(saved, 2, defs);

@@ -59,6 +59,15 @@ function chartMetaToQuote(meta) {
     changePct: changePct != null ? Math.round(changePct * 100) / 100 : null,
     currency: meta.currency || 'USD',
     marketTime: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
+    // Day/52-week range + volume: real fields on Yahoo's chart `meta` object
+    // (same payload chartPreviousClose already comes from), just not mapped
+    // through before — not every symbol/timeframe carries all of them, hence
+    // the `?? null` throughout.
+    dayHigh: meta.regularMarketDayHigh ?? null,
+    dayLow: meta.regularMarketDayLow ?? null,
+    weekHigh52: meta.fiftyTwoWeekHigh ?? null,
+    weekLow52: meta.fiftyTwoWeekLow ?? null,
+    volume: meta.regularMarketVolume ?? null,
   };
 }
 
@@ -171,14 +180,20 @@ async function screener(screenId, { count = 25 } = {}) {
 async function series(seriesId, { ttl = SLOW_TTL, limit = 60 } = {}) {
   const apiKey = keys.getKey('market') || '';
   const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json&sort_order=desc&limit=${limit}`;
-  return online.fetch(url, { feature: 'market', cacheKey: `fred:${seriesId}`, ttl });
+  // limit belongs in the key: the Macro tiles ask for limit=1 and the detail
+  // table for limit=24, and a shared row let whichever landed first serve both
+  // for the whole TTL — the full-history table could render one observation.
+  return online.fetch(url, { feature: 'market', cacheKey: `fred:${seriesId}:${limit}`, ttl });
 }
 
 // ── coingecko: crypto simple price (keyless) ───────────────────────────────
 
 async function simplePrice(ids = ['bitcoin', 'ethereum'], { ttl = DEFAULT_TTL, vs = 'usd' } = {}) {
   const idsParam = ids.join(',');
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(idsParam)}&vs_currencies=${vs}&include_24hr_change=true`;
+  // include_24hr_vol / include_last_updated_at are the same keyless
+  // simple/price endpoint, just asking it for two more fields it already
+  // supports — lets the Crypto tab show 24h volume and per-coin freshness.
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(idsParam)}&vs_currencies=${vs}&include_24hr_change=true&include_24hr_vol=true&include_last_updated_at=true`;
   return online.fetch(url, { feature: 'market', cacheKey: `coingecko:${idsParam}:${vs}`, ttl });
 }
 

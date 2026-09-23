@@ -22,5 +22,7 @@ describe('skipApiLimiter', () => {
   it('keeps limiting reads that can hit the network', () => {
     expect(skipApiLimiter(req('GET', '/market/quote/AAPL'))).toBe(false);
     expect(skipApiLimiter(req('GET', '/online/status'))).toBe(false);
+    expect(skipApiLimiter(req('GET', '/betting/sports-odds'))).toBe(false);
+    expect(skipApiLimiter(req('GET', '/news/market'))).toBe(false);
   });
 });
