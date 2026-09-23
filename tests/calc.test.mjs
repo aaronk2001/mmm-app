@@ -126,6 +126,26 @@ describe('detectRecurring', () => {
     const out = store.detectRecurring(txns);
     expect(out[0]).toMatchObject({ kind: 'income', cadence: 'biweekly' });
   });
+
+  // next_date used to be UTC-parsed, advanced with local setMonth, then keyed
+  // via toISOString — west of UTC, rent on the 1st after February projected
+  // to Mar 29. Force a western TZ so this fails on any machine.
+  it('keeps a 1st-of-month bill on the 1st west of UTC', () => {
+    const prevTZ = process.env.TZ;
+    process.env.TZ = 'America/Phoenix';
+    try {
+      const txns = [
+        { payee: 'Rent', amount: -1500, date: '2026-01-01' },
+        { payee: 'Rent', amount: -1500, date: '2026-02-01' },
+        { payee: 'Rent', amount: -1500, date: '2026-03-01' },
+      ];
+      expect(store.detectRecurring(txns)[0].next_date).toBe('2026-04-01');
+      const sep = txns.map((t, i) => ({ ...t, date: `2026-0${7 + i}-01` }));
+      expect(store.detectRecurring(sep)[0].next_date).toBe('2026-10-01');
+    } finally {
+      if (prevTZ === undefined) delete process.env.TZ; else process.env.TZ = prevTZ;
+    }
+  });
 });
 
 describe('projectCashflow', () => {

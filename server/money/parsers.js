@@ -5,6 +5,7 @@
 // are simple and stable.
 
 const Papa = require('papaparse');
+const calc = require('./calc');
 
 function parseCSV(csvText, mapping) {
   const result = Papa.parse(String(csvText).trim(), {
@@ -44,7 +45,7 @@ function normalizeQifDate(s) {
     if (y.length === 2) y = (parseInt(y, 10) >= 70 ? '19' : '20') + y;
     return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }
-  return new Date().toISOString().slice(0, 10);
+  return calc.localDate();
 }
 
 function parseQIF(content) {
@@ -80,7 +81,7 @@ function parseOFX(content) {
     const dt = tag('DTPOSTED');
     const dm = String(dt).match(/^(\d{4})(\d{2})(\d{2})/);
     rows.push({
-      date: dm ? `${dm[1]}-${dm[2]}-${dm[3]}` : new Date().toISOString().slice(0, 10),
+      date: dm ? `${dm[1]}-${dm[2]}-${dm[3]}` : calc.localDate(),
       amount: parseFloat(amt.replace(/[, ]/g, '')),
       payee: tag('NAME') || tag('PAYEE'),
       note: tag('MEMO'),

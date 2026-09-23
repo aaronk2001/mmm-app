@@ -51,7 +51,9 @@ fs.renameSync(path.join(OUT, 'electron.exe'), path.join(OUT, 'MMM.exe'));
 // ── 3. App payload ────────────────────────────────────────────────────────────
 log('3/6', 'Injecting app -> resources/app');
 fs.mkdirSync(path.join(APP, 'src'), { recursive: true });
-for (const f of ['electron.js', 'preload.js', 'package.json']) {
+// THIRD_PARTY_NOTICES.md must travel with the binary (MIT/BSD/Apache/OFL all
+// require the notice in distributions, not just the source repo).
+for (const f of ['electron.js', 'preload.js', 'package.json', 'THIRD_PARTY_NOTICES.md']) {
   fs.copyFileSync(path.join(ROOT, f), path.join(APP, f));
 }
 fs.cpSync(path.join(ROOT, 'server'), path.join(APP, 'server'), { recursive: true });
@@ -71,9 +73,14 @@ if (!fs.existsSync(path.join(APP, 'content', 'learn', 'sources.yaml'))) {
   process.exit(1);
 }
 // Never ship a database, legacy blob, or backups inside the app folder — user
-// data lives in %APPDATA%\mmm and a fresh install must start empty.
-for (const junk of ['mmm.db', 'mmm.db-wal', 'mmm.db-shm', 'data.json', 'data.json.migrated.bak', 'backups']) {
-  fs.rmSync(path.join(APP, 'server', 'store', 'money', junk), { recursive: true, force: true });
+// data lives in %APPDATA%\mmm and a fresh install must start empty. Match
+// mmm.db* by prefix: dev-DB copies like mmm.db.pre-restore-* and
+// mmm.db.corrupted-backup-* (scripts/restore-dev-db.sh) are real user data too.
+const STORE = path.join(APP, 'server', 'store', 'money');
+for (const name of fs.readdirSync(STORE)) {
+  if (name.startsWith('mmm.db') || ['data.json', 'data.json.migrated.bak', 'backups'].includes(name)) {
+    fs.rmSync(path.join(STORE, name), { recursive: true, force: true });
+  }
 }
 
 // ── 4. Server dependency closure ──────────────────────────────────────────────

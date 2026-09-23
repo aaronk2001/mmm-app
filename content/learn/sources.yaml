@@ -39,6 +39,7 @@ sources:
     title: "Principles of Finance, 1st Edition — OpenStax (Dahlquist & Knight)"
     url: "https://openstax.org/details/books/principles-finance"
     license: "CC BY 4.0"
+    license_url: "https://creativecommons.org/licenses/by/4.0/"
     attribution: "Access for free at openstax.org. Principles of Finance (1st ed.) is licensed under CC BY 4.0. Adapted with modification for this lesson."
     allows_verbatim: true
 
@@ -46,12 +47,14 @@ sources:
     title: "Emergency fund — Wikipedia"
     url: "https://en.wikipedia.org/wiki/Emergency_fund"
     license: "CC BY-SA 4.0"
-    attribution: "Adapted from Wikipedia, \"Emergency fund,\" CC BY-SA 4.0. Content has been modified from the original."
+    license_url: "https://creativecommons.org/licenses/by-sa/4.0/"
+    attribution: "Adapted from \"Emergency fund\" by Wikipedia contributors, CC BY-SA 4.0. Content has been modified from the original."
     allows_verbatim: false
 
   - id: wikipedia-fixed-variable-costs
     title: "Fixed cost / Variable cost — Wikipedia"
     url: "https://en.wikipedia.org/wiki/Fixed_cost"
     license: "CC BY-SA 4.0"
-    attribution: "Adapted from Wikipedia, \"Fixed cost,\" CC BY-SA 4.0. Content has been modified from the original."
+    license_url: "https://creativecommons.org/licenses/by-sa/4.0/"
+    attribution: "Adapted from \"Fixed cost\" by Wikipedia contributors, CC BY-SA 4.0. Content has been modified from the original."
     allows_verbatim: false

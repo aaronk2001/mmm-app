@@ -23,6 +23,7 @@ import { api } from '../../../lib/query';
 import { toast } from '../../../lib/toast';
 import { confirmDialog } from '../../../lib/confirm';
 import { computeIncomeVsSpending } from '../../../lib/incomeVsSpending';
+import { parseYmd } from '../../../lib/localDate';
 import IncomeVsSpendingCard from './parts/cashflow/IncomeVsSpendingCard';
 import Subscriptions from './parts/cashflow/Subscriptions';
 
@@ -149,7 +150,7 @@ export default function CashFlow() {
 
   // Separate recurring into income/bills
   const recurringIncome = recurring.filter(r => r.kind === 'income');
-  const recurringBills = recurring.filter(r => r.kind === 'bill').sort((a, b) => new Date(a.next_date) - new Date(b.next_date));
+  const recurringBills = recurring.filter(r => r.kind === 'bill').sort((a, b) => parseYmd(a.next_date) - parseYmd(b.next_date));
 
   const defaultAccountId = accounts.find(a => a.type === 'checking')?.id || accounts[0]?.id || '';
 
@@ -391,7 +392,7 @@ export default function CashFlow() {
                     stroke="var(--m-muted)"
                     style={{ fontSize: '12px' }}
                     tickFormatter={d => {
-                      const date = new Date(d);
+                      const date = parseYmd(d);
                       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     }}
                     interval={Math.floor(adjustedProjection.projection.length / 6) || 0}
@@ -409,7 +410,7 @@ export default function CashFlow() {
                       color: 'var(--m-ink)',
                     }}
                     formatter={value => <Money value={value} prefix="$" decimals={0} />}
-                    labelFormatter={label => new Date(label).toLocaleDateString('en-US')}
+                    labelFormatter={label => parseYmd(label).toLocaleDateString('en-US')}
                   />
                   <Area
                     type="monotone"
@@ -892,7 +893,7 @@ export default function CashFlow() {
                           {item.next_date && (
                             <>
                               <span>•</span>
-                              <span>{new Date(item.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                              <span>{parseYmd(item.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                             </>
                           )}
                           {accountName(item.account_id) && (
@@ -981,7 +982,7 @@ export default function CashFlow() {
                           </div>
                           {bill.next_date && (
                             <div style={{ fontSize: '13px', color: 'var(--m-ink-2)' }}>
-                              Next: {new Date(bill.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              Next: {parseYmd(bill.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </div>
                           )}
                         </div>
@@ -1028,7 +1029,7 @@ export default function CashFlow() {
                             {r.next_date && (
                               <>
                                 <span>•</span>
-                                <span>Next: {new Date(r.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                <span>Next: {parseYmd(r.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                               </>
                             )}
                           </div>
@@ -1076,7 +1077,7 @@ export default function CashFlow() {
                             {r.next_date && (
                               <>
                                 <span>•</span>
-                                <span>Next: {new Date(r.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                <span>Next: {parseYmd(r.next_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                               </>
                             )}
                           </div>

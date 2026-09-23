@@ -4,8 +4,14 @@ const fs = require('fs');
 const http = require('http');
 const net  = require('net');
 const { fork, execFileSync } = require('child_process');
+// Zero-dependency list of known provider names (see the file for why this
+// isn't `require('./server/online')` — that would pull in db/connection.js).
+const KNOWN_PROVIDERS = require('./server/online/features');
 
 const SERVER_PORT = 5006;
+// A real API key/token is well under this; it's generous headroom, not a
+// realistic ceiling, so it can't be used to bloat keys.enc via IPC.
+const MAX_SECRET_LENGTH = 4096;
 
 let mainWindow = null;
 let serverProcess = null;
@@ -150,6 +156,11 @@ function startServer() {
   const env = { ...process.env, PORT: SERVER_PORT };
   if (app.isPackaged && !env.MMM_DATA_DIR) {
     env.MMM_DATA_DIR = path.join(app.getPath('appData'), 'mmm');
+  } else if (!app.isPackaged && !env.MMM_DATA_DIR) {
+    // server/db/connection.js now refuses the in-repo dev-DB fallback unless
+    // this is set — this is the one deliberate place that opts in, so
+    // `npm run dev` / `npm start` keep using the dev DB exactly as before.
+    env.MMM_ALLOW_DEV_DB = '1';
   }
   serverProcess = fork(serverPath, [], {
     env,
@@ -209,10 +220,22 @@ function createWindow() {
   });
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  // Open external links in the browser, not Electron.
+  // Open external links in the browser, not Electron — web URLs only.
+  // openExternal hands file:, smb:, ms-* etc. to the OS shell, so anything
+  // else is dropped.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // setWindowOpenHandler above only stops a NEW window/tab; it does nothing
+  // against a main-frame navigation (window.location = ..., a clicked link
+  // with no target). MMM never navigates the main frame itself outside
+  // loadURL() calls this file makes directly (which don't fire this event),
+  // so any 'will-navigate' is either a bug or a compromised renderer trying
+  // to escape the app — deny it unconditionally.
+  mainWindow.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
   });
 }
 
@@ -341,10 +364,20 @@ ipcMain.handle('secrets:get', () => {
   for (const k of Object.keys(map)) presence[k] = !!map[k];
   return presence;
 });
+// A compromised renderer can't read keys.enc (safeStorage never leaves this
+// process, and 'secrets:get' only returns presence booleans), but with no
+// validation here it could still overwrite/delete an arbitrary key or bloat
+// keys.enc with junk. Provider must be one of the known features; value is
+// capped in length.
 ipcMain.handle('secrets:set', (_e, payload) => {
   const provider = payload && payload.provider;
-  if (!provider || typeof provider !== 'string') throw new Error('provider is required');
+  if (!provider || typeof provider !== 'string' || !KNOWN_PROVIDERS.includes(provider)) {
+    throw new Error('Unknown provider.');
+  }
   const value = payload.value;
+  if (value != null && (typeof value !== 'string' || value.length > MAX_SECRET_LENGTH)) {
+    throw new Error('Invalid key value.');
+  }
   const next = { ...loadSecrets() };
   if (value) next[provider] = String(value); else delete next[provider];
   saveSecrets(next);

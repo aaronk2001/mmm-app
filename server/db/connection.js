@@ -11,39 +11,46 @@ const repo = require('./repo');
 // (%APPDATA%\mmm) so user data lives outside the app folder and survives
 // rebuilds/updates.
 const ASSET_DIR = path.join(__dirname, '..', 'store', 'money');
-const DATA_DIR = process.env.MMM_DATA_DIR || ASSET_DIR;
+
+// Sprint E, Track 1: MMM_DATA_DIR used to silently fall back to ASSET_DIR —
+// the real in-repo dev database — whenever it wasn't set. That fallback fired
+// for anything that required this module without knowing about the env var
+// (a `node -e` one-liner, a stray sanity-check script) and once wiped the dev
+// DB outright (see scripts/restore-dev-db.sh). The fallback is still here —
+// npm run dev / npm start need it — but it now requires an explicit opt-in
+// (MMM_ALLOW_DEV_DB) instead of firing implicitly. electron.js sets that
+// opt-in itself when launching the dev server; tests/setup.mjs and the
+// packaged app both set MMM_DATA_DIR directly and never touch this branch.
+const DEV_DB_OPT_IN = 'MMM_ALLOW_DEV_DB';
+
+function resolveDataDir() {
+  if (process.env.MMM_DATA_DIR) return process.env.MMM_DATA_DIR;
+  if (process.env[DEV_DB_OPT_IN]) return ASSET_DIR;
+  throw new Error(
+    `MMM_DATA_DIR is not set. Refusing to fall back to the in-repo dev database at ${ASSET_DIR} ` +
+    `implicitly — that footgun has wiped the dev DB before (see scripts/restore-dev-db.sh). ` +
+    `Set MMM_DATA_DIR explicitly (a temp dir for a one-off script, %APPDATA%\\mmm for the packaged ` +
+    `app), or set ${DEV_DB_OPT_IN}=1 if you deliberately want the in-repo dev database ` +
+    `(npm run dev / npm start do this automatically).`
+  );
+}
+
+const DATA_DIR = resolveDataDir();
 const DB_FILE = process.env.MMM_DB_FILE || path.join(DATA_DIR, 'mmm.db');
-const JSON_FILE = path.join(ASSET_DIR, 'data.json');
+// Legacy pre-SQLite blob. Resolved from DATA_DIR, not ASSET_DIR: only the dev
+// dir can hold one, and reading ASSET_DIR imported the dev data.json into (and
+// wrote a .bak beside it from) every fresh temp data dir.
+const JSON_FILE = path.join(DATA_DIR, 'data.json');
 const SCHEMA = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 const SCHEMA_VERSION = '2';
 
 let _db = null;
 
-// One-time relocation: DBs created before MMM_DATA_DIR existed live next to the
-// bundled assets (inside the app folder) and would be lost on rebuild. Merge the
-// WAL into the main file, then copy it to the new home.
-function migrateLegacyDb() {
-  const legacy = path.join(ASSET_DIR, 'mmm.db');
-  if (path.resolve(DB_FILE) === path.resolve(legacy)) return;
-  if (fs.existsSync(DB_FILE) || !fs.existsSync(legacy)) return;
-  try {
-    try {
-      const old = new Database(legacy);
-      old.pragma('wal_checkpoint(TRUNCATE)');
-      old.close();
-    } catch { /* best effort — copy whatever is there */ }
-    fs.copyFileSync(legacy, DB_FILE);
-    console.log('[MMM db] migrated legacy mmm.db ->', DB_FILE);
-  } catch (e) {
-    console.error('[MMM db] legacy DB migration failed:', e.message);
-  }
-}
 
 // Lazily open (and one-time initialize) the SQLite database. Singleton.
 function db() {
   if (_db) return _db;
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  migrateLegacyDb();
   _db = new Database(DB_FILE);
   _db.pragma('journal_mode = WAL');
   migrateSchema(_db); // may drop/recreate tables — runs before foreign_keys ON

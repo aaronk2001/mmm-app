@@ -69,6 +69,21 @@ describe('GET /lessons/:id', () => {
     expect(readStep.body).not.toContain('{{');
     expect(readStep.body).toMatch(/\d/); // runway_days.formatted rendered in
   });
+
+  it('resolves a CC BY-SA Wikipedia source for m2-fixed-vs-variable', async () => {
+    const { status, body } = await get('/lessons/m2-fixed-vs-variable');
+    expect(status).toBe(200);
+    expect(body.source_id).toBe('wikipedia-fixed-variable-costs');
+    expect(body.source.license).toBe('CC BY-SA 4.0');
+    expect(body.source.url.startsWith('https://')).toBe(true);
+    expect(body.source.license_url).toBe('https://creativecommons.org/licenses/by-sa/4.0/');
+  });
+
+  it('resolves the original-mmm source for an in-house lesson', async () => {
+    const { body } = await get(`/lessons/${LESSON_ID}`);
+    expect(body.source_id).toBe('original-mmm');
+    expect(body.source.id).toBe('original-mmm');
+  });
 });
 
 describe('full lesson-completion flow', () => {
