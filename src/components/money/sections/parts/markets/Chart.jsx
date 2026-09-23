@@ -22,6 +22,10 @@ export default function Chart() {
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
 
+  // Declared before the effects below: it is read in a dependency array, which
+  // is evaluated during render, so declaring it after them is a TDZ crash.
+  const showChart = !loading && !error && !!env?.series?.length;
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -37,7 +41,11 @@ export default function Chart() {
   // resolved colors, not `var(--m-*)` references — read them off the
   // container, which is always inside .money-hub.
   useEffect(() => {
-    if (!containerRef.current || chartRef.current) return;
+    // Depends on showChart, NOT []: the container below only renders once the
+    // fetch resolves, so a mount-only effect always saw a null ref, bailed on
+    // the line below, and never ran again — the canvas was never created and
+    // only the table fallback appeared.
+    if (!showChart || !containerRef.current || chartRef.current) return;
     let disposed = false;
     import('lightweight-charts').then(({ createChart, AreaSeries }) => {
       if (disposed || !containerRef.current) return;
@@ -78,7 +86,7 @@ export default function Chart() {
         seriesRef.current = null;
       }
     };
-  }, []);
+  }, [showChart]);
 
   useEffect(() => {
     if (seriesRef.current && env?.series?.length) {
