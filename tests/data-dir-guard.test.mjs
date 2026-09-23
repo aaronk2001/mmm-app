@@ -23,6 +23,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 const DEV_DB = path.join(ROOT, 'server', 'store', 'money', 'mmm.db');
+// null on a fresh clone with no dev DB — the guard assertions still hold.
+const devDbMtime = () => (fs.existsSync(DEV_DB) ? fs.statSync(DEV_DB).mtimeMs : null);
+const DEV_DIR = path.dirname(DEV_DB);
 const CONNECTION_PATH = path.join(ROOT, 'server', 'db', 'connection.js').split(path.sep).join('/');
 
 // Requires server/db/connection.js in a fresh `node -e` process, with the
@@ -47,7 +50,7 @@ function requireConnectionIn(extraEnv) {
 
 describe('data-dir footgun guard (server/db/connection.js)', () => {
   it('refuses to resolve a data dir with neither MMM_DATA_DIR nor MMM_ALLOW_DEV_DB set, and never touches the dev DB', () => {
-    const before = fs.statSync(DEV_DB).mtimeMs;
+    const before = devDbMtime();
 
     const result = requireConnectionIn({});
 
@@ -55,12 +58,12 @@ describe('data-dir footgun guard (server/db/connection.js)', () => {
     expect(result.stderr).toMatch(/MMM_DATA_DIR/);
     expect(result.stderr).toMatch(/MMM_ALLOW_DEV_DB/);
 
-    const after = fs.statSync(DEV_DB).mtimeMs;
+    const after = devDbMtime();
     expect(after).toBe(before);
   });
 
   it('resolves to the in-repo dev dir only when MMM_ALLOW_DEV_DB is explicitly set', () => {
-    const before = fs.statSync(DEV_DB).mtimeMs;
+    const before = devDbMtime();
 
     const result = requireConnectionIn({ MMM_ALLOW_DEV_DB: '1' });
 
@@ -70,7 +73,7 @@ describe('data-dir footgun guard (server/db/connection.js)', () => {
     expect(path.resolve(parsed.dataDir)).toBe(path.resolve(path.join(ROOT, 'server', 'store', 'money')));
 
     // Requiring the module alone (no db() call) must still leave the file untouched.
-    const after = fs.statSync(DEV_DB).mtimeMs;
+    const after = devDbMtime();
     expect(after).toBe(before);
   });
 
@@ -82,6 +85,33 @@ describe('data-dir footgun guard (server/db/connection.js)', () => {
       expect(result.status).toBe(0);
       const parsed = JSON.parse(result.stdout);
       expect(path.resolve(parsed.dataDir)).toBe(path.resolve(tmp));
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  // The removed migrateLegacyDb() opened the dev DB read-write, checkpointed it
+  // and copied it into every fresh MMM_DATA_DIR; initialize() also imported the
+  // dev data.json. A fresh dir must start empty and leave the dev dir alone.
+  it('opens a fresh MMM_DATA_DIR empty, without reading or writing the dev dir', () => {
+    const snapshot = () => (fs.existsSync(DEV_DIR)
+      ? fs.readdirSync(DEV_DIR).sort().map((n) => { const s = fs.statSync(path.join(DEV_DIR, n)); return `${n}:${s.size}:${s.mtimeMs}`; })
+      : []);
+    const before = snapshot();
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mmm-guard-test-'));
+    try {
+      const script =
+        `const c = require(${JSON.stringify(CONNECTION_PATH)}); const d = c.db(); ` +
+        `const n = (t) => d.prepare('SELECT COUNT(*) AS n FROM ' + t).get().n; ` +
+        `console.log(JSON.stringify({ accounts: n('accounts'), transactions: n('transactions') })); d.close();`;
+      const env = { ...process.env, MMM_DATA_DIR: tmp };
+      delete env.MMM_ALLOW_DEV_DB;
+      delete env.MMM_DB_FILE;
+      const result = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', cwd: ROOT, env });
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout.trim().split('\n').pop())).toEqual({ accounts: 0, transactions: 0 });
+      expect(snapshot()).toEqual(before);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

@@ -1,6 +1,5 @@
 // Point the data layer at a throwaway SQLite DB before any test imports store.js.
-// (migrateLegacyDb may copy the dev DB here; tests that need a clean slate call
-// store.reset() in their own beforeAll.)
+// A fresh dir starts empty — nothing is copied from the dev DB any more.
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
