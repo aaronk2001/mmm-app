@@ -16,6 +16,8 @@ import {
   Compass,
   LineChart,
   CandlestickChart,
+  Newspaper,
+  Dices,
   ChevronDown,
 } from 'lucide-react';
 import '../../styles/money-theme.css';
@@ -59,6 +61,8 @@ const IMPORTERS = {
   plan:         () => import('./sections/Plan'),
   markets:      () => import('./sections/Markets'),
   trades:       () => import('./sections/Trades'),
+  intelligence: () => import('./sections/Intelligence'),
+  betting:      () => import('./sections/Betting'),
   learn:        () => import('./sections/Learn'),
   settings:     () => import('./sections/Settings'),
 };
@@ -84,6 +88,8 @@ const SECTIONS = [
   { id: 'plan',         label: 'Plan',                 icon: Compass,         group: 'plan' },
   { id: 'markets',      label: 'Markets',              icon: LineChart,       group: 'invest' },
   { id: 'trades',       label: 'Trades',               icon: CandlestickChart, group: 'invest' },
+  { id: 'intelligence', label: 'Intelligence',         icon: Newspaper,       group: 'invest' },
+  { id: 'betting',      label: 'Betting',              icon: Dices,           group: 'invest' },
   { id: 'learn',        label: 'Learn',                icon: GraduationCap,   group: 'grow' },
   { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },      // ungrouped, pinned to the bottom
 ];
