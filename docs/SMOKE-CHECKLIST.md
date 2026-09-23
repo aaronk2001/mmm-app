@@ -139,23 +139,20 @@ expected failure mode, not a crash; load bars first.
 
 ### 9. External links open in the OS browser
 
-**Caveat:** as of this sprint, a code search of `src/` for `href="http`,
-`target="_blank"`, and `window.open` found **no external link currently
-rendered anywhere in the UI** — `content/learn/sources.yaml` carries a
-`url` per source and the lesson API returns `source_id`/`license_note`, but
-no Learn component renders that URL as a clickable link today. Treat this
-step as **not currently exercisable** until a real external link ships;
-don't fabricate one to test against.
+- [ ] Open Learn and start the lesson "Fixed vs. Variable — What You Can
+      Actually Steer" (`m2-fixed-vs-variable`).
+- [ ] Confirm the attribution footer below the lesson content shows the
+      license note and a "Source: ..." line linking to Wikipedia's "Fixed
+      cost" article.
+- [ ] Click the Source link.
+- [ ] Confirm it opens in the default OS browser, and the MMM window's
+      content does not navigate away.
 
-What **is** verified by code: `electron.js` denies same-window navigation
+Verified by code: `electron.js` denies same-window navigation
 unconditionally (`will-navigate` → `event.preventDefault()`) and routes any
 `window.open`/new-window request to the OS browser instead of a new Electron
 window (`setWindowOpenHandler` → `shell.openExternal(url)` + `{ action:
-'deny' }`). Once a real external link exists (e.g. a future Learn citation),
-re-run this step as:
-- [ ] Click the external link.
-- [ ] Confirm it opens in the default OS browser, and the MMM window's
-      content does not navigate away.
+'deny' }`).
 
 ### 10. Market refresh isn't cut off by the request timeout
 
