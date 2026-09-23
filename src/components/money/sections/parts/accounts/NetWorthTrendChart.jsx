@@ -5,6 +5,7 @@ import Card from '../../../shared/Card';
 import Money from '../../../shared/Money';
 import { motion } from 'motion/react';
 import { useApi } from '../../../../../lib/query';
+import { parseYmd } from '../../../../../lib/localDate';
 
 export default function NetWorthTrendChart({ data: initialData }) {
   const { data: fullHistory } = useApi('money/networth');
@@ -17,7 +18,7 @@ export default function NetWorthTrendChart({ data: initialData }) {
     const cutoff = new Date();
     if (timeframe === '90d') cutoff.setDate(now.getDate() - 90);
     else if (timeframe === '1y') cutoff.setFullYear(now.getFullYear() - 1);
-    return snapshots.filter(s => new Date(s.date) >= cutoff);
+    return snapshots.filter(s => parseYmd(s.date) >= cutoff);
   };
 
   const snapshots = fullHistory?.snapshots || initialData || [];

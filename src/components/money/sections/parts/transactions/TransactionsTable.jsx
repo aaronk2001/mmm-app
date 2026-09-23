@@ -1,6 +1,7 @@
 import { Trash2, Tag } from 'lucide-react';
 import Term from '../../../shared/Term';
 import Money from '../../../shared/Money';
+import { parseYmd } from '../../../../../lib/localDate';
 
 export default function TransactionsTable({
   filteredTransactions,
@@ -95,7 +96,7 @@ export default function TransactionsTable({
                   <input type="checkbox" checked={sel} onChange={() => onToggleRow(txn.id)} aria-label="Select row" style={{ cursor: 'pointer' }} />
                 </td>
                 <td style={{ padding: '8px 12px', color: 'var(--m-ink)', fontVariantNumeric: 'tabular-nums' }}>
-                  {editing(txn.id, 'date') ? cellInput('date') : display(txn.id, 'date', new Date(txn.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}
+                  {editing(txn.id, 'date') ? cellInput('date') : display(txn.id, 'date', parseYmd(txn.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}
                 </td>
                 <td style={{ padding: '8px 12px', color: 'var(--m-ink)' }}>
                   {editing(txn.id, 'payee') ? cellInput('text') : display(txn.id, 'payee', txn.payee || '—')}
