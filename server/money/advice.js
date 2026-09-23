@@ -12,6 +12,8 @@
 // impact:   0-100 ranking score (higher = surfaced first / nudged)
 // action:   { label, route, params } | null  — deep-link to the fixing screen
 
+const { localDateFromStr } = require('./calc');
+
 const SEVERITY_FLOOR = { critical: 80, warn: 55, info: 25, good: 5 };
 
 const money = (n) => {
@@ -220,7 +222,7 @@ function computeAdvice(input = {}) {
     const current = linked != null ? linked : Number(g.current) || 0;
     const remaining = Math.max(0, target - current);
     if (remaining <= 0) return;
-    const td = new Date(g.target_date);
+    const td = localDateFromStr(g.target_date);
     const monthsLeft = (td.getFullYear() - today.getFullYear()) * 12 + (td.getMonth() - today.getMonth());
     if (monthsLeft <= 0) return;
     const needed = remaining / monthsLeft;

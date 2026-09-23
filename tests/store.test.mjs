@@ -1,10 +1,29 @@
 // Integration tests over the real SQLite data layer (temp DB from tests/setup.mjs).
 // Focus: derived balances, integer-cents exactness, cascade deletes, deep-merge
 // settings, recurring CRUD, and export/import round-trips.
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import store from '../server/money/store.js';
 import repo from '../server/db/repo.js';
 import { db } from '../server/db/connection.js';
+
+// TZ west of UTC + a fake evening local time so a UTC-keyed "today"
+// (`new Date().toISOString()...`) disagrees with the LOCAL calendar day —
+// Sep 23, 8pm Phoenix local is already Sep 24 in UTC.
+function withPhoenixEvening(fn) {
+  const prevTZ = process.env.TZ;
+  process.env.TZ = 'America/Phoenix';
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(2026, 8, 23, 20, 0));
+  try {
+    return fn();
+  } finally {
+    vi.useRealTimers();
+    if (prevTZ === undefined) delete process.env.TZ; else process.env.TZ = prevTZ;
+  }
+}
 
 beforeEach(() => {
   store.reset();
@@ -254,6 +273,48 @@ describe('import pipeline', () => {
     const out = store.importFile(acc.id, 'qif', 'D07/01/26\nT-100\nPRent Co\n^\n');
     expect(out.imported).toBe(1);
     expect(store.getAccounts()[0].balance).toBe(-100);
+  });
+
+  it('falls back to LOCAL today (not UTC) when an imported row has no date', () => {
+    withPhoenixEvening(() => {
+      const acc = store.createAccount('Checking', 'checking', 0);
+      const out = store.importTransactions(acc.id, [{ amount: '10', payee: 'Mystery' }]);
+      expect(out.sample[0].date).toBe('2026-09-23');
+    });
+  });
+});
+
+describe('seedSample re-anchoring uses LOCAL calendar days', () => {
+  it('shifts the newest transaction to LOCAL "2 days ago" and the newest snapshot to LOCAL today, not UTC', () => {
+    withPhoenixEvening(() => {
+      const dir = mkdtempSync(path.join(tmpdir(), 'mmm-seed-'));
+      const file = path.join(dir, 'sample.json');
+      try {
+        const sample = {
+          accounts: [{ id: 'a1', name: 'Checking', type: 'checking', balance: 1000, currency: 'USD' }],
+          transactions: [
+            { id: 't1', account_id: 'a1', date: '2026-01-01', amount: -10, payee: 'Old' },
+            { id: 't2', account_id: 'a1', date: '2026-01-10', amount: -20, payee: 'Newest' },
+          ],
+        };
+        writeFileSync(file, JSON.stringify(sample));
+        expect(store.seedSample(file)).toBe(true);
+
+        // Re-anchored so the newest transaction lands ~2 days before LOCAL
+        // today. A UTC-keyed shift (toISOString) would land it one day later
+        // in the evening west of UTC.
+        const newest = store.getTransactions().find((t) => t.payee === 'Newest');
+        expect(newest.date).toBe('2026-09-21');
+
+        // The synthesized net-worth trend's most recent point should be
+        // LOCAL today, not UTC "tomorrow".
+        const snaps = store.getNetWorthSnapshots();
+        const maxDate = snaps.reduce((m, s) => (s.date > m ? s.date : m), '');
+        expect(maxDate).toBe('2026-09-23');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });
 
