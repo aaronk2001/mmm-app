@@ -71,9 +71,14 @@ if (!fs.existsSync(path.join(APP, 'content', 'learn', 'sources.yaml'))) {
   process.exit(1);
 }
 // Never ship a database, legacy blob, or backups inside the app folder — user
-// data lives in %APPDATA%\mmm and a fresh install must start empty.
-for (const junk of ['mmm.db', 'mmm.db-wal', 'mmm.db-shm', 'data.json', 'data.json.migrated.bak', 'backups']) {
-  fs.rmSync(path.join(APP, 'server', 'store', 'money', junk), { recursive: true, force: true });
+// data lives in %APPDATA%\mmm and a fresh install must start empty. Match
+// mmm.db* by prefix: dev-DB copies like mmm.db.pre-restore-* and
+// mmm.db.corrupted-backup-* (scripts/restore-dev-db.sh) are real user data too.
+const STORE = path.join(APP, 'server', 'store', 'money');
+for (const name of fs.readdirSync(STORE)) {
+  if (name.startsWith('mmm.db') || ['data.json', 'data.json.migrated.bak', 'backups'].includes(name)) {
+    fs.rmSync(path.join(STORE, name), { recursive: true, force: true });
+  }
 }
 
 // ── 4. Server dependency closure ──────────────────────────────────────────────
