@@ -3,6 +3,7 @@ const store = require('./store');
 const advice = require('./advice');
 const ollama = require('./ollama');
 const { coachSystemPrompt } = require('./coach-persona');
+const { localDate } = require('./calc');
 const v = require('../middleware/validators');
 
 const router = express.Router();
@@ -53,7 +54,7 @@ router.get('/overview', (req, res) => {
     const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
 
     // Recent snapshots (last 30 days) — string-compared dates.
-    const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const cutoff = localDate(-30);
     const recentSnapshots = data.networth_snapshots
       .filter(s => String(s.date) >= cutoff)
       .map(s => ({
