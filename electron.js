@@ -220,9 +220,11 @@ function createWindow() {
   });
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  // Open external links in the browser, not Electron.
+  // Open external links in the browser, not Electron — web URLs only.
+  // openExternal hands file:, smb:, ms-* etc. to the OS shell, so anything
+  // else is dropped.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 
