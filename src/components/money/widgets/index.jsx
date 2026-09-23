@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Wallet, TrendingUp, Zap, PiggyBank, Target, Landmark, Receipt,
-  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3, Sparkles, Hourglass, GraduationCap, ArrowRight,
+  Calculator, Pencil, Check, X, PieChart as PieIcon, BarChart3, Sparkles, Hourglass, GraduationCap, ArrowRight, Newspaper,
 } from 'lucide-react';
 import InsightsWidget from './InsightsWidget';
 import Grade from '../shared/Grade';
@@ -415,6 +415,40 @@ function TodaysLesson() {
   );
 }
 
+// Compact headline strip for the Overview dashboard. GET /api/news/market is
+// the same envelope the Intelligence → News tab reads: with `news` off or no
+// key stored it returns an empty list plus a `reason`, so this widget shows
+// that sentence instead of an error. Headlines are untrusted remote text —
+// rendered as text, linked only when the URL is http(s), and always
+// target=_blank rel="noopener noreferrer" (Electron sends those to the OS
+// browser). `published_at` is an instant, never a day key.
+function TopNews({ config = {} }) {
+  const count = Number(config.count) || 4;
+  const { data, isLoading } = useApi('news/market');
+  if (isLoading) return <Loading />;
+  const articles = (data?.articles || []).slice(0, count);
+  if (articles.length === 0) return <Empty>{data?.reason || 'Turn on Market news in Settings → Online & Keys.'}</Empty>;
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {articles.map((a) => {
+        const safe = typeof a.url === 'string' && /^https?:\/\//i.test(a.url);
+        const meta = [a.source, a.published_at ? new Date(a.published_at).toLocaleString() : null].filter(Boolean).join(' · ');
+        const title = (
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--m-ink)', display: 'block', lineHeight: 1.4 }}>{a.title}</span>
+        );
+        return (
+          <div key={a.id}>
+            {safe ? (
+              <a href={a.url} target="_blank" rel="noopener noreferrer" className="m-no-drag" style={{ textDecoration: 'none' }}>{title}</a>
+            ) : title}
+            {meta && <div style={{ fontSize: 11, color: 'var(--m-muted)', marginTop: 2, ...num }}>{meta}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── registry ─────────────────────────────────────────────────────────────────
 // defaultLayout uses a 12-col grid; rowHeight ~80px. `scroll` => content area
 // gets its own overflow; chart widgets fill height instead.
@@ -432,6 +466,7 @@ export const WIDGETS = {
   incomeExpense:      { title: 'Income vs. Expenses',   icon: BarChart3,     layout: { w: 4, h: 3, minW: 3, minH: 2 }, Component: IncomeExpense },
   customMetric:       { title: 'Custom Metric',        icon: Calculator,    layout: { w: 4, h: 3, minW: 3, minH: 3 }, Component: CustomMetric, scroll: true },
   todaysLesson:       { title: "Today's Lesson",       icon: GraduationCap, layout: { w: 4, h: 3, minW: 3, minH: 3 }, Component: TodaysLesson },
+  topNews:            { title: 'Top News',             icon: Newspaper,     layout: { w: 4, h: 4, minW: 3, minH: 3 }, Component: TopNews, scroll: true },
 };
 
 // Dashboard presets — quick layouts users can apply from the Overview toolbar.
@@ -471,4 +506,5 @@ export const DEFAULT_LAYOUT = [
   { i: 'goals',              x: 4, y: 10, w: 4, h: 4 },
   { i: 'recentTransactions', x: 8, y: 10, w: 4, h: 5 },
   { i: 'todaysLesson',       x: 0, y: 15, w: 4, h: 3 },
+  { i: 'topNews',            x: 4, y: 15, w: 4, h: 4 },
 ];
