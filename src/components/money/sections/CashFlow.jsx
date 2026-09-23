@@ -392,7 +392,7 @@ export default function CashFlow() {
                     stroke="var(--m-muted)"
                     style={{ fontSize: '12px' }}
                     tickFormatter={d => {
-                      const date = new Date(d);
+                      const date = parseYmd(d);
                       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     }}
                     interval={Math.floor(adjustedProjection.projection.length / 6) || 0}
@@ -410,7 +410,7 @@ export default function CashFlow() {
                       color: 'var(--m-ink)',
                     }}
                     formatter={value => <Money value={value} prefix="$" decimals={0} />}
-                    labelFormatter={label => new Date(label).toLocaleDateString('en-US')}
+                    labelFormatter={label => parseYmd(label).toLocaleDateString('en-US')}
                   />
                   <Area
                     type="monotone"

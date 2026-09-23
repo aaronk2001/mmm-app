@@ -65,7 +65,7 @@ export default function NetWorthTrendChart({ data: initialData }) {
               dataKey="date"
               stroke="var(--m-muted)"
               style={{ fontSize: '12px' }}
-              tickFormatter={d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              tickFormatter={d => parseYmd(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             />
             <YAxis
               stroke="var(--m-muted)"
@@ -80,7 +80,7 @@ export default function NetWorthTrendChart({ data: initialData }) {
                 color: 'var(--m-ink)',
               }}
               formatter={value => <Money value={value} prefix="$" decimals={0} />}
-              labelFormatter={label => new Date(label).toLocaleDateString('en-US')}
+              labelFormatter={label => parseYmd(label).toLocaleDateString('en-US')}
             />
             <Area
               type="monotone"

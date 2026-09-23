@@ -5,6 +5,7 @@ import Money from '../../../shared/Money';
 import MetricCard from '../../../shared/MetricCard';
 import EmptyState from '../../../shared/EmptyState';
 import { perMonth, perYear } from '../../../../../lib/cadence';
+import { parseYmd } from '../../../../../lib/localDate';
 
 const CYCLES = [
   { value: 'all', label: 'All' },
@@ -14,7 +15,7 @@ const CYCLES = [
 ];
 
 const fmtDate = (d) => d
-  ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  ? parseYmd(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   : '—';
 
 /**
