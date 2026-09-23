@@ -6,7 +6,7 @@ import SectionHeader from '../shared/SectionHeader';
 import Card from '../shared/Card';
 import EmptyState from '../shared/EmptyState';
 import { useApi } from '../../../lib/query';
-import { parseYmd } from '../../../lib/localDate';
+import { parseYmd, todayYmd } from '../../../lib/localDate';
 
 const f$ = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
 const num = { fontVariantNumeric: 'tabular-nums' };
@@ -97,7 +97,7 @@ export default function Reports() {
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `mmm-${name}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.href = url; a.download = `mmm-${name}-${todayYmd()}.csv`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }
 

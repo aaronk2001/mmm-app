@@ -168,7 +168,7 @@ export default function Transactions() {
     const csv = header + rows;
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const now = new Date().toISOString().split('T')[0];
+    const now = todayYmd();
     const link = document.createElement('a');
     link.href = url;
     link.download = `mmm-transactions-${now}.csv`;
