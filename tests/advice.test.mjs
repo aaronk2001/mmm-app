@@ -1,6 +1,6 @@
 // Unit tests for the deterministic advice engine. Pure function → synthetic
 // inputs, no DB. Locks the rule behavior the LLM coach is grounded on.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import advice from '../server/money/advice.js';
 
 const { computeAdvice, computeDigest } = advice;
@@ -103,6 +103,28 @@ describe('computeAdvice', () => {
     });
     // needs (4500/4)=1125/mo but only contributing 200 → behind
     expect(byId(fs, 'goal-behind-g1')).toBeTruthy();
+  });
+
+  it('counts monthsLeft on the LOCAL calendar day for a 1st-of-month target date (west of UTC)', () => {
+    const prevTZ = process.env.TZ;
+    process.env.TZ = 'America/Phoenix';
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 15, 10, 0)); // Sep 15 2026, 10am Phoenix local
+    try {
+      // `new Date('2026-11-01')` parses as UTC midnight = Oct 31, 5pm Phoenix
+      // local, collapsing Sep 15 -> Nov 1 (2 months) into 1 month and falsely
+      // flagging the goal as behind pace even though $550/mo covers the real
+      // 2-month, $500/mo pace.
+      const fs = computeAdvice({
+        metrics: { monthly_income: 4000, monthly_expenses: 3000 },
+        goals: [{ id: 'g1', name: 'Trip', target: 1000, current: 0, monthly_contribution: 550, target_date: '2026-11-01' }],
+        accounts: [],
+      });
+      expect(byId(fs, 'goal-behind-g1')).toBeFalsy();
+    } finally {
+      vi.useRealTimers();
+      if (prevTZ === undefined) delete process.env.TZ; else process.env.TZ = prevTZ;
+    }
   });
 
   it('spreads quarterly and annual bills over their true monthly share in the recurring-heavy finding', () => {

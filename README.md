@@ -2,48 +2,90 @@
 
 A standalone, **local-first** personal-finance desktop app. Electron shell → a
 local Express server on `:5006` → a React SPA, with all data in a local SQLite
-database. No cloud, no accounts, no telemetry.
+database. No cloud, no accounts, no telemetry by default — every online
+feature is an explicit opt-in (see below).
 
 ## Run it
 
 ```bash
 npm install
-npm run dev            # Vite (5173) + Electron, hot reload
-npm test               # money-math unit tests (vitest)
-npm run build          # build the SPA to src/dist
-npm run build:portable # hand-assemble build/MMM-portable/MMM.exe (see below)
+npm run dev              # Vite (5173) + Electron, hot reload
+npm start                 # run the Electron shell directly (electron .)
+npm test                  # money-math unit tests (vitest)
+npm run build              # build the SPA to src/dist
+npm run build:portable     # hand-assemble build/MMM-portable/MMM.exe
+npm run check:contrast      # WCAG contrast gate over src/styles/theme.css
+npm run check:learn-content # validates content/learn/**/*.md (front matter, check answers, sources)
 ```
 
-The desktop shortcut is created by `make-mmm-shortcut.ps1` (run it from a normal
-shell — it points a `MMM.lnk` on your Desktop at the portable exe with the app
-icon).
+**Never run `build` and `build:portable` at the same time.** `build:portable`
+runs `vite build` itself as its first step, and both write to `src/dist` — the
+loser of the race dies with `EPERM`. Run them one at a time.
 
-## Where your data lives
+**Close any running `MMM.exe` before `npm run build:portable`.** The script
+deletes and recreates `build/MMM-portable` (`fs.rmSync` + `fs.mkdirSync` in
+`scripts/build-portable.mjs`) — if the portable exe is still running from that
+path, Windows holds the file open and the build fails.
 
-- **Packaged app:** `%APPDATA%\mmm\` — `mmm.db` (SQLite) plus `backups\`.
-  Rebuilding or replacing the exe never touches it.
-- **Dev:** `server/store/money/` in the repo.
+`build:portable` ends with its own smoke test (boots the packaged server
+against a throwaway data dir and polls `/api/health` + `/api/money/overview`)
+and prints `SMOKE PASS — portable ready: build/MMM-portable/MMM.exe`. See also
+`docs/SMOKE-CHECKLIST.md` for a manual pass over the packaged exe.
 
-MMM snapshots your data automatically every day (JSON + a live SQLite copy,
-30-day retention) and lets you back up / restore on demand from **Settings →
-Desktop / Privacy & Data**. It also imports a legacy `data.json` and migrates
-older database versions in place on first run.
+## Where data lives
+
+- **Packaged app:** `%APPDATA%\mmm`. `electron.js` forks the server with
+  `MMM_DATA_DIR` set to that path whenever `app.isPackaged` is true, so
+  rebuilding or replacing the exe never touches user data.
+- **Dev:** the in-repo database at `server/store/money/mmm.db`. `electron.js`
+  sets `MMM_ALLOW_DEV_DB=1` itself when launching the server unpackaged (`npm
+  run dev` / `npm start`), which is what lets the dev DB load at all.
+- **`server/db/connection.js` throws at require-time** unless `MMM_DATA_DIR`
+  or `MMM_ALLOW_DEV_DB=1` is set — it no longer falls back to the in-repo dev
+  DB silently (that footgun once wiped it via a stray one-off script). For a
+  one-off script or ad-hoc `node` invocation against the server code, set a
+  throwaway data dir instead of the dev DB opt-in:
+  ```bash
+  MMM_DATA_DIR=$(mktemp -d) node some-script.js
+  ```
+- **Backups:** `server/backup/scheduler.js` writes daily JSON + live SQLite
+  snapshots to `<DATA_DIR>/backups` (once on startup, then every 24h), keeping
+  the newest **30 days** (`RETENTION_DAYS`). Restore on demand from Settings →
+  Privacy & Data.
+
+## Online features are opt-in
+
+`server/online/features.js` defines the only feature keys the app knows:
+`market`, `news`, `youtube`, `predictionMarkets`, `sportsOdds`, `telegram`,
+`cloudLlm`. **All are off by default** — Settings → Online & Keys shows one
+toggle + one key field per feature, each starts off, and with zero API keys
+configured every money feature (accounts, transactions, budget, cash flow,
+goals, debt, investments, reports) still works fully offline.
+
+Keys are stored via Electron's `safeStorage` (encrypted `keys.enc` next to
+`desktop-prefs.json` in `%APPDATA%\mmm`, decrypted only in the main process
+and pushed to the forked server over IPC — see `server/online/keys.js`).
+They're never written to SQLite, `.env`, or localStorage, and the renderer can
+only ever read back a presence boolean, never a key value.
+
+Trading (the **Trades** section) is **paper-only** — practice positions
+against a strategy gate with zero real money or brokerage connection.
+
+## Deliberately cut
+
+Compared to its sibling project NEXUS, MMM does **not** include: AI/Desk (new
+LLM-agent work — the existing local Ollama coach at `/api/money/coach`
+remains), Betting/prediction-market trading, Media (news/YouTube feeds beyond
+the opt-in toggles), Telegram delivery, and Learn content beyond modules
+M0–M2 (`content/learn/m0-orientation`, `m1-runway-survival`,
+`m2-cash-flow-steer`). See `docs/NEXUS-PARITY.md` for the full NEXUS-to-MMM
+feature mapping.
 
 ## Sections
 
-- **Overview** — customizable widget dashboard (drag/resize, presets, custom
-  metrics). `Ctrl+N` opens a keyboard-first quick-add from anywhere.
-- **Accounts & Net Worth** — accounts by type, net-worth trend (90d/1y/All).
-- **Transactions** — full ledger with inline edit, search, multi-select bulk
-  ops, CSV/OFX/QIF import, and CSV export of the current view.
-- **Budget** — monthly envelopes with rollover and drill-down to spending.
-- **Cash Flow** — 90-day projection, scenario sliders, recurring income/bills.
-- **Goals** — savings goals with account linking, projected completion, pace.
-- **Debt Payoff** — avalanche/snowball with interest-saved deltas + calculators.
-- **Investments** — holdings, allocation, inline price updates, gain/loss.
-- **Reports** — spending / income-vs-expense / net-worth with custom ranges.
-- **Settings** — theme + teal accent, currency, rules, custom fields, backups,
-  launch-on-startup, and close-to-tray.
+The 14 nav sections (`SECTIONS` in `src/components/money/MoneyHub.jsx`):
+Overview, Accounts & Net Worth, Transactions, Budget, Cash Flow, Goals, Debt
+Payoff, Investments, Reports, Plan, Markets, Trades, Learn, Settings & Privacy.
 
 ## Architecture
 
@@ -78,4 +120,10 @@ The result is `build/MMM-portable/MMM.exe` — no installer required.
 
 - Bun is not used here — this app is npm + JS/JSX by design.
 - Dates are compared as `YYYY-MM-DD` strings on the local calendar throughout
-  (never `new Date(isoDate)`), which avoids UTC-vs-local day-shift bugs.
+  (never `new Date(isoDate)`, which parses as UTC midnight and can shift the
+  displayed day) — see `src/lib/localDate.js` and `server/money/calc.js`'s
+  local-date helpers.
+
+## Third-party notices
+
+See `THIRD_PARTY_NOTICES.md` for third-party license attributions.

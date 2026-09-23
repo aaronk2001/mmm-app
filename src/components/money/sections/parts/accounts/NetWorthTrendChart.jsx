@@ -5,6 +5,7 @@ import Card from '../../../shared/Card';
 import Money from '../../../shared/Money';
 import { motion } from 'motion/react';
 import { useApi } from '../../../../../lib/query';
+import { parseYmd } from '../../../../../lib/localDate';
 
 export default function NetWorthTrendChart({ data: initialData }) {
   const { data: fullHistory } = useApi('money/networth');
@@ -17,7 +18,7 @@ export default function NetWorthTrendChart({ data: initialData }) {
     const cutoff = new Date();
     if (timeframe === '90d') cutoff.setDate(now.getDate() - 90);
     else if (timeframe === '1y') cutoff.setFullYear(now.getFullYear() - 1);
-    return snapshots.filter(s => new Date(s.date) >= cutoff);
+    return snapshots.filter(s => parseYmd(s.date) >= cutoff);
   };
 
   const snapshots = fullHistory?.snapshots || initialData || [];
@@ -64,7 +65,7 @@ export default function NetWorthTrendChart({ data: initialData }) {
               dataKey="date"
               stroke="var(--m-muted)"
               style={{ fontSize: '12px' }}
-              tickFormatter={d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              tickFormatter={d => parseYmd(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             />
             <YAxis
               stroke="var(--m-muted)"
@@ -79,7 +80,7 @@ export default function NetWorthTrendChart({ data: initialData }) {
                 color: 'var(--m-ink)',
               }}
               formatter={value => <Money value={value} prefix="$" decimals={0} />}
-              labelFormatter={label => new Date(label).toLocaleDateString('en-US')}
+              labelFormatter={label => parseYmd(label).toLocaleDateString('en-US')}
             />
             <Area
               type="monotone"

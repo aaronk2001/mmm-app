@@ -8,6 +8,21 @@ import ErrorState from '../../../shared/ErrorState';
 import StepView from './StepView';
 import { findResumeStepIndex, passesMasteryGate, shouldHandleEscapeKey } from './resume';
 
+function SourceFooter({ source, licenseNote }) {
+  if (!source || source.id === 'original-mmm') return null;
+  return (
+    <div style={{ marginTop: 20, paddingTop: 12, borderTop: '1px solid var(--m-border)', fontSize: 11, color: 'var(--m-muted)', lineHeight: 1.5 }}>
+      {licenseNote && <div>{licenseNote}</div>}
+      <div>
+        Source: <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--m-muted)' }}>{source.title}</a> —{' '}
+        {source.license_url ? (
+          <a href={source.license_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--m-muted)' }}>{source.license}</a>
+        ) : source.license}. {source.attribution}
+      </div>
+    </div>
+  );
+}
+
 function EndScreen({ lesson, lessonProgress, onReview, onBackToLessons }) {
   const gateOk = passesMasteryGate({ gate: lesson.gate, scorePct: lessonProgress?.score_pct, applyActionDone: lessonProgress?.apply_action_done });
   return (
@@ -30,6 +45,7 @@ function EndScreen({ lesson, lessonProgress, onReview, onBackToLessons }) {
         <button className="m-btn m-btn-secondary" onClick={onReview}><RotateCcw size={14} style={{ marginRight: 6 }} aria-hidden="true" />Review lesson</button>
         <button className="m-btn m-btn-primary" onClick={onBackToLessons}>Back to lessons</button>
       </div>
+      <SourceFooter source={lesson.source} licenseNote={lesson.license_note} />
     </div>
   );
 }
@@ -225,6 +241,7 @@ export default function LessonRunner() {
             submitting={submitting}
           />
         )}
+        {!finished && <SourceFooter source={data.source} licenseNote={data.license_note} />}
       </div>
     </div>
   );

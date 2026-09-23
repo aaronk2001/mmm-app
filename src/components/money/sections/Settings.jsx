@@ -11,6 +11,7 @@ import OnlinePanel from './parts/settings/OnlinePanel';
 import ErrorState from '../shared/ErrorState';
 import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
+import { todayYmd } from '../../../lib/localDate';
 
 const ACCENTS = [
   { name: 'Teal',   hex: '#2dd4bf' },
@@ -262,7 +263,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mmm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `mmm-backup-${todayYmd()}.json`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       setBackupMsg({ ok: true, text: 'Backup downloaded.' });
