@@ -34,6 +34,12 @@ export function buildLearnIndex(contentDir) {
   const issues = [];
   const index = [];
 
+  for (const source of sources) {
+    if (typeof source.license === 'string' && source.license.startsWith('CC ') && !source.license_url) {
+      issues.push(`sources.yaml: ${source.id}: CC-licensed source is missing license_url`);
+    }
+  }
+
   for (const lesson of lessons) {
     const lessonIssues = [];
 

@@ -76,6 +76,7 @@ describe('GET /lessons/:id', () => {
     expect(body.source_id).toBe('wikipedia-fixed-variable-costs');
     expect(body.source.license).toBe('CC BY-SA 4.0');
     expect(body.source.url.startsWith('https://')).toBe(true);
+    expect(body.source.license_url).toBe('https://creativecommons.org/licenses/by-sa/4.0/');
   });
 
   it('resolves the original-mmm source for an in-house lesson', async () => {
