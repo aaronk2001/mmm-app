@@ -51,7 +51,9 @@ fs.renameSync(path.join(OUT, 'electron.exe'), path.join(OUT, 'MMM.exe'));
 // ── 3. App payload ────────────────────────────────────────────────────────────
 log('3/6', 'Injecting app -> resources/app');
 fs.mkdirSync(path.join(APP, 'src'), { recursive: true });
-for (const f of ['electron.js', 'preload.js', 'package.json']) {
+// THIRD_PARTY_NOTICES.md must travel with the binary (MIT/BSD/Apache/OFL all
+// require the notice in distributions, not just the source repo).
+for (const f of ['electron.js', 'preload.js', 'package.json', 'THIRD_PARTY_NOTICES.md']) {
   fs.copyFileSync(path.join(ROOT, f), path.join(APP, f));
 }
 fs.cpSync(path.join(ROOT, 'server'), path.join(APP, 'server'), { recursive: true });
