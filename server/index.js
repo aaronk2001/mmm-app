@@ -3,6 +3,7 @@ const express     = require('express');
 const cors        = require('cors');
 const helmet      = require('helmet');
 const rateLimit   = require('express-rate-limit');
+const { skipApiLimiter } = require('./api-limiter');
 const compression = require('compression');
 const path        = require('path');
 
@@ -39,9 +40,11 @@ app.use(compression());
 app.use(express.json({ limit: '2mb' })); // larger for settings + CSV/backup import
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
-// General API limiter — 120 req/min is generous for a single-user app.
+// General API limiter — 120 req/min on writes and network-reaching reads;
+// local reads skip it (see server/api-limiter.js for the measurement).
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false,
+  skip: skipApiLimiter,
   message: { error: 'Too many requests, please slow down.' },
 });
 app.use('/api', apiLimiter);
