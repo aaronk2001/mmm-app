@@ -6,6 +6,9 @@
 //   3. Nothing here writes to the money ledger — the whole surface is GET.
 import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } from 'vitest';
 import express from 'express';
+import path from 'node:path';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { transformSync } from 'esbuild';
 import { createRequire } from 'node:module';
 import { db } from '../server/db/connection.js';
 import repo from '../server/db/repo.js';
@@ -230,6 +233,51 @@ describe('routes: /api/betting', () => {
       // eslint-disable-next-line no-await-in-loop
       const res = await fetch(`${base}/prediction-markets`, { method });
       expect(res.status).toBe(404);
+    }
+  });
+});
+
+// The Betting section is unreachable from the build graph until the hub
+// mounts it (MoneyHub.jsx is the controller's file, untouched here), so
+// `vite build` never compiles these files and a typo would only surface as a
+// blank tab after wiring. esbuild-parse each one and resolve every relative
+// import by hand — cheaper and more deterministic than importing React,
+// react-router and lucide into the test worker.
+describe('Betting section components parse and resolve their imports', () => {
+  const dir = 'src/components/money/sections/parts/betting';
+  const files = () => {
+    const names = readdirSync(dir).map((f) => `${dir}/${f}`);
+    return ['src/components/money/sections/Betting.jsx', ...names];
+  };
+
+  it('every file parses as JSX', () => {
+    for (const f of files()) {
+      expect(() => transformSync(readFileSync(f, 'utf8'), { loader: 'jsx', sourcefile: f }), f).not.toThrow();
+    }
+  });
+
+  it('every relative import points at a file that exists', () => {
+    for (const f of files()) {
+      const src = readFileSync(f, 'utf8');
+      for (const [, spec] of src.matchAll(/from '(\.[^']+)'/g)) {
+        const resolved = path.resolve(path.dirname(f), spec);
+        const found = ['', '.js', '.jsx'].some((ext) => existsSync(resolved + ext));
+        expect(found, `${f} → ${spec}`).toBe(true);
+      }
+      // lazy() sub-tab imports are dynamic, so they are matched separately.
+      for (const [, spec] of src.matchAll(/import\('(\.[^']+)'\)/g)) {
+        const resolved = path.resolve(path.dirname(f), spec);
+        expect(['', '.js', '.jsx'].some((ext) => existsSync(resolved + ext)), `${f} → ${spec}`).toBe(true);
+      }
+    }
+  });
+
+  it('carries no hardcoded hex colours, no rgba(), and no cursor:pointer', () => {
+    for (const f of files()) {
+      const src = readFileSync(f, 'utf8');
+      expect(src, f).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(src, f).not.toMatch(/rgba?\(/);
+      expect(src, f).not.toMatch(/cursor:\s*'?pointer/);
     }
   });
 });

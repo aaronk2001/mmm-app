@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import * as client from '../src/lib/odds.js';
+import { valueRows } from '../src/components/money/sections/parts/betting/ValueBetting.jsx';
 
 const require = createRequire(import.meta.url);
 const server = require('../server/betting/odds.js');
@@ -205,5 +206,34 @@ describe('consensusProbs / valueEdge', () => {
   });
   both('valueEdge is null for an unpriced leg', (m) => {
     expect(m.valueEdge(0.5, null)).toBeNull();
+  });
+});
+
+// The Value table's row builder — pure, so it is pinned here rather than
+// needing a DOM. It is the one place the client mirror is actually wired up.
+describe('valueRows (Betting → Value tab)', () => {
+  const events = [{
+    id: 'e1', homeTeam: 'Suns', awayTeam: 'Lakers',
+    consensus: { home: 0.5, away: 0.5 },
+    bookmakers: [
+      { key: 'a', name: 'Book A', markets: { h2h: { homeOdds: 120, awayOdds: -110 } } },  // home +120 → implied 45.45%, edge 4.55pts
+      { key: 'b', name: 'Book B', markets: { h2h: { homeOdds: -130, awayOdds: -105 } } },
+    ],
+  }];
+
+  it('keeps only prices beating the consensus by at least the threshold, best edge first', () => {
+    const rows = valueRows(events, 0.02);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ team: 'Suns', book: 'Book A', odds: 120 });
+    expect(rows[0].edge).toBeCloseTo(0.0454545, 6);
+    expect(rows[0].ev).toBeCloseTo(0.1, 10);
+  });
+
+  it('raising the threshold drops the row', () => {
+    expect(valueRows(events, 0.05)).toEqual([]);
+  });
+
+  it('skips a game with no consensus (no book quoting both sides)', () => {
+    expect(valueRows([{ id: 'x', bookmakers: [{ name: 'A', markets: { h2h: { homeOdds: 120 } } }] }], 0)).toEqual([]);
   });
 });
