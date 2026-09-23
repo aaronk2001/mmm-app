@@ -123,9 +123,12 @@ router.get('/lessons/:id', (req, res) => {
     // above (no new computation), so the client can render Grade.jsx badges
     // and a "running on sample figures" banner truthfully, and pre-fill an
     // apply-action confirm from the user's own numbers.
+    const source = content.getSourceById(content.loadSources(CONTENT_DIR), lesson.source_id);
+
     res.json({
       ...lessonSummary(lesson), source_id: lesson.source_id, license_note: lesson.license_note,
       requires_data: lesson.requires_data, personalizes: lesson.personalizes || [], variables: vars, steps,
+      source: source ? { id: source.id, title: source.title, url: source.url, license: source.license, attribution: source.attribution } : null,
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
