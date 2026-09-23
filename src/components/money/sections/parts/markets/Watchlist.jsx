@@ -6,7 +6,7 @@ import { toast } from '../../../../../lib/toast';
 import Card from '../../../shared/Card';
 import EmptyState from '../../../shared/EmptyState';
 import Skeleton from '../../../shared/Skeleton';
-import { f$, fPct, changeColor, num } from './common';
+import { f$, fPct, changeColor, num, rangeStr, formatUpdatedAt } from './common';
 
 // This tab is the one the brief means by "UI reads snapshots and never
 // triggers a fetch except explicit Refresh": prices come only from
@@ -88,21 +88,27 @@ export default function Watchlist() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--m-border)' }}>
-                  {['Symbol', 'Note', 'Price', 'Change', 'Updated', ''].map((h, i) => (
-                    <th key={h} style={{ padding: '10px 12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em', textAlign: i === 2 || i === 3 ? 'right' : 'left' }}>{h}</th>
+                  {['Symbol', 'Note', 'Price', 'Change', 'Day Range', 'Updated', ''].map((h, i) => (
+                    <th key={h} style={{ padding: '10px 12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em', textAlign: i >= 2 && i <= 4 ? 'right' : 'left' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {watchlist.map((item) => {
                   const snap = bySymbol[item.symbol];
+                  const q = snap?.data || {};
                   return (
                     <tr key={item.id} style={{ borderBottom: '1px solid var(--m-border)' }}>
                       <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--m-ink)' }}>{item.symbol}</td>
                       <td style={{ padding: '10px 12px', color: 'var(--m-ink-2)' }}>{item.note || '—'}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink)', ...num }}>{snap ? f$(snap.price) : '—'}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: changeColor(snap?.change_pct), ...num }}>{snap ? fPct(snap.change_pct) : '—'}</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--m-muted)', fontSize: 12 }}>{snap?.fetched_at ? new Date(snap.fetched_at).toLocaleString() : 'never — hit Refresh now'}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: changeColor(snap?.change_pct), ...num }}>
+                        {snap ? `${fPct(snap.change_pct)}${q.change != null ? ` (${q.change >= 0 ? '+' : ''}${q.change.toFixed(2)})` : ''}` : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink-2)', fontSize: 12, ...num }}>{rangeStr(q.dayLow, q.dayHigh)}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--m-muted)', fontSize: 12 }} title={snap?.fetched_at ? new Date(snap.fetched_at).toLocaleString() : undefined}>
+                        {snap?.fetched_at ? (formatUpdatedAt(snap.fetched_at) || new Date(snap.fetched_at).toLocaleString()) : 'never — hit Refresh now'}
+                      </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                         <button className="m-btn m-btn-secondary m-btn-sm" onClick={() => removeItem(item)} aria-label={`Remove ${item.symbol}`}>
                           <Trash2 size={14} />
