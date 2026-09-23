@@ -6,6 +6,7 @@ import SectionHeader from '../shared/SectionHeader';
 import Card from '../shared/Card';
 import EmptyState from '../shared/EmptyState';
 import { useApi } from '../../../lib/query';
+import { parseYmd } from '../../../lib/localDate';
 
 const f$ = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
 const num = { fontVariantNumeric: 'tabular-nums' };
@@ -48,15 +49,15 @@ export default function Reports() {
 
   let start, end;
   if (fromDate && toDate) {
-    start = new Date(fromDate);
-    end = new Date(toDate);
+    start = parseYmd(fromDate);
+    end = parseYmd(toDate);
     end.setDate(end.getDate() + 1);
   } else {
     start = rangeStart(range);
     end = new Date(2099, 0, 1);
   }
   const inRange = txns.filter((t) => {
-    const d = new Date(t.date);
+    const d = parseYmd(t.date);
     return d >= start && d < end;
   });
 
@@ -83,7 +84,7 @@ export default function Reports() {
     .map((r) => ({ month: r.month, income: Math.round(r.income), expenses: Math.round(r.expenses), net: Math.round(r.income - r.expenses) }));
 
   // Net worth — respect BOTH ends of the range (matches the transaction filter).
-  const nwRows = snapshots.filter((s) => { const d = new Date(s.date); return d >= start && d < end; })
+  const nwRows = snapshots.filter((s) => { const d = parseYmd(s.date); return d >= start && d < end; })
     .map((s) => ({ date: s.date, net: s.net, assets: s.assets, liabilities: s.liabilities }));
 
   function exportCSV() {

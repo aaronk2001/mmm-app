@@ -13,6 +13,7 @@ const CHART_COLORS = ['var(--m-chart-1)', 'var(--m-chart-2)', 'var(--m-chart-3)'
 import { useQuery } from '@tanstack/react-query';
 import { useApi, fetchSettings, saveSettings, queryClient } from '../../../lib/query';
 import { evalFormula } from '../../../lib/formula';
+import { parseYmd } from '../../../lib/localDate';
 
 // ── formatting ───────────────────────────────────────────────────────────────
 const f$ = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
@@ -67,7 +68,7 @@ function NetWorthTrend({ config = {} }) {
   } else {
     if (nwLoading) return <Loading />;
     const all = nwData?.snapshots || [];
-    snaps = tf === '90d' ? all.filter((s) => new Date(s.date) >= new Date(Date.now() - 90 * 86400000)) : all;
+    snaps = tf === '90d' ? all.filter((s) => parseYmd(s.date) >= new Date(Date.now() - 90 * 86400000)) : all;
   }
   const pts = snaps.map((s) => ({ date: s.date, net: s.net }));
   if (pts.length < 2) return <Empty>Net-worth history builds up as your balances change over time.</Empty>;
