@@ -8,10 +8,12 @@ Every claim below was read directly from the file on disk (`node_modules/<pkg>/p
 and the licence file in that package's directory) or from `content/learn/sources.yaml` — nothing
 here is from memory. The path each fact was read from is noted per entry.
 
-Only the packages listed in `package.json` `dependencies` are covered (the packages that are
-actually bundled into the shipped app). `devDependencies` are build-time only and are not
-included. **Transitive dependencies (the dependencies of these packages) are not individually
-listed in this file.**
+Only the packages listed in `package.json` `dependencies` are covered, plus `electron`: although
+`electron` is listed under `devDependencies` in `package.json`, its runtime (`node_modules/electron/dist`)
+is copied by `fs.cpSync` in `scripts/build-portable.mjs` into the shipped build as `MMM.exe`, so it
+does ship and is covered below. Aside from that one exception, `devDependencies` are build-time
+only and are not included. **Transitive dependencies (the dependencies of these packages) are not
+individually listed in this file.**
 
 ---
 
@@ -181,6 +183,18 @@ listed in this file.**
 - Licence (SPDX): MIT
 - Copyright: `Copyright (c) Tailwind Labs, Inc.`
 - Read from: `node_modules/tailwindcss/package.json` (license field), `node_modules/tailwindcss/LICENSE`
+
+### electron
+- Version: 30.5.1
+- Licence (SPDX): MIT
+- Read from: `node_modules/electron/package.json` (license field). Listed as a `devDependency`, but its
+  runtime is copied via `fs.cpSync(node_modules/electron/dist, ...)` in `scripts/build-portable.mjs`
+  and ships as `MMM.exe` — see the note above the package list.
+- Bundled Chromium notices: the Electron runtime embeds Chromium. Its `LICENSE` and
+  `LICENSES.chromium.html` files (both confirmed present in `node_modules/electron/dist/`) are
+  copied alongside `MMM.exe` in the packaged build by the same `fs.cpSync` call, so Chromium's
+  third-party notices ship as `LICENSES.chromium.html` next to `MMM.exe` rather than being
+  reproduced in this document.
 
 ---
 
@@ -632,16 +646,19 @@ never copy a sentence, and never set `allows_verbatim: true` for it.
 - Title: Principles of Finance, 1st Edition — OpenStax (Dahlquist & Knight)
 - URL: https://openstax.org/details/books/principles-finance
 - Licence: CC BY 4.0
+- Licence URL: https://creativecommons.org/licenses/by/4.0/
 - Attribution: "Access for free at openstax.org. Principles of Finance (1st ed.) is licensed under CC BY 4.0. Adapted with modification for this lesson."
 
 ### wikipedia-emergency-fund
 - Title: Emergency fund — Wikipedia
 - URL: https://en.wikipedia.org/wiki/Emergency_fund
 - Licence: CC BY-SA 4.0
-- Attribution: "Adapted from Wikipedia, \"Emergency fund,\" CC BY-SA 4.0. Content has been modified from the original."
+- Licence URL: https://creativecommons.org/licenses/by-sa/4.0/
+- Attribution: "Adapted from \"Emergency fund\" by Wikipedia contributors, CC BY-SA 4.0. Content has been modified from the original."
 
 ### wikipedia-fixed-variable-costs
 - Title: Fixed cost / Variable cost — Wikipedia
 - URL: https://en.wikipedia.org/wiki/Fixed_cost
 - Licence: CC BY-SA 4.0
-- Attribution: "Adapted from Wikipedia, \"Fixed cost,\" CC BY-SA 4.0. Content has been modified from the original."
+- Licence URL: https://creativecommons.org/licenses/by-sa/4.0/
+- Attribution: "Adapted from \"Fixed cost\" by Wikipedia contributors, CC BY-SA 4.0. Content has been modified from the original."
