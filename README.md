@@ -5,6 +5,14 @@ local Express server on `:5006` → a React SPA, with all data in a local SQLite
 database. No cloud, no accounts, no telemetry by default — every online
 feature is an explicit opt-in (see below).
 
+![Overview](docs/screenshots/overview.png)
+
+| Budget | Debt Payoff | Plan |
+|---|---|---|
+| ![Budget](docs/screenshots/budget.png) | ![Debt Payoff](docs/screenshots/debt.png) | ![Plan](docs/screenshots/plan.png) |
+
+_Screenshots use the built-in sample data._
+
 ## Run it
 
 ```bash
