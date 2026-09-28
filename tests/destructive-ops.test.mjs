@@ -143,3 +143,15 @@ describe('accounts', () => {
     expect(body.debts[0]).toMatchObject({ name: 'Card', balance: 1000, apr: 0.3, apr_is_default: false, min_payment: 40 });
   });
 });
+
+describe('what counts as "your data"', () => {
+  it('protects paper trades and learn progress, not just the ledger', async () => {
+    store.reset();
+    const repo = (await import('../server/db/repo.js')).default;
+    const { db } = (await import('../server/db/connection.js')).default;
+    repo.createWatchlistItem(db(), { symbol: 'MINE' });
+    expect((await call('POST', '/seed-sample', {})).status).toBe(409);
+    const res = await call('POST', '/reset', { confirm: true });
+    expect(res.body.safety).toMatch(/^pre-reset-/);
+  });
+});
