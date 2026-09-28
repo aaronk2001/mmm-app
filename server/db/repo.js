@@ -782,17 +782,22 @@ function getPriceBars(d, symbol, { from = null, to = null } = {}) {
 function getPriceBarSymbols(d) {
   return d.prepare('SELECT DISTINCT symbol FROM price_bars ORDER BY symbol').all().map((r) => r.symbol);
 }
-// Cheap (COUNT/MAX, no row payload) fingerprint of one symbol's bar content
-// over a date range — used to fold bar CONTENT into a backtest config hash
-// so a re-upload of corrected bars under an unchanged config is recognised
-// as a new run instead of matching a stale cached one.
+// Fingerprint of one symbol's bar CONTENT over a date range — folded into a
+// backtest config hash so bars that changed under an unchanged config are
+// recognised as a new run instead of matching a stale cached one. It hashes
+// every stored field of every bar: a {count, maxDate} summary missed the
+// common case, a corrected re-upload over the same dates (same count, same
+// last date, different prices/splits/dividends), and served the stale run.
 function getPriceBarFingerprint(d, symbol, { from = null, to = null } = {}) {
-  let sql = 'SELECT COUNT(*) as count, MAX(date) as maxDate FROM price_bars WHERE symbol = ?';
+  let sql = 'SELECT date, open_cents, high_cents, low_cents, close_cents, volume, split, dividend_cents FROM price_bars WHERE symbol = ?';
   const params = [String(symbol).toUpperCase()];
   if (from) { sql += ' AND date >= ?'; params.push(from); }
   if (to) { sql += ' AND date <= ?'; params.push(to); }
-  const row = d.prepare(sql).get(...params);
-  return { count: row.count, maxDate: row.maxDate };
+  sql += ' ORDER BY date';
+  const rows = d.prepare(sql).raw().all(...params);
+  const hash = crypto.createHash('sha256');
+  for (const r of rows) hash.update(`${JSON.stringify(r)}\n`);
+  return { count: rows.length, maxDate: rows.length ? rows[rows.length - 1][0] : null, hash: hash.digest('hex') };
 }
 // Bulk upsert — one call per CSV upload or Yahoo sync. Returns rows written.
 function upsertPriceBars(d, symbol, bars, source = 'csv') {

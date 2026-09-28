@@ -46,10 +46,12 @@ function configHash(coreConfig) {
   return crypto.createHash('sha256').update(stableStringify(coreConfig)).digest('hex');
 }
 
-// Cheap per-symbol {count, maxDate} snapshot of price_bars over the run's
-// date range, folded into the hash so a re-upload of corrected bars under an
-// otherwise-identical config produces a NEW hash instead of matching (and
-// silently reusing) a stale prior run.
+// Per-symbol content hash of price_bars over the run's date range (see
+// repo.getPriceBarFingerprint), folded into the hash so a re-upload of
+// corrected bars under an otherwise-identical config — even over the very
+// same dates — produces a NEW hash instead of matching (and silently
+// reusing) a stale prior run. The benchmark's bars feed beta/alpha/tracking
+// error, so they are fingerprinted too.
 function barsFingerprint(symbols, from, to) {
   const out = {};
   for (const s of symbols) out[s] = repo.getPriceBarFingerprint(db(), s, { from, to });
@@ -128,7 +130,9 @@ router.post('/bars/sync', async (req, res) => {
     if (!result.series || !result.series.length) {
       return res.json({ symbol: symbol.toUpperCase(), count: 0, offline: !!result.offline, stale: !!result.stale });
     }
-    const rows = result.series.map((r) => ({ date: r.time, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume, split: 1, dividend: 0 }));
+    // Yahoo's closes are already split-adjusted (split stays 1); dividends
+    // come from the chart's events, so buy-and-hold total return includes them.
+    const rows = result.series.map((r) => ({ date: r.time, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume, split: 1, dividend: r.dividend || 0 }));
     const count = repo.upsertPriceBars(db(), symbol, rows, 'yahoo');
     res.json({ symbol: symbol.toUpperCase(), count, offline: !!result.offline, stale: !!result.stale });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -244,6 +248,7 @@ router.post('/run', async (req, res) => {
       symbols: [...symbols].sort(), from, to, strategy, initialCashCents,
       slippageBps, commissionCents, maxWeightPerAsset, benchmarkSymbol, splitDate,
       barsFingerprint: barsFingerprint(symbols, from, to),
+      benchmarkFingerprint: benchmarkSymbol ? barsFingerprint([benchmarkSymbol], from, to)[benchmarkSymbol] : null,
     };
     const hash = configHash(coreConfig);
 

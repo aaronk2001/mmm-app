@@ -21,9 +21,9 @@
 //       commissionCents, slippageCents, cashDeltaCents, decisionIndex}` —
 //       camelCase, and it never carries a realized P&L. Win rate / profit
 //       factor need one, so `reconstructRealizedPnlCents` below replays the
-//       SAME average-cost accounting engine.js itself uses
-//       (avgCostCents = (priorCost*priorQty + grossCents) / newQty on a buy)
-//       to derive each sell's P&L. Both `qty`/`shares` and
+//       SAME fee-inclusive average-cost accounting engine.js itself uses
+//       (avgCostCents = (priorCost*priorQty + grossCents + commissionCents)
+//       / newQty on a buy) to derive each sell's P&L. Both `qty`/`shares` and
 //       `priceCents`/`price_cents` naming are accepted (see the `trade*`
 //       accessor helpers) so this keeps working if that naming ever changes
 //       again; if a trade entry already carries an explicit finite
@@ -273,11 +273,13 @@ function tradeSlippageCents(t) {
 /**
  * Derives one realized P&L figure per closing ('sell') fill by replaying
  * engine.js's own average-cost accounting per symbol in ledger order:
- * a buy updates avgCost = (priorCost*priorQty + grossCents) / newQty; a
- * sell's P&L is its net cash proceeds minus (avgCost * qty sold) at that
- * moment. Buys contribute no realized P&L (they open/add to a position).
- * A trade that already carries an explicit finite `pnl_cents` is trusted
- * as-is rather than re-derived.
+ * a buy updates avgCost = (priorCost*priorQty + grossCents + commission) /
+ * newQty — the cost basis is fee-inclusive, so a round trip's P&L carries
+ * BOTH commissions (leaving the buy side out turned small net losers into
+ * "wins"); a sell's P&L is its net cash proceeds minus (avgCost * qty sold)
+ * at that moment. Buys contribute no realized P&L (they open/add to a
+ * position). A trade that already carries an explicit finite `pnl_cents` is
+ * trusted as-is rather than re-derived.
  * @param {Array<object>} trades
  * @returns {number[]} one entry per closed round-trip, in cents.
  */
@@ -298,7 +300,7 @@ function reconstructRealizedPnlCents(trades) {
       const gross = Number.isFinite(t.grossCents) ? t.grossCents : priceCents * qty;
       const priorCostCents = avgCost[sym] * heldQty[sym];
       heldQty[sym] += qty;
-      avgCost[sym] = heldQty[sym] > 0 ? (priorCostCents + gross) / heldQty[sym] : 0;
+      avgCost[sym] = heldQty[sym] > 0 ? (priorCostCents + gross + tradeCommissionCents(t)) / heldQty[sym] : 0;
     } else {
       const proceedsCents = Number.isFinite(t.cashDeltaCents) ? t.cashDeltaCents : priceCents * qty - tradeCommissionCents(t);
       const basisCents = avgCost[sym] * qty;

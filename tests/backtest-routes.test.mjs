@@ -1,10 +1,16 @@
 // Route-level test: mounts the backtest router on an ephemeral Express
 // server against the temp MMM_DATA_DIR from tests/setup.mjs. No network —
-// every case here drives the CSV-upload path, never bars/sync.
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
+// every case drives the CSV-upload path, except the bars/sync case, which
+// stubs fetch for the Yahoo host.
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
 import express from 'express';
+import { createRequire } from 'node:module';
 import routes from '../server/backtest/routes.js';
 import store from '../server/money/store.js';
+import repo from '../server/db/repo.js';
+import { db } from '../server/db/connection.js';
+
+const require = createRequire(import.meta.url);
 
 let server; let base;
 
@@ -147,7 +153,8 @@ describe('POST /run', () => {
   // I6: the config hash used to exclude bar CONTENT (only row shape/config
   // mattered), so re-uploading corrected bars under an identical config
   // returned the stale cached run instead of recomputing. The hash now folds
-  // in a cheap per-symbol {count, maxDate} fingerprint of price_bars.
+  // in a per-symbol content hash of price_bars (see the in-place correction
+  // case below — a {count, maxDate} summary missed it).
   it('recomputes (does not reuse) after bars are re-uploaded under an identical config (I6)', async () => {
     await post('/bars/csv', { symbol: 'AAPL', csv: csvFor(100) });
     const req = {
@@ -170,6 +177,34 @@ describe('POST /run', () => {
     expect(second.body.run.config_hash).not.toBe(first.body.run.config_hash);
     expect(second.body.run.id).not.toBe(first.body.run.id);
     expect(second.body.run.result.equityCurve.length).toBe(13);
+  });
+
+  it('recomputes after bars are corrected IN PLACE (same dates, same count, different prices)', async () => {
+    await post('/bars/csv', { symbol: 'AAPL', csv: csvFor(100) });
+    const req = { symbols: ['AAPL'], strategy: { kind: 'buyAndHold', params: { symbol: 'AAPL' } }, initialCashCents: 1_000_000 };
+    const first = await post('/run', req);
+    expect(first.body.outcome).toBe('completed');
+
+    // Same 12 dates, same last date — only the prices are corrected.
+    await post('/bars/csv', { symbol: 'AAPL', csv: csvFor(50) });
+    const second = await post('/run', req);
+    expect(second.body.reused).toBeFalsy();
+    expect(second.body.run.config_hash).not.toBe(first.body.run.config_hash);
+    expect(second.body.run.result.resultHash).not.toBe(first.body.run.result.resultHash);
+  });
+
+  it('recomputes when the benchmark symbol\'s bars change', async () => {
+    await post('/bars/csv', { symbol: 'AAPL', csv: csvFor(100) });
+    await post('/bars/csv', { symbol: 'SPY', csv: csvFor(400) });
+    const req = {
+      symbols: ['AAPL'], strategy: { kind: 'buyAndHold', params: { symbol: 'AAPL' } },
+      initialCashCents: 1_000_000, benchmarkSymbol: 'SPY',
+    };
+    const first = await post('/run', req);
+    await post('/bars/csv', { symbol: 'SPY', csv: csvFor(300) });
+    const second = await post('/run', req);
+    expect(second.body.reused).toBeFalsy();
+    expect(second.body.run.config_hash).not.toBe(first.body.run.config_hash);
   });
 
   // I7: a typo'd strategy symbol (not in the run's own symbol universe)
@@ -230,5 +265,41 @@ describe('strategy presets', () => {
   it('400s an unknown kind', async () => {
     const { status } = await post('/strategies', { name: 'x', kind: 'nope', params: {} });
     expect(status).toBe(400);
+  });
+});
+
+describe('POST /bars/sync', () => {
+  it('keeps the dividends Yahoo reports as chart events (they were always stored as 0)', async () => {
+    const onlineSeam = require('../server/online/index.js'); // the instance routes.js reaches via require
+    onlineSeam._resetForTests();
+    repo.setSettings(db(), { online: { market: true } });
+    const t = (day) => Date.UTC(2024, 0, day, 14, 30) / 1000;
+    const payload = {
+      chart: {
+        result: [{
+          meta: { symbol: 'DIVCO', currency: 'USD' },
+          timestamp: [t(2), t(3), t(4)],
+          events: { dividends: { [t(3)]: { amount: 1.25, date: t(3) } } },
+          indicators: { quote: [{ open: [100, 99, 98], high: [100, 99, 98], low: [100, 99, 98], close: [100, 98.75, 98], volume: [1, 1, 1] }] },
+        }],
+      },
+    };
+    const originalFetch = global.fetch.bind(globalThis);
+    const spy = vi.spyOn(global, 'fetch').mockImplementation((url, opts) => (
+      String(url).startsWith(base)
+        ? originalFetch(url, opts)
+        : Promise.resolve(new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    ));
+    try {
+      const { status, body } = await post('/bars/sync', { symbol: 'DIVCO' });
+      expect(status).toBe(200);
+      expect(body.count).toBe(3);
+      const bars = await get('/bars/DIVCO');
+      expect(bars.body.map((b) => [b.date, b.dividend])).toEqual([['2024-01-02', 0], ['2024-01-03', 1.25], ['2024-01-04', 0]]);
+      expect(spy.mock.calls.some(([u]) => String(u).includes('events=div%7Csplit'))).toBe(true);
+    } finally {
+      spy.mockRestore();
+      repo.setSettings(db(), { online: { market: false } });
+    }
   });
 });
