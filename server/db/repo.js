@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('crypto');
+const { toCents } = require('../money/amounts');
+const { normalizeBalance } = require('../money/account-types');
 
 // Repository v2 — per-row prepared statements over the cents-based schema.
 // Money is INTEGER cents in SQLite; this layer converts to float dollars at its
@@ -8,7 +10,8 @@ const crypto = require('crypto');
 // Account balances are DERIVED: opening_balance_cents + SUM(transactions).
 // readAll/writeAll remain only for export / import / seed / reset.
 
-const toCents = (v) => Math.round((parseFloat(v) || 0) * 100);
+// toCents is the strict money boundary (server/money/amounts.js): it throws on
+// garbage and out-of-range amounts instead of storing a wrong number.
 const toDollars = (c) => (c == null ? null : Math.round(c) / 100);
 // Local YYYY-MM-DD. toISOString() is UTC and names tomorrow on an Arizona evening.
 const todayLocal = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -84,6 +87,7 @@ const rowAccount = (r) => ({
   balance: toDollars(r.balance_cents),
   institution: r.institution, currency: r.currency, status: r.status,
   created_at: r.created_at, custom: safeJson(r.custom, {}),
+  apr: r.apr ?? null, min_payment: toDollars(r.min_payment_cents),
 });
 const rowTxn = (r) => ({
   id: r.id, account_id: r.account_id, date: r.date,
@@ -91,6 +95,7 @@ const rowTxn = (r) => ({
   payee: r.payee, category_id: r.category_id,
   tags: safeJson(r.tags, []), note: r.note, source: r.source,
   cleared: !!r.cleared, custom: safeJson(r.custom, {}),
+  external_id: r.external_id ?? null, import_batch_id: r.import_batch_id ?? null,
 });
 const rowBudget = (r) => ({ id: r.id, category_id: r.category_id, period: r.period, limit: toDollars(r.limit_cents), rollover: !!r.rollover });
 const rowGoal = (r) => ({
@@ -107,7 +112,7 @@ const rowHolding = (r) => ({
   price_source: r.price_source, updated_at: r.updated_at,
 });
 const rowSnapshot = (r) => ({ date: r.date, assets: toDollars(r.assets_cents), liabilities: toDollars(r.liabilities_cents), net: toDollars(r.net_cents) });
-const rowRecurring = (r) => ({ id: r.id, payee: r.payee, amount: toDollars(r.amount_cents), cadence: r.cadence, kind: r.kind, next_date: r.next_date, note: r.note, account_id: r.account_id || null });
+const rowRecurring = (r) => ({ id: r.id, payee: r.payee, amount: toDollars(r.amount_cents), cadence: r.cadence, kind: r.kind, next_date: r.next_date, note: r.note, account_id: r.account_id || null, anchor_day: r.anchor_day ?? null });
 const rowHttpCache = (r) => ({ cache_key: r.cache_key, feature: r.feature, url: r.url, data: safeJson(r.data, null), cached_at: r.cached_at });
 
 // Derived balance: opening + sum of the account's transactions, in cents.
@@ -131,10 +136,17 @@ function getAccount(d, id) {
   const r = d.prepare(ACCOUNT_SELECT + ' WHERE a.id = ?').get(id);
   return r ? rowAccount(r) : null;
 }
+const ACCOUNT_INSERT = 'INSERT INTO accounts (id, name, type, opening_balance_cents, institution, currency, status, created_at, custom, apr, min_payment_cents) VALUES (?,?,?,?,?,?,?,?,?,?,?)';
+const optCents = (v) => (v === undefined || v === null || v === '' ? null : toCents(v));
+const optRate = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
+function insertAccountRow(d, id, a, openingCents) {
+  d.prepare(ACCOUNT_INSERT).run(id, a.name, a.type, openingCents, a.institution || '', a.currency || 'USD',
+    a.status || 'active', a.created_at || null, jsonText(a.custom, {}), optRate(a.apr), optCents(a.min_payment));
+}
 function createAccount(d, a) {
   const id = a.id || newId();
-  d.prepare('INSERT INTO accounts (id, name, type, opening_balance_cents, institution, currency, status, created_at, custom) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(id, a.name, a.type, toCents(a.balance), a.institution || '', a.currency || 'USD', a.status || 'active', a.created_at || new Date().toISOString(), jsonText(a.custom, {}));
+  const balance = normalizeBalance(a.type, a.balance);
+  insertAccountRow(d, id, { ...a, created_at: a.created_at || new Date().toISOString() }, toCents(balance));
   return getAccount(d, id);
 }
 function updateAccount(d, id, patch) {
@@ -147,11 +159,14 @@ function updateAccount(d, id, patch) {
       if (patch[k] !== undefined) { sets.push(`${k} = ?`); vals.push(patch[k]); }
     }
     if (patch.custom !== undefined) { sets.push('custom = ?'); vals.push(jsonText(patch.custom, {})); }
+    if (patch.apr !== undefined) { sets.push('apr = ?'); vals.push(optRate(patch.apr)); }
+    if (patch.min_payment !== undefined) { sets.push('min_payment_cents = ?'); vals.push(optCents(patch.min_payment)); }
     if (patch.balance !== undefined) {
       // Balance is derived — editing it adjusts the opening balance so the
       // derived value lands exactly on the requested number.
+      const balance = normalizeBalance(patch.type ?? existing.type, patch.balance);
       sets.push('opening_balance_cents = ?');
-      vals.push(toCents(patch.balance) - txnSumCents(d, id));
+      vals.push(toCents(balance) - txnSumCents(d, id));
     }
     if (sets.length) d.prepare(`UPDATE accounts SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
   });
@@ -180,10 +195,11 @@ function getTransaction(d, id) {
   return r ? rowTxn(r) : null;
 }
 
-const TXN_INSERT = 'INSERT INTO transactions (id, account_id, date, amount_cents, payee, category_id, tags, note, source, cleared, custom) VALUES (?,?,?,?,?,?,?,?,?,?,?)';
+const TXN_INSERT = 'INSERT INTO transactions (id, account_id, date, amount_cents, payee, category_id, tags, note, source, cleared, custom, external_id, import_batch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
 function txnInsertArgs(t, id) {
   return [id, t.account_id || null, String(t.date).slice(0, 10), toCents(t.amount), t.payee || '', t.category_id || null,
-    jsonText(t.tags, []), t.note || '', t.source || 'manual', t.cleared ? 1 : 0, jsonText(t.custom, {})];
+    jsonText(t.tags, []), t.note || '', t.source || 'manual', t.cleared ? 1 : 0, jsonText(t.custom, {}),
+    t.external_id || null, t.import_batch_id || null];
 }
 function createTransaction(d, t) {
   const id = t.id || newId();
@@ -435,10 +451,15 @@ function insertSnapshotIfMissing(d, s) {
 function getRecurring(d) {
   return d.prepare('SELECT * FROM recurring ORDER BY next_date').all().map(rowRecurring);
 }
+// Monthly/quarterly/annual schedules are pinned to the day of month they were
+// created on, so an item due the 31st comes back to the 31st after a short
+// month instead of drifting to the 28th forever.
+const dayOf = (ymd) => (ymd && /^\d{4}-\d{2}-\d{2}/.test(ymd) ? Number(String(ymd).slice(8, 10)) : null);
 function createRecurring(d, r) {
   const id = r.id || newId();
-  d.prepare('INSERT INTO recurring (id, payee, amount_cents, cadence, kind, next_date, note, account_id) VALUES (?,?,?,?,?,?,?,?)')
-    .run(id, r.payee, toCents(r.amount), r.cadence, r.kind, r.next_date || null, r.note || '', r.account_id || null);
+  const anchor = r.anchor_day ?? dayOf(r.next_date);
+  d.prepare('INSERT INTO recurring (id, payee, amount_cents, cadence, kind, next_date, note, account_id, anchor_day) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(id, r.payee, toCents(r.amount), r.cadence, r.kind, r.next_date || null, r.note || '', r.account_id || null, anchor);
   return rowRecurring(d.prepare('SELECT * FROM recurring WHERE id = ?').get(id));
 }
 function updateRecurring(d, id, patch) {
@@ -450,6 +471,10 @@ function updateRecurring(d, id, patch) {
     if (patch[k] !== undefined) { sets.push(`${k} = ?`); vals.push(patch[k] === '' ? null : patch[k]); }
   }
   if (patch.amount !== undefined) { sets.push('amount_cents = ?'); vals.push(toCents(patch.amount)); }
+  // A user edit of next_date re-pins the schedule to that day; the auto-post
+  // advance passes its own anchor_day so it never re-pins to a clamped date.
+  if (patch.anchor_day !== undefined) { sets.push('anchor_day = ?'); vals.push(patch.anchor_day); }
+  else if (patch.next_date) { sets.push('anchor_day = ?'); vals.push(dayOf(patch.next_date)); }
   if (sets.length) d.prepare(`UPDATE recurring SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);
   return rowRecurring(d.prepare('SELECT * FROM recurring WHERE id = ?').get(id));
 }
@@ -1232,17 +1257,35 @@ function readAll(d) {
   return out;
 }
 
-function writeAll(d, blob) {
+// Tables writeAll manages, grouped so FK-linked tables are always replaced
+// together. The money ledger group is always replaced; in `partial` mode
+// (import / restore) every other group is replaced only when the blob carries
+// at least one of its keys — so importing an older export, which predates the
+// paper-trading, backtest and learn tables, no longer silently wipes them.
+const WRITE_GROUPS = [
+  { keys: ['http_cache'], tables: ['http_cache'] },
+  { keys: ['paper_account', 'paper_positions', 'paper_trades', 'paper_journal', 'agent_events', 'decisions', 'closes'],
+    tables: ['paper_journal', 'paper_trades', 'paper_positions', 'agent_events', 'closes', 'decisions'] },
+  { keys: ['watchlist', 'alert_rules'], tables: ['watchlist', 'alert_rules'] },
+  { keys: ['import_log'], tables: ['import_log'] },
+  { keys: ['price_cache'], tables: ['price_cache'] },
+  { keys: ['strategies', 'backtest_runs', 'price_bars'], tables: ['backtest_runs', 'strategies', 'price_bars'] },
+  { keys: ['learn_progress', 'learn_step_progress', 'learn_cards', 'learn_reviews', 'learn_applied_actions',
+    'learn_settings', 'learn_streak', 'learn_events', 'activity_log'],
+    tables: ['learn_reviews', 'learn_cards', 'learn_step_progress', 'learn_progress', 'learn_applied_actions', 'activity_log', 'learn_events'] },
+];
+const LEDGER_TABLES = ['transactions', 'holdings', 'accounts', 'categories', 'budgets', 'goals', 'rules', 'networth_snapshots', 'recurring'];
+
+// Replace the database contents with `blob`. Default is a full-state replace
+// (seed / reset / restore of a complete backup). { partial: true } keeps any
+// non-ledger group the blob doesn't mention.
+function writeAll(d, blob, { partial = false } = {}) {
   const arr = (k) => (Array.isArray(blob[k]) ? blob[k] : []);
+  const groups = WRITE_GROUPS.filter((g) => !partial || g.keys.some((k) => blob[k] !== undefined));
+  const replacing = (key) => groups.some((g) => g.keys.includes(key));
   const run = d.transaction(() => {
     // FK-safe delete order (children first).
-    for (const t of [
-      'transactions', 'holdings', 'accounts', 'categories', 'budgets', 'goals', 'rules', 'networth_snapshots', 'recurring', 'http_cache',
-      'paper_journal', 'paper_trades', 'paper_positions', 'agent_events', 'closes', 'decisions', 'watchlist', 'import_log',
-      'price_cache', 'alert_rules', 'backtest_runs', 'strategies', 'price_bars',
-      'learn_reviews', 'learn_cards', 'learn_step_progress', 'learn_progress',
-      'learn_applied_actions', 'activity_log', 'learn_events',
-    ]) {
+    for (const t of [...LEDGER_TABLES, ...groups.flatMap((g) => g.tables)]) {
       d.prepare(`DELETE FROM ${t}`).run();
     }
 
@@ -1257,8 +1300,8 @@ function writeAll(d, blob) {
     for (const a of arr('accounts')) {
       const actualId = a.id || newId();
       accIds.add(actualId);
-      d.prepare('INSERT INTO accounts (id, name, type, opening_balance_cents, institution, currency, status, created_at, custom) VALUES (?,?,?,?,?,?,?,?,?)')
-        .run(actualId, a.name, a.type, toCents(a.balance) - (sums[a.id] || 0), a.institution || '', a.currency || 'USD', a.status || 'active', a.created_at || null, jsonText(a.custom, {}));
+      // Restores are faithful: no sign normalization of the stored balance.
+      insertAccountRow(d, actualId, a, toCents(a.balance) - (sums[a.id] || 0));
     }
 
     const txnStmt = d.prepare(TXN_INSERT);
@@ -1278,42 +1321,50 @@ function writeAll(d, blob) {
         .run(s.date, toCents(s.assets), toCents(s.liabilities), toCents(s.net));
     }
     for (const r of arr('recurring')) createRecurring(d, { cadence: 'monthly', kind: 'bill', ...r });
-    for (const c of arr('http_cache')) upsertHttpCache(d, c);
 
-    // writeAll is always a full-state operation (backup/seed/reset), so
-    // paper_account is always (re)set — to the given value, or a fresh
-    // $100k default when absent (e.g. repo.emptyData()) — never left as
-    // whatever a prior DB state happened to have.
-    importPaperAccount(d, blob.paper_account || { capital: 100000, starting_capital: 100000 });
-    for (const dec of arr('decisions')) createDecision(d, dec);
-    for (const c of arr('closes')) createClose(d, c);
-    for (const p of arr('paper_positions')) createPaperPosition(d, p);
-    for (const t of arr('paper_trades')) createPaperTrade(d, t);
-    for (const j of arr('paper_journal')) createPaperJournalEntry(d, j);
-    for (const e of arr('agent_events')) appendAgentEvent(d, e);
-    for (const w of arr('watchlist')) createWatchlistItem(d, w);
-    for (const i of arr('import_log')) markImported(d, i.source, i.source_id, i.imported_at);
-    for (const p of arr('price_cache')) upsertPriceCache(d, p);
-    for (const a of arr('alert_rules')) createAlertRule(d, a);
-    for (const s of arr('strategies')) createStrategy(d, s);
-    for (const r of arr('backtest_runs')) createBacktestRun(d, r);
-    for (const bySymbol of Object.entries(
-      arr('price_bars').reduce((acc, b) => { (acc[b.symbol] = acc[b.symbol] || []).push(b); return acc; }, {}),
-    )) upsertPriceBars(d, bySymbol[0], bySymbol[1], bySymbol[1][0]?.source || 'csv');
+    if (replacing('http_cache')) for (const c of arr('http_cache')) upsertHttpCache(d, c);
 
-    // Learn engine (Sprint D). FK order: activity_log before learn_applied_actions
-    // (activity_log_id FK), learn_cards before learn_reviews (card_id FK).
-    for (const a of arr('activity_log')) createActivityLogEntry(d, a);
-    for (const p of arr('learn_progress')) importLearnProgress(d, p);
-    for (const sp of arr('learn_step_progress')) importLearnStepProgress(d, sp);
-    for (const c of arr('learn_cards')) upsertLearnCard(d, c);
-    for (const rv of arr('learn_reviews')) appendLearnReview(d, rv);
-    for (const aa of arr('learn_applied_actions')) createLearnAppliedAction(d, aa);
-    for (const e of arr('learn_events')) importLearnEvent(d, e);
-    // Singletons — like paper_account, always (re)set: to the given value, or
-    // a fresh default when absent (e.g. repo.emptyData()).
-    importLearnSettings(d, blob.learn_settings);
-    importLearnStreak(d, blob.learn_streak);
+    if (replacing('paper_account')) {
+      // A replaced paper group is a full state: paper_account is (re)set to
+      // the given value, or a fresh $100k default when absent (e.g.
+      // repo.emptyData()) — never left as whatever a prior DB state had.
+      importPaperAccount(d, blob.paper_account || { capital: 100000, starting_capital: 100000 });
+      for (const dec of arr('decisions')) createDecision(d, dec);
+      for (const c of arr('closes')) createClose(d, c);
+      for (const p of arr('paper_positions')) createPaperPosition(d, p);
+      for (const t of arr('paper_trades')) createPaperTrade(d, t);
+      for (const j of arr('paper_journal')) createPaperJournalEntry(d, j);
+      for (const e of arr('agent_events')) appendAgentEvent(d, e);
+    }
+    if (replacing('watchlist')) {
+      for (const w of arr('watchlist')) createWatchlistItem(d, w);
+      for (const a of arr('alert_rules')) createAlertRule(d, a);
+    }
+    if (replacing('import_log')) for (const i of arr('import_log')) markImported(d, i.source, i.source_id, i.imported_at);
+    if (replacing('price_cache')) for (const p of arr('price_cache')) upsertPriceCache(d, p);
+    if (replacing('strategies')) {
+      for (const s of arr('strategies')) createStrategy(d, s);
+      for (const r of arr('backtest_runs')) createBacktestRun(d, r);
+      for (const bySymbol of Object.entries(
+        arr('price_bars').reduce((acc, b) => { (acc[b.symbol] = acc[b.symbol] || []).push(b); return acc; }, {}),
+      )) upsertPriceBars(d, bySymbol[0], bySymbol[1], bySymbol[1][0]?.source || 'csv');
+    }
+
+    if (replacing('learn_progress')) {
+      // Learn engine (Sprint D). FK order: activity_log before learn_applied_actions
+      // (activity_log_id FK), learn_cards before learn_reviews (card_id FK).
+      for (const a of arr('activity_log')) createActivityLogEntry(d, a);
+      for (const p of arr('learn_progress')) importLearnProgress(d, p);
+      for (const sp of arr('learn_step_progress')) importLearnStepProgress(d, sp);
+      for (const c of arr('learn_cards')) upsertLearnCard(d, c);
+      for (const rv of arr('learn_reviews')) appendLearnReview(d, rv);
+      for (const aa of arr('learn_applied_actions')) createLearnAppliedAction(d, aa);
+      for (const e of arr('learn_events')) importLearnEvent(d, e);
+      // Singletons — like paper_account, (re)set to the given value or a
+      // fresh default when absent.
+      importLearnSettings(d, blob.learn_settings);
+      importLearnStreak(d, blob.learn_streak);
+    }
 
     const extras = {};
     for (const k of Object.keys(blob)) if (!BLOB_KEYS.includes(k)) extras[k] = blob[k];

@@ -6,6 +6,7 @@ const repo = require('../db/repo');
 const calc = require('./calc');
 const parsers = require('./parsers');
 const { computeRunway } = require('./runway');
+const { isLiquid } = require('./account-types');
 
 // Store v2 — thin data-access orchestration over the per-row repo API. Every
 // exported name and signature matches v1 so routes.js and the tests keep
@@ -21,8 +22,23 @@ function readData() {
   return repo.readAll(db());
 }
 
-function writeData(data) {
-  repo.writeAll(db(), data);
+// { partial: true } keeps non-ledger table groups the blob doesn't carry
+// (see repo.writeAll) — used by import and restore.
+function writeData(data, opts) {
+  repo.writeAll(db(), data, opts);
+}
+
+function getSettings() {
+  return repo.getSettings(db()) || {};
+}
+function saveSettings(patch) {
+  return repo.setSettings(db(), patch);
+}
+
+// No accounts and no transactions: the only state in which a full replace
+// (loading the sample) can't destroy anything.
+function isEmpty() {
+  return db().prepare('SELECT (SELECT COUNT(*) FROM accounts) + (SELECT COUNT(*) FROM transactions) AS n').get().n === 0;
 }
 
 function getEmptyData() {
@@ -50,7 +66,7 @@ function getAccounts() {
   return repo.getAccounts(db());
 }
 
-function createAccount(name, type, balance, institution, currency = 'USD', status = 'active', custom = {}) {
+function createAccount(name, type, balance, institution, currency = 'USD', status = 'active', custom = {}, { apr = null, min_payment = null } = {}) {
   if (!name || !type) throw new Error('name and type required');
   return repo.createAccount(db(), {
     name, type,
@@ -58,6 +74,7 @@ function createAccount(name, type, balance, institution, currency = 'USD', statu
     institution: institution || '',
     currency, status,
     custom: custom && typeof custom === 'object' ? custom : {},
+    apr, min_payment,
   });
 }
 
@@ -396,7 +413,7 @@ function getMetrics() {
   const monthly_expenses = recent.filter(t => t.amount < 0)
     .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0) / 2;
   const liquid_savings = accounts
-    .filter(a => a.type === 'checking' || a.type === 'savings' || a.type === 'cash')
+    .filter(a => isLiquid(a.type))
     .reduce((s, a) => s + (parseFloat(a.balance) || 0), 0);
 
   const monthly_surplus = monthly_income - monthly_expenses;
@@ -547,6 +564,9 @@ function reset() {
 module.exports = {
   readData,
   writeData,
+  isEmpty,
+  getSettings,
+  saveSettings,
   getEmptyData,
   getDefaultCategories,
   newId,

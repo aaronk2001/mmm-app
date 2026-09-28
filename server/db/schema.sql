@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS accounts (
   currency              TEXT    DEFAULT 'USD',
   status                TEXT    DEFAULT 'active',
   created_at            TEXT,
-  custom                TEXT    DEFAULT '{}'
+  custom                TEXT    DEFAULT '{}',
+  apr                   REAL,                -- liabilities: annual rate as a fraction (0.2 = 20%)
+  min_payment_cents     INTEGER              -- liabilities: required monthly payment
 );
 
 CREATE TABLE IF NOT EXISTS categories (
@@ -40,11 +42,16 @@ CREATE TABLE IF NOT EXISTS transactions (
   note         TEXT    DEFAULT '',
   source       TEXT    DEFAULT 'manual',
   cleared      INTEGER DEFAULT 0,
-  custom       TEXT    DEFAULT '{}'
+  custom       TEXT    DEFAULT '{}',
+  external_id  TEXT,                         -- bank id (OFX FITID) or content hash; dedupes re-imports
+  import_batch_id TEXT                       -- which import created the row (undo an import)
 );
 CREATE INDEX IF NOT EXISTS idx_txn_account  ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_txn_category ON transactions(category_id);
 CREATE INDEX IF NOT EXISTS idx_txn_date     ON transactions(date);
+-- Indexes on columns added after v2 (external_id, payee+category) live in
+-- connection.js applyAdditiveMigrations, after the ALTERs that create them —
+-- an index here would fail on an existing DB before the column exists.
 
 CREATE TABLE IF NOT EXISTS budgets (
   id          TEXT PRIMARY KEY,
@@ -101,7 +108,8 @@ CREATE TABLE IF NOT EXISTS recurring (
   kind         TEXT    NOT NULL,            -- income | bill
   next_date    TEXT,
   note         TEXT    DEFAULT '',
-  account_id   TEXT                         -- when set, due items auto-post as transactions
+  account_id   TEXT,                        -- when set, due items auto-post as transactions
+  anchor_day   INTEGER                      -- day of month the schedule is anchored to (1-31)
 );
 
 -- Online seam (Sprint A, Track 1). Cache for server/online/index.js's
