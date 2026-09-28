@@ -465,49 +465,187 @@ function getMetrics() {
 }
 
 // ── import ────────────────────────────────────────────────────────────────────
+//
+// Every import — CSV rows mapped by the client, CSV text, OFX, QIF — runs
+// through importRows():
+//  1. parsers.normalizeRows turns bank formats into YYYY-MM-DD dates and plain
+//     decimal amounts. It decides the file's date order (MDY/DMY) and decimal
+//     mark once, and rejects rows it can't read with a reason. One bad row is
+//     skipped and reported; it never rejects the batch, and no row is ever
+//     dated "today" because its date couldn't be read.
+//  2. Each row gets an external_id: the bank's OFX FITID, else a hash of
+//     account + date + amount in cents + normalized payee + an occurrence
+//     index. The index keeps two genuine $5.00 coffees on the same day as two
+//     rows, and is stable when the same file is imported again.
+//  3. A row whose external_id the account already has is a duplicate: it is
+//     skipped and counted, so re-importing an overlapping statement is safe.
+//  4. Recurring claim rule. A bank row claims — instead of duplicating — a
+//     transaction the app auto-posted from a recurring item when it is in the
+//     same account, has source 'recurring' and no external_id yet, the SAME
+//     amount in cents, and a date within ±3 days (banks post a day or two
+//     either side of the due date; weekends and holidays push it further).
+//     The closest date wins, then the oldest row. The claimed row takes the
+//     bank's date, payee, external_id and source; its previous date, payee and
+//     source are kept in custom._import_claim so undoing the import restores it.
+//  5. The rest is inserted with this import's batch id, all in one SQLite
+//     transaction. undoImport(batch_id) — DELETE /transactions/import/:batch_id —
+//     removes those rows and releases the claims.
 
-function importTransactions(account_id, rows, csvText, mapping) {
-  if (!account_id) throw new Error('account_id required');
-  if (!repo.getAccount(db(), account_id)) throw new Error('Account not found');
+const crypto = require('crypto');
+const { toCents: importCents } = require('./amounts');
 
-  let parsedRows = rows;
-  if (!rows || rows.length === 0) {
-    if (!csvText) throw new Error('rows or csvText required');
-    parsedRows = parsers.parseCSV(csvText, mapping);
-  }
+const CLAIM_WINDOW_DAYS = 3;
+const MAX_REPORTED_ERRORS = 500;
 
-  const toInsert = [];
-  for (const row of parsedRows) {
-    const amount = parseFloat(row.amount);
-    if (isNaN(amount)) continue;
-    const payee = row.payee || '';
-    // Normalize whatever date format the file used (ISO, M/D/YY, M/D/YYYY) to
-    // YYYY-MM-DD — the data layer compares date strings, so a raw '07/04/2026'
-    // would silently vanish from month filters. Unparseable dates become today.
-    toInsert.push({
-      account_id,
-      date: row.date ? parsers.normalizeQifDate(row.date) : calc.localDate(),
-      amount,
-      payee,
-      category_id: calc.autoCategorize(payee, amount),
-      tags: [],
-      note: row.note || '',
-      source: 'csv',
-      cleared: false,
-      custom: {},
-    });
-  }
+const importError = (message, status = 400) => Object.assign(new Error(message), { status });
+const normPayee = (p) => String(p || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const parseCustom = (s) => {
+  try { const v = JSON.parse(s); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; }
+};
 
-  const imported = repo.insertTransactions(db(), toInsert);
-  return { imported: imported.length, sample: imported.slice(0, 5) };
+function shiftYmd(ymd, days) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
-function importFile(account_id, format, content) {
-  if (!account_id) throw new Error('account_id required');
-  if (!content) throw new Error('file content required');
-  const rows = format === 'ofx' ? parsers.parseOFX(content) : format === 'qif' ? parsers.parseQIF(content) : [];
-  if (!rows.length) throw new Error(`No transactions found in the ${String(format).toUpperCase()} file`);
-  return importTransactions(account_id, rows);
+function contentExternalId(accountId, date, cents, payee, occurrence) {
+  const hash = crypto.createHash('sha256')
+    .update([accountId, date, cents, normPayee(payee), occurrence].join('\u001f'))
+    .digest('hex');
+  return `h:${hash.slice(0, 32)}`;
+}
+
+function importRows(account_id, rawRows, { dateFormat, decimal, source }) {
+  const d = db();
+  const { rows, errors, detected } = parsers.normalizeRows(rawRows, { dateFormat, decimal });
+  const categoryIds = new Set(repo.getCategories(d).map((c) => c.id));
+  const batchId = newId();
+  const occurrences = new Map();
+  let duplicates = 0;
+  let claimed = 0;
+
+  const hasExternal = d.prepare('SELECT 1 FROM transactions WHERE account_id = ? AND external_id = ?');
+  const findClaim = d.prepare(`
+    SELECT id, date, payee, source, custom FROM transactions
+    WHERE account_id = ? AND source = 'recurring' AND external_id IS NULL AND amount_cents = ?
+      AND date BETWEEN ? AND ?
+    ORDER BY ABS(julianday(date) - julianday(?)), rowid
+    LIMIT 1`);
+  const claim = d.prepare('UPDATE transactions SET date = ?, payee = ?, external_id = ?, source = ?, custom = ? WHERE id = ?');
+
+  const inserted = d.transaction(() => {
+    const toInsert = [];
+    for (const r of rows) {
+      let cents;
+      try { cents = importCents(r.amount); } catch (e) { errors.push({ row: r.row, reason: e.message }); continue; }
+
+      let externalId = r.external_id;
+      if (!externalId) {
+        const key = `${r.date}\u001f${cents}\u001f${normPayee(r.payee)}`;
+        const occurrence = occurrences.get(key) || 0;
+        occurrences.set(key, occurrence + 1);
+        externalId = contentExternalId(account_id, r.date, cents, r.payee, occurrence);
+      }
+      if (hasExternal.get(account_id, externalId)) { duplicates += 1; continue; }
+
+      const match = findClaim.get(account_id, cents,
+        shiftYmd(r.date, -CLAIM_WINDOW_DAYS), shiftYmd(r.date, CLAIM_WINDOW_DAYS), r.date);
+      if (match) {
+        const custom = parseCustom(match.custom);
+        custom._import_claim = { batch_id: batchId, date: match.date, payee: match.payee, source: match.source };
+        claim.run(r.date, r.payee || match.payee, externalId, source, JSON.stringify(custom), match.id);
+        claimed += 1;
+        continue;
+      }
+
+      toInsert.push({
+        account_id,
+        date: r.date,
+        amount: r.amount, // plain decimal string; repo converts it to cents
+        payee: r.payee,
+        category_id: r.category_id && categoryIds.has(r.category_id)
+          ? r.category_id
+          : calc.autoCategorize(r.payee, cents / 100),
+        tags: [],
+        note: r.note,
+        source,
+        cleared: false,
+        custom: {},
+        external_id: externalId,
+        import_batch_id: batchId,
+      });
+    }
+    return repo.insertTransactions(d, toInsert);
+  })();
+
+  errors.sort((a, b) => a.row - b.row);
+  return {
+    imported: inserted.length + claimed,
+    skipped: errors.length,
+    duplicates,
+    errors: errors.slice(0, MAX_REPORTED_ERRORS),
+    batch_id: inserted.length || claimed ? batchId : null,
+    // Beyond the contract, for the UI: rows that matched an auto-posted
+    // recurring transaction, what the file was read as, and a preview.
+    claimed,
+    detected,
+    sample: inserted.slice(0, 5),
+  };
+}
+
+// POST /transactions/import. `rows` carry RAW strings from the mapped columns
+// ({ date, amount? | debit?/credit?, payee, category_id?, note? }); without
+// rows, `csvText` is parsed server-side with `mapping`.
+function importTransactions(account_id, rows, csvText, mapping, { dateFormat = 'auto', decimal = 'auto' } = {}) {
+  if (!account_id) throw importError('account_id required');
+  if (!repo.getAccount(db(), account_id)) throw importError('Account not found', 404);
+
+  let rawRows = rows;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    if (!csvText) throw importError('rows or csvText required');
+    rawRows = parsers.parseCSV(csvText, mapping);
+  }
+  return importRows(account_id, rawRows, { dateFormat, decimal, source: 'csv' });
+}
+
+function importFile(account_id, format, content, { dateFormat = 'auto', decimal = 'auto' } = {}) {
+  if (!account_id) throw importError('account_id required');
+  if (!content) throw importError('file content required');
+  if (!repo.getAccount(db(), account_id)) throw importError('Account not found', 404);
+  const kind = String(format || '').toLowerCase();
+  if (kind !== 'ofx' && kind !== 'qif') throw importError('format must be ofx or qif');
+  const rows = kind === 'ofx' ? parsers.parseOFX(content) : parsers.parseQIF(content);
+  if (!rows.length) throw importError(`No transactions found in the ${kind.toUpperCase()} file`);
+  return importRows(account_id, rows, { dateFormat, decimal, source: kind });
+}
+
+// Undo one import: delete the rows it inserted and give claimed auto-posted
+// recurring rows back their original date, payee and source. `beforeChange`
+// runs once there is something to undo (the route takes a safety snapshot).
+function undoImport(batchId, { beforeChange } = {}) {
+  if (!batchId) throw importError('batch_id required');
+  const d = db();
+  // The claim marker lives in custom JSON; LIKE narrows the scan and the exact
+  // batch id is checked after parsing.
+  const claims = d.prepare('SELECT id, custom FROM transactions WHERE custom LIKE ?').all(`%${batchId}%`)
+    .map((row) => ({ id: row.id, custom: parseCustom(row.custom) }))
+    .filter((row) => row.custom._import_claim && row.custom._import_claim.batch_id === batchId);
+  const rows = d.prepare('SELECT COUNT(*) AS n FROM transactions WHERE import_batch_id = ?').get(batchId).n;
+  if (!rows && !claims.length) throw importError('Import batch not found', 404);
+  const safety = beforeChange ? beforeChange() : undefined;
+
+  const release = d.prepare('UPDATE transactions SET date = ?, payee = ?, source = ?, external_id = NULL, custom = ? WHERE id = ?');
+  const result = d.transaction(() => {
+    const deleted = d.prepare('DELETE FROM transactions WHERE import_batch_id = ?').run(batchId).changes;
+    for (const { id, custom } of claims) {
+      const c = custom._import_claim;
+      delete custom._import_claim;
+      release.run(c.date, c.payee, c.source || 'recurring', JSON.stringify(custom), id);
+    }
+    return { deleted, restored: claims.length };
+  })();
+  return { batch_id: batchId, ...result, ...(safety !== undefined ? { safety } : {}) };
 }
 
 // ── seed & reset ──────────────────────────────────────────────────────────────
@@ -613,6 +751,7 @@ module.exports = {
 
   importFile,
   importTransactions,
+  undoImport,
 
   getDeclaredRecurring,
   createRecurring,

@@ -221,25 +221,43 @@ router.get('/payees', (req, res) => {
 // Transactions import
 // ────────────────────────────────────────────────────────────────────────────
 
+// Body: { account_id, rows: [{ date, amount? | debit?, credit?, payee, category_id?, note? }],
+// dateFormat?: 'auto'|'MDY'|'DMY'|'YMD', decimal?: 'auto'|'.'|',' } — rows carry RAW
+// strings from the mapped columns. Reply: { imported, skipped, duplicates,
+// errors: [{ row, reason }], batch_id } (+ claimed, detected, sample). A bad
+// row is skipped and reported; it never rejects the batch.
 router.post('/transactions/import', (req, res) => {
   try {
     if (invalid(res, v.validateImport(req.body))) return;
-    const { account_id, rows, csv, mapping } = req.body;
-    const result = store.importTransactions(account_id, rows, csv, mapping);
+    const { account_id, rows, csv, mapping, dateFormat, decimal } = req.body;
+    const result = store.importTransactions(account_id, rows, csv, mapping, { dateFormat, decimal });
     res.json(result);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
 // OFX / QIF file import (file read as text client-side, posted as JSON — no upload middleware).
+// Same reply as /transactions/import.
 router.post('/transactions/import-file', (req, res) => {
   try {
     if (invalid(res, v.validateImport(req.body))) return;
-    const { account_id, format, content } = req.body;
-    res.json(store.importFile(account_id, format, content));
+    const { account_id, format, content, dateFormat, decimal } = req.body;
+    res.json(store.importFile(account_id, format, content, { dateFormat, decimal }));
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+// Undo one import: removes the rows it added and releases any auto-posted
+// recurring rows it claimed. A pre-change snapshot is taken first.
+router.delete('/transactions/import/:batch_id', (req, res) => {
+  try {
+    res.json(store.undoImport(req.params.batch_id, {
+      beforeChange: () => backup.snapshotBeforeChange('undo-import'),
+    }));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 

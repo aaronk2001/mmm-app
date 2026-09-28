@@ -38,9 +38,24 @@ describe('bulk ids validation', () => {
   });
 });
 
-describe('import row validation', () => {
-  it('rejects rows with non-numeric amounts', () => {
-    expect(v.validateImport({ account_id: 'a', rows: [{ date: '2026-07-01', amount: 'lots' }] }).valid).toBe(false);
+describe('import request validation', () => {
+  // Deliberate change: one bad row used to reject the whole request with a 400.
+  // Rows carry raw bank strings now ("$1,234.56", "(12.34)"); the import skips
+  // and reports a row it can't read instead (tests/import.test.mjs).
+  it('does not reject the batch over one bad row', () => {
+    expect(v.validateImport({ account_id: 'a', rows: [{ date: '2026-07-01', amount: 'lots' }] }).valid).toBe(true);
     expect(v.validateImport({ account_id: 'a', rows: [{ date: '2026-07-01', amount: -5 }] }).valid).toBe(true);
+  });
+
+  it('still checks the request itself', () => {
+    expect(v.validateImport({ rows: [] }).valid).toBe(false); // no account
+    expect(v.validateImport({ account_id: 'a', rows: 'x' }).valid).toBe(false);
+    expect(v.validateImport({ account_id: 'a', rows: new Array(20001).fill({}) }).valid).toBe(false);
+    expect(v.validateImport({ account_id: 'a', rows: [], dateFormat: 'DDMM' }).valid).toBe(false);
+    expect(v.validateImport({ account_id: 'a', rows: [], decimal: ';' }).valid).toBe(false);
+    expect(v.validateImport({ account_id: 'a', format: 'xlsx', content: 'x' }).valid).toBe(false);
+    for (const dateFormat of ['auto', 'MDY', 'DMY', 'YMD']) {
+      expect(v.validateImport({ account_id: 'a', rows: [], dateFormat, decimal: ',' }).valid).toBe(true);
+    }
   });
 });

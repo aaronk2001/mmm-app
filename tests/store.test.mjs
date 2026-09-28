@@ -275,11 +275,17 @@ describe('import pipeline', () => {
     expect(store.getAccounts()[0].balance).toBe(-100);
   });
 
-  it('falls back to LOCAL today (not UTC) when an imported row has no date', () => {
+  // Deliberate change (finding #1): a row with no date used to be dated today
+  // (local, after an earlier UTC bug). Any "today" re-dates a real
+  // transaction, so the row is now rejected and reported and the rest imports.
+  it('rejects a row with no date instead of dating it today', () => {
     withPhoenixEvening(() => {
       const acc = store.createAccount('Checking', 'checking', 0);
-      const out = store.importTransactions(acc.id, [{ amount: '10', payee: 'Mystery' }]);
-      expect(out.sample[0].date).toBe('2026-09-23');
+      const out = store.importTransactions(acc.id, [{ amount: '10', payee: 'Mystery' }, { date: '2026-09-20', amount: '5', payee: 'Ok' }]);
+      expect(out.imported).toBe(1);
+      expect(out.skipped).toBe(1);
+      expect(out.errors).toEqual([{ row: 1, reason: 'missing date' }]);
+      expect(store.getTransactions().map((t) => t.date)).toEqual(['2026-09-20']);
     });
   });
 });
