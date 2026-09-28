@@ -34,7 +34,9 @@ let timer = null;
 // One interval tick. http_cache housekeeping runs on every tick (it is
 // throttled to once an hour inside the seam, and needs no network) so rows
 // older than 30 days are dropped even when nothing is being fetched. The
-// snapshot refresh itself is opt-in and market-hours only.
+// snapshot refresh itself is opt-in and market-hours only; refreshSnapshots
+// coalesces with a run that is still in flight, so a slow run can't stack a
+// second one on top of it.
 function tick() {
   online.maybePruneCache();
   if (!online.enabled('market') || !isUsMarketHours()) return null;

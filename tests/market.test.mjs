@@ -38,8 +38,15 @@ function okResponse(body) {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
 
+// providers.js reaches the seam through Node's require, which vitest keeps
+// separate from this file's ESM `import` — two module instances, two sets of
+// cooldowns. Reset the one the providers actually use as well, or a 429 in
+// one test (host-scoped now) would leak into the next.
+const onlineRequired = require('../server/online/index.js');
+
 beforeEach(() => {
   online._resetForTests();
+  onlineRequired._resetForTests();
   repo.setSettings(db(), { online: Object.fromEntries(online.FEATURES.map((f) => [f, false])) });
 });
 afterEach(() => {
@@ -308,5 +315,229 @@ describe('fred cache key', () => {
     expect(new Set(seen).size).toBe(2);
     expect(seen).toEqual(['fred:FEDFUNDS:1', 'fred:FEDFUNDS:24']);
     vi.restoreAllMocks();
+  });
+});
+
+// ── Snapshot rows the Watchlist can actually read, stamped honestly ─────────
+// The Watchlist renders row.price (price_cents) and row.fetched_at. Before:
+// snapshots.js passed `price_cents`, which repo.upsertPriceCache ignores, so
+// every row stored NULL; and a refresh that failed upstream re-stamped the
+// seam's cached copy with fetched_at = now.
+describe('refreshSnapshots — honest rows', () => {
+  const chartFor = (overrides = {}) => (url) => {
+    const symbol = decodeURIComponent(String(url).split('/finance/chart/')[1].split('?')[0]);
+    const o = overrides[symbol] || {};
+    return Promise.resolve(okResponse(fakeChartJson(symbol, o.price ?? 123.45, o.prev ?? 120, o.meta || {})));
+  };
+
+  it('stores the quote price, so row.price is set (not NULL)', async () => {
+    setMarket(true);
+    repo.createWatchlistItem(db(), { symbol: 'PRCE' });
+    vi.spyOn(global, 'fetch').mockImplementation(chartFor());
+    await refreshSnapshots({ includeIndices: false, includeFutures: false });
+    expect(repo.getPriceCacheEntry(db(), 'quote:PRCE').price).toBe(123.45);
+    expect(db().prepare("SELECT price_cents FROM price_cache WHERE id = 'quote:PRCE'").get().price_cents).toBe(12345);
+  });
+
+  it('a failed refresh keeps the cached copy\'s true fetch time instead of stamping it "now"', async () => {
+    setMarket(true);
+    repo.createWatchlistItem(db(), { symbol: 'OLDQ' });
+    const oldAt = new Date(Date.now() - 20 * 86_400_000).toISOString();
+    repo.upsertHttpCache(db(), { cache_key: 'yahoo:chart:OLDQ:5d:1d', feature: 'market', url: 'x', data: fakeChartJson('OLDQ', 50, 49), cached_at: oldAt });
+    vi.spyOn(global, 'fetch').mockImplementation(() => Promise.resolve(new Response('{}', { status: 429 })));
+    const out = await refreshSnapshots({ includeIndices: false, includeFutures: false });
+    const row = repo.getPriceCacheEntry(db(), 'quote:OLDQ');
+    expect(row.price).toBe(50);
+    expect(row.fetched_at).toBe(oldAt); // not "just now"
+    expect(out.skipped.map((s) => s.symbol)).toContain('OLDQ');
+  });
+
+  it('never overwrites a newer snapshot with an older cached copy', async () => {
+    setMarket(true);
+    repo.createWatchlistItem(db(), { symbol: 'NEWR' });
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    repo.upsertPriceCache(db(), { id: 'quote:NEWR', kind: 'quote', symbol: 'NEWR', price: 99, change_pct: 1, data: { price: 99 }, source: 'yahoo', fetched_at: recent });
+    repo.upsertHttpCache(db(), {
+      cache_key: 'yahoo:chart:NEWR:5d:1d', feature: 'market', url: 'x', data: fakeChartJson('NEWR', 50, 49),
+      cached_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+    });
+    vi.spyOn(global, 'fetch').mockImplementation(() => Promise.resolve(new Response('{}', { status: 429 })));
+    await refreshSnapshots({ includeIndices: false, includeFutures: false });
+    const row = repo.getPriceCacheEntry(db(), 'quote:NEWR');
+    expect(row.price).toBe(99);
+    expect(row.fetched_at).toBe(recent);
+  });
+
+  it('stores minor-unit quotes (London pence) in the major unit', async () => {
+    setMarket(true);
+    repo.createWatchlistItem(db(), { symbol: 'VOD.L' });
+    vi.spyOn(global, 'fetch').mockImplementation(chartFor({ 'VOD.L': { price: 250, prev: 240, meta: { currency: 'GBp' } } }));
+    await refreshSnapshots({ includeIndices: false, includeFutures: false });
+    const row = repo.getPriceCacheEntry(db(), 'quote:VOD.L');
+    expect(row.price).toBe(2.5);
+    expect(row.data.currency).toBe('GBP');
+    expect(row.data.previousClose).toBe(2.4);
+  });
+
+  it('a refresh requested mid-run shares that run instead of starting a second one', async () => {
+    setMarket(true);
+    repo.createWatchlistItem(db(), { symbol: 'INFL' });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const perUrl = new Map();
+    const inner = chartFor();
+    vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
+      perUrl.set(String(url), (perUrl.get(String(url)) || 0) + 1);
+      await gate;
+      return inner(url);
+    });
+    const a = refreshSnapshots({ includeIndices: false, includeFutures: false });
+    const b = refreshSnapshots({ includeIndices: false, includeFutures: false });
+    expect(b).toBe(a);
+    release();
+    await a;
+    expect([...perUrl.keys()].some((u) => u.includes('/INFL?'))).toBe(true);
+    expect(Math.max(...perUrl.values())).toBe(1); // nothing fetched twice
+  });
+});
+
+// ── /refresh-holdings: fresh, same-currency quotes only ─────────────────────
+describe('POST /refresh-holdings — never writes a stale or wrong-currency price', () => {
+  let server; let base;
+  const originalFetch = global.fetch.bind(globalThis);
+  beforeAll(async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api/market', marketRoutes);
+    await new Promise((resolve) => { server = app.listen(0, '127.0.0.1', resolve); });
+    base = `http://127.0.0.1:${server.address().port}/api/market`;
+  });
+  afterAll(() => new Promise((resolve) => server.close(resolve)));
+
+  it('converts pence, refuses stale and mismatched-currency quotes, and reports each skip', async () => {
+    setMarket(true);
+    const d = db();
+    const gbp = repo.createAccount(d, { name: 'ISA', type: 'investment', balance: 0, currency: 'GBP' });
+    const usd = repo.createAccount(d, { name: 'Brokerage', type: 'investment', balance: 0, currency: 'USD' });
+    const vod = repo.createHolding(d, { account_id: gbp.id, symbol: 'VOD.L', shares: 1000, cost_basis: 2, current_price: 2.1 });
+    const sap = repo.createHolding(d, { account_id: usd.id, symbol: 'SAP.DE', shares: 10, cost_basis: 100, current_price: 120 });
+    const old = repo.createHolding(d, { account_id: usd.id, symbol: 'STLE', shares: 5, cost_basis: 70, current_price: 80 });
+    const fresh = repo.createHolding(d, { account_id: usd.id, symbol: 'FRSH', shares: 1, cost_basis: 10, current_price: 11 });
+    // STLE only has a 20-day-old cached quote, and its upstream is down.
+    repo.upsertHttpCache(d, {
+      cache_key: 'yahoo:chart:STLE:5d:1d', feature: 'market', url: 'x', data: fakeChartJson('STLE', 50, 49),
+      cached_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+    });
+    const meta = { 'VOD.L': { price: 250, currency: 'GBp' }, 'SAP.DE': { price: 130, currency: 'EUR' }, FRSH: { price: 12.34, currency: 'USD' } };
+    vi.spyOn(global, 'fetch').mockImplementation((url, opts) => {
+      const u = String(url);
+      if (u.startsWith(base)) return originalFetch(url, opts);
+      const symbol = decodeURIComponent(u.split('/finance/chart/')[1].split('?')[0]);
+      const m = meta[symbol];
+      if (!m) return Promise.resolve(new Response('{}', { status: 404 })); // STLE and the sample holdings
+      return Promise.resolve(okResponse(fakeChartJson(symbol, m.price, m.price, { currency: m.currency })));
+    });
+
+    const body = await (await fetch(`${base}/refresh-holdings`, { method: 'POST' })).json();
+    const after = Object.fromEntries(body.holdings.map((h) => [h.id, h]));
+    expect(after[vod.id]).toMatchObject({ current_price: 2.5, price_source: 'yahoo' });   // 250p -> £2.50
+    expect(after[fresh.id]).toMatchObject({ current_price: 12.34, price_source: 'yahoo' });
+    expect(after[sap.id]).toMatchObject({ current_price: 120 });                         // EUR quote, USD holding
+    expect(after[old.id]).toMatchObject({ current_price: 80 });                          // stale cache refused
+    const reasons = Object.fromEntries(body.skipped.map((s) => [s.id, s.reason]));
+    expect(reasons[sap.id]).toMatch(/EUR.*USD/);
+    expect(reasons[old.id]).toMatch(/no fresh quote/);
+    expect(reasons[vod.id]).toBeUndefined();
+  });
+});
+
+// ── earnings / screener: the SDK behind online.guard ────────────────────────
+describe('earnings()/screener() — yahoo-finance2 through the seam', () => {
+  afterEach(() => providers._setYahooClientForTests(null));
+
+  it('passes the seam\'s abort signal, caches within the TTL, and returns a live envelope', async () => {
+    setMarket(true);
+    const calls = [];
+    providers._setYahooClientForTests({
+      quoteSummary: async (symbol, query, opts) => { calls.push({ symbol, query, opts }); return { earnings: { symbol } }; },
+      screener: async (id, query, opts) => { calls.push({ id, query, opts }); return { quotes: [{ symbol: 'X' }] }; },
+    });
+    const first = await providers.yahoo.earnings('aapl');
+    const second = await providers.yahoo.earnings('AAPL');
+    expect(calls).toHaveLength(1); // second call served from http_cache within the TTL
+    expect(calls[0].opts.fetchOptions.signal).toBeInstanceOf(AbortSignal);
+    expect(calls[0].opts.validateResult).toBe(false);
+    expect(first).toMatchObject({ offline: false, stale: false, data: { earnings: { symbol: 'AAPL' } } });
+    expect(second.data).toEqual(first.data);
+
+    const s = await providers.yahoo.screener('day_gainers');
+    expect(s.data.quotes[0].symbol).toBe('X');
+    expect(calls[1]).toMatchObject({ id: 'day_gainers', query: { count: 25 } });
+  });
+
+  it('a 429 from the SDK rate-limits the Yahoo chart host too', async () => {
+    setMarket(true);
+    providers._setYahooClientForTests({
+      quoteSummary: async () => { const e = new Error('Too Many Requests'); e.code = 429; throw e; },
+    });
+    expect((await providers.yahoo.earnings('RLMT')).offline).toBe(true);
+    const spy = vi.spyOn(global, 'fetch');
+    const q = await providers.yahoo.quote('RLMT2');
+    expect(spy).not.toHaveBeenCalled();
+    expect(q.offline).toBe(true);
+  });
+
+  it('builds a working client from the installed (v3+, class-exporting) SDK, with no traffic off Yahoo', async () => {
+    setMarket(true);
+    providers._setYahooClientForTests(null); // let yf() construct the real client
+    const seen = [];
+    vi.spyOn(global, 'fetch').mockImplementation((url, init) => {
+      seen.push({ url: String(url), signal: init && init.signal });
+      return Promise.reject(new Error('no network in tests'));
+    });
+    const out = await providers.yahoo.earnings('INST');
+    expect(out.offline).toBe(true);
+    // The old `.default.quoteSummary()` threw before making any request.
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((c) => /^https:\/\/[^/]*yahoo\.com\//.test(c.url))).toBe(true);
+    expect(seen[0].signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+// chart() asks Yahoo for events=div|split; the dividends used to be dropped
+// on the floor, so every Yahoo-synced backtest was price-only.
+describe('seriesFromChart — dividends from Yahoo events', () => {
+  const t = (day) => Date.UTC(2024, 0, day, 14, 30) / 1000; // 09:30 ET market open
+  const result = {
+    timestamp: [t(2), t(3), t(4), t(8)],
+    indicators: { quote: [{ open: [100, 99, 98, 97], high: [100, 99, 98, 97], low: [100, 99, 98, 97], close: [100, 98.75, 98, 97], volume: [1, 1, 1, 1] }] },
+    events: {
+      dividends: {
+        [t(3)]: { amount: 1.25, date: t(3) }, // ex-date with a bar
+        [t(6)]: { amount: 0.5, date: t(6) },  // a Saturday: lands on the next bar (Mon the 8th)
+        [t(4)]: { amount: 0, date: t(4) },    // junk amounts are ignored
+      },
+      splits: { [t(4)]: { numerator: 2, denominator: 1, date: t(4) } },
+    },
+  };
+
+  it('puts each dividend on its ex-date bar (or the next bar), and never surfaces splits', () => {
+    const rows = providers.seriesFromChart(result);
+    expect(rows.map((r) => r.time)).toEqual(['2024-01-02', '2024-01-03', '2024-01-04', '2024-01-08']);
+    expect(rows[1].dividend).toBe(1.25);
+    expect(rows[3].dividend).toBe(0.5);
+    expect(rows[0].dividend).toBeUndefined();
+    expect(rows[2].dividend).toBeUndefined();
+    // Yahoo's close series is already split-adjusted; nothing split-shaped leaks out.
+    for (const r of rows) expect(r.split).toBeUndefined();
+  });
+
+  it('toMajorUnits converts only minor-unit currencies', () => {
+    expect(providers.toMajorUnits({ currency: 'GBp', price: 250, previousClose: 240, change: 10, changePct: 4.17 }))
+      .toMatchObject({ currency: 'GBP', price: 2.5, previousClose: 2.4, change: 0.1, changePct: 4.17 });
+    expect(providers.toMajorUnits({ currency: 'ZAc', price: 1000 })).toMatchObject({ currency: 'ZAR', price: 10 });
+    expect(providers.toMajorUnits({ currency: 'ILA', price: 500 })).toMatchObject({ currency: 'ILS', price: 5 });
+    const gbp = { currency: 'GBP', price: 2.5 };
+    expect(providers.toMajorUnits(gbp)).toBe(gbp); // 'GBP' is pounds already
   });
 });
