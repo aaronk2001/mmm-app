@@ -143,13 +143,31 @@ function migrateSchema(d) {
 // Additive column adds for already-migrated (v2) DBs. schema.sql uses
 // CREATE TABLE IF NOT EXISTS, so new columns on existing tables must be ALTERed
 // in by hand. Each add is guarded by a table_info check, so this is idempotent.
+// Indexes on added columns are created here too, AFTER the ALTERs — putting
+// them in schema.sql would fail on an existing DB before the column exists.
+const ADDED_COLUMNS = [
+  ['recurring', 'account_id', 'TEXT'],
+  ['recurring', 'anchor_day', 'INTEGER'],
+  ['accounts', 'apr', 'REAL'],
+  ['accounts', 'min_payment_cents', 'INTEGER'],
+  ['transactions', 'external_id', 'TEXT'],
+  ['transactions', 'import_batch_id', 'TEXT'],
+];
+
 function applyAdditiveMigrations(d) {
   const hasCol = (table, col) =>
     d.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
-  if (!hasCol('recurring', 'account_id')) {
-    d.exec('ALTER TABLE recurring ADD COLUMN account_id TEXT');
-    console.log('[MMM db] added recurring.account_id');
+  for (const [table, col, type] of ADDED_COLUMNS) {
+    if (!hasCol(table, col)) {
+      d.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+      console.log(`[MMM db] added ${table}.${col}`);
+    }
   }
+  // A bank's transaction id (or an import's content hash) is unique per
+  // account, so re-importing an overlapping statement can't double-count.
+  d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_external ON transactions(account_id, external_id) WHERE external_id IS NOT NULL');
+  // /payees groups by payee+category over every transaction.
+  d.exec('CREATE INDEX IF NOT EXISTS idx_txn_payee ON transactions(payee, category_id)');
 }
 
 // First run only: import the legacy data.json (and back it up), else seed empty.
@@ -190,4 +208,4 @@ function scheduleMaintenance(d) {
   timer.unref();
 }
 
-module.exports = { db, checkpoint, DATA_DIR, DB_FILE, ASSET_DIR };
+module.exports = { db, checkpoint, applyAdditiveMigrations, DATA_DIR, DB_FILE, ASSET_DIR };

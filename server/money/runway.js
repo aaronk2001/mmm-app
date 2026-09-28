@@ -8,7 +8,7 @@
 // actual burn from thin (but >=14-day) history, or burn imputed from
 // recurring bills; C = actual burn from under 14 days of history, or
 // nothing to go on (reported as 'unknown' band either way).
-const LIQUID_TYPES = new Set(['checking', 'savings', 'cash']);
+const { LIQUID_TYPES } = require('./account-types');
 const WINDOW_DAYS = 90;
 
 function ymd(d) {
