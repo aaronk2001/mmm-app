@@ -39,7 +39,7 @@ function getOnlineSettings(d = db()) {
 // enabled('constructor') must not find Object.prototype's function.
 function enabled(feature, d = db()) {
   if (!FEATURES.includes(feature)) return false;
-  return getOnlineSettings(d)[feature] === true;
+  return !!getOnlineSettings(d)[feature];
 }
 
 // ── concurrency — max 3 in-flight online calls at once ──────────────────────
@@ -73,10 +73,12 @@ function stateFor(map, key) {
   if (!map.has(key)) map.set(key, {});
   return map.get(key);
 }
+// A call with no known host (a guard() transport that didn't name one)
+// keeps its host-scoped timers under its own cacheKey instead.
 function coolingDown(cacheKey, host, now = Date.now()) {
   const k = keyCooldowns.get(cacheKey);
   if (k && k.errorUntil > now) return true;
-  const h = host ? hostCooldowns.get(host) : null;
+  const h = hostCooldowns.get(host || cacheKey);
   return !!(h && (h.rateLimitUntil > now || h.errorUntil > now));
 }
 

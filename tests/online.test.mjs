@@ -378,6 +378,15 @@ describe('online.guard — SDK transports get the same seam', () => {
     expect(hitCount).toBe(0);
   });
 
+  it('a 429 from a transport that names no host still cools that call down', async () => {
+    setFeature('market', true);
+    let calls = 0;
+    const limited = async () => { calls += 1; const e = new Error('Too Many Requests'); e.status = 429; throw e; };
+    await online.guard(limited, { feature: 'market', cacheKey: 'g-429-nohost' });
+    await online.guard(limited, { feature: 'market', cacheKey: 'g-429-nohost' });
+    expect(calls).toBe(1);
+  });
+
   it('an ordinary transport error cools down only that cacheKey', async () => {
     setFeature('market', true);
     let calls = 0;
