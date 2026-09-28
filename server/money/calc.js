@@ -50,6 +50,39 @@ function computeNetWorth(accounts, baseCurrency = 'USD', fxRates = null) {
   };
 }
 
+// An account's balance in the base currency. `cc` is store.getCurrencyConfig()
+// ({ baseCurrency, fxRates }); without it, amounts pass through unchanged.
+// Every place that adds balances across accounts goes through this — the
+// net-worth snapshot, goal insights and the forecast used to add yen to
+// dollars ($1,000 + ¥1,000,000 = "$1,001,000").
+function balanceInBase(account, cc) {
+  const b = parseFloat(account && account.balance) || 0;
+  return cc ? convertAmount(b, account.currency, cc.baseCurrency, cc.fxRates) : b;
+}
+// A transaction's amount in the base currency, via its account's currency.
+function amountInBase(t, currencyByAccount, cc) {
+  const a = parseFloat(t.amount) || 0;
+  if (!cc || !currencyByAccount) return a;
+  return convertAmount(a, currencyByAccount.get(t.account_id), cc.baseCurrency, cc.fxRates);
+}
+const currencyMap = (accounts = []) => new Map(accounts.map((a) => [a.id, a.currency]));
+
+// ── transfers ────────────────────────────────────────────────────────────────
+// Money moving between the user's own accounts (checking -> savings, paying a
+// card from checking) is neither income nor spending. A transaction is a
+// transfer when its category is in the 'transfers' group (the default Savings
+// and Transfer categories). Only runway.js knew this: income-vs-spending,
+// metrics, goal insights, the forecast and recurring detection all counted a
+// $2,500 move to savings as $2,500 earned and $2,500 spent.
+function transferCategoryIds(categories = []) {
+  const ids = new Set(['transfer', 'transfers']);
+  for (const c of categories || []) {
+    if (String(c.group || '').toLowerCase() === 'transfers') ids.add(c.id);
+  }
+  return ids;
+}
+const isTransferTxn = (t, transferIds) => !!(t && t.category_id && transferIds && transferIds.has(t.category_id));
+
 // ── budgets ──────────────────────────────────────────────────────────────────
 // Every period the validator accepts gets a status (weekly/biweekly/annual
 // budgets used to vanish), windows are LOCAL calendar dates, and rollover is
@@ -138,11 +171,18 @@ function autoCategorize(payee, amount) {
   return 'oth';
 }
 
-function detectRecurring(transactions, declaredRecurring = []) {
+// A detected series that hasn't charged for more than two periods (plus a few
+// days' grace) has stopped — a cancelled gym membership was still being
+// projected two years later.
+const STALE_AFTER_DAYS = { weekly: 17, biweekly: 31, monthly: 65 };
+
+function detectRecurring(transactions, declaredRecurring = [], { categories = null, today = localDate() } = {}) {
   if (transactions.length === 0) return declaredRecurring || [];
 
+  const transferIds = categories ? transferCategoryIds(categories) : null;
   const groups = {};
   transactions.forEach(t => {
+    if (isTransferTxn(t, transferIds)) return;
     const key = t.payee.toLowerCase();
     if (!groups[key]) groups[key] = [];
     groups[key].push(t);
@@ -181,11 +221,12 @@ function detectRecurring(transactions, declaredRecurring = []) {
     const kind = parseFloat(txns[0].amount) > 0 ? 'income' : 'bill';
     const lastTxn = txns[txns.length - 1];
     const lastDate = localDateFromStr(lastTxn.date);
+    const daysSinceLast = Math.round((localDateFromStr(today) - lastDate) / 86400000);
+    if (daysSinceLast > STALE_AFTER_DAYS[cadence]) return;
 
-    let nextDate = new Date(lastDate);
-    if (cadence === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
-    else if (cadence === 'biweekly') nextDate.setDate(nextDate.getDate() + 14);
-    else if (cadence === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
+    // Clamped month math: setMonth(+1) on Jan 31 lands on Mar 3, skipping
+    // February entirely.
+    const nextDate = advanceCadence(lastDate, cadence, lastDate.getDate());
 
     recurring.push({
       payee,
@@ -205,8 +246,11 @@ function detectRecurring(transactions, declaredRecurring = []) {
 // Mirrors server/money/store.js addMonthsClamped — keep the two in step.
 // Adds n months to Date `d`, clamping the day-of-month to the target month's
 // last day instead of letting it roll into the following month.
-function addMonthsClamped(d, n) {
-  const day = d.getDate();
+function addMonthsClamped(d, n, anchorDay = null) {
+  // anchorDay: the day the schedule is pinned to (recurring.anchor_day). Chaining
+  // from an already-clamped date drifted a 31st-of-the-month item to the 28th
+  // for good after February.
+  const day = anchorDay || d.getDate();
   const probe = new Date(d.getFullYear(), d.getMonth() + n, 1);
   const lastDay = new Date(probe.getFullYear(), probe.getMonth() + 1, 0).getDate();
   probe.setDate(Math.min(day, lastDay));
@@ -225,21 +269,25 @@ function localDateFromStr(s) {
   return new Date(y, mo - 1, dd);
 }
 
-function advanceCadence(d, cadence) {
+function advanceCadence(d, cadence, anchorDay = null) {
   if (cadence === 'weekly') { const nd = new Date(d); nd.setDate(nd.getDate() + 7); return nd; }
   if (cadence === 'biweekly') { const nd = new Date(d); nd.setDate(nd.getDate() + 14); return nd; }
-  if (cadence === 'monthly') return addMonthsClamped(d, 1);
-  if (cadence === 'quarterly') return addMonthsClamped(d, 3);
-  if (cadence === 'annual') return addMonthsClamped(d, 12);
+  if (cadence === 'monthly') return addMonthsClamped(d, 1, anchorDay);
+  if (cadence === 'quarterly') return addMonthsClamped(d, 3, anchorDay);
+  if (cadence === 'annual') return addMonthsClamped(d, 12, anchorDay);
   return null;
 }
 
+// The day a recurring item is pinned to: its stored anchor, else its
+// next_date's day.
+const anchorOf = (r) => r.anchor_day || Number(String(r.next_date || '').slice(8, 10)) || null;
+
 // Forward-projects liquid balances. avgDailyDiscretionary is supplied by the
 // caller (store computes it from recent transactions) so this stays pure.
-function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary = 0) {
+function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary = 0, { cc = null } = {}) {
   const startBalance = accounts
     .filter(a => isLiquid(a.type))
-    .reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0);
+    .reduce((sum, a) => sum + balanceInBase(a, cc), 0);
 
   const projection = [];
   const lowBalanceWarnings = [];
@@ -252,26 +300,34 @@ function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary =
   // that never matched and silently vanish from the forecast.
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const horizon = new Date(today.getFullYear(), today.getMonth(), today.getDate() + days);
+
+  // Each item's occurrences inside the window, walked once (the old loop
+  // re-walked every item from next_date for every day — quadratic, so
+  // ?days=32000 held the server for 17 seconds).
+  const deltaByDay = new Map();
+  for (const r of recurring) {
+    if (!r.next_date) continue;
+    const anchor = anchorOf(r);
+    const delta = r.kind === 'income' ? parseFloat(r.amount) : -parseFloat(r.amount);
+    let checkDate = localDateFromStr(r.next_date);
+    let guard = 0;
+    while (checkDate <= horizon && guard++ < 100000) {
+      if (checkDate >= today) {
+        const key = ymdLocal(checkDate);
+        deltaByDay.set(key, (deltaByDay.get(key) || 0) + delta);
+      }
+      const advanced = advanceCadence(checkDate, r.cadence, anchor);
+      if (!advanced) break;
+      checkDate = advanced;
+    }
+  }
 
   for (let d = 0; d <= days; d++) {
     const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + d);
     const dateStr = ymdLocal(date);
 
-    recurring.forEach(r => {
-      let checkDate = localDateFromStr(r.next_date);
-
-      while (checkDate <= date) {
-        if (ymdLocal(checkDate) === dateStr) {
-          const delta = r.kind === 'income' ? parseFloat(r.amount) : -parseFloat(r.amount);
-          currentBalance += delta;
-        }
-
-        const advanced = advanceCadence(checkDate, r.cadence);
-        if (!advanced) break;
-        checkDate = advanced;
-      }
-    });
-
+    currentBalance += deltaByDay.get(dateStr) || 0;
     currentBalance -= avgDailyDiscretionary;
 
     projection.push({
@@ -309,16 +365,20 @@ function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary =
   };
 }
 
-function computeGoalInsights(accounts, transactions, recurring = []) {
+function computeGoalInsights(accounts, transactions, recurring = [], { categories = null, cc = null } = {}) {
   const cutoff = localDate(-60);
+  const transferIds = categories ? transferCategoryIds(categories) : null;
+  const byAccount = currencyMap(accounts);
+  const recent = transactions.filter(t => String(t.date).slice(0, 10) >= cutoff && !isTransferTxn(t, transferIds));
 
-  // Actual monthly flow from the last 60 days of transactions.
-  const txnMonthlyExpenses = transactions
-    .filter(t => String(t.date).slice(0, 10) >= cutoff && t.amount < 0)
-    .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount) || 0), 0) / 2;
-  const txnMonthlyIncome = transactions
-    .filter(t => String(t.date).slice(0, 10) >= cutoff && t.amount > 0)
-    .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) / 2;
+  // Actual monthly flow from the last 60 days of transactions (transfers
+  // between the user's own accounts are neither income nor spending).
+  const txnMonthlyExpenses = recent
+    .filter(t => t.amount < 0)
+    .reduce((sum, t) => sum + Math.abs(amountInBase(t, byAccount, cc)), 0) / 2;
+  const txnMonthlyIncome = recent
+    .filter(t => t.amount > 0)
+    .reduce((sum, t) => sum + amountInBase(t, byAccount, cc), 0) / 2;
 
   // Recurring items normalized to a monthly figure. Most users model bills as
   // recurring rather than posting every transaction, so fold them in — take the
@@ -343,7 +403,7 @@ function computeGoalInsights(accounts, transactions, recurring = []) {
 
   const liquidAssets = accounts
     .filter(a => isLiquid(a.type))
-    .reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0);
+    .reduce((sum, a) => sum + balanceInBase(a, cc), 0);
 
   const emergencyFundMonths = 6;
   const emergencyFundTarget = monthlyExpenses * emergencyFundMonths;
@@ -351,7 +411,7 @@ function computeGoalInsights(accounts, transactions, recurring = []) {
 
   const emergencyFundAdequacy = liquidAssets >= emergencyFundTarget ? 'good' : liquidAssets >= (monthlyExpenses * 3) ? 'ok' : 'low';
 
-  const nw = computeNetWorth(accounts);
+  const nw = computeNetWorth(accounts, cc ? cc.baseCurrency : undefined, cc ? cc.fxRates : null);
 
   const annualExpenses = monthlyExpenses * 12;
   const fireNumber = annualExpenses * 25;
@@ -503,6 +563,12 @@ module.exports = {
   ymdLocal,
   localDateFromStr,
   convertAmount,
+  balanceInBase,
+  amountInBase,
+  transferCategoryIds,
+  isTransferTxn,
+  advanceCadence,
+  addMonthsClamped,
   computeNetWorth,
   computeBudgetStatus,
   budgetWindow,

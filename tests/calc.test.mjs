@@ -3,6 +3,7 @@
 // rewrite changes any of these numbers, that's a regression, not a test bug.
 import { describe, it, expect, beforeAll } from 'vitest';
 import store from '../server/money/store.js';
+import calc from '../server/money/calc.js';
 
 const iso = (d) => d.toISOString().slice(0, 10);
 const daysAgo = (n) => {
@@ -183,12 +184,45 @@ describe('detectRecurring', () => {
         { payee: 'Rent', amount: -1500, date: '2026-02-01' },
         { payee: 'Rent', amount: -1500, date: '2026-03-01' },
       ];
-      expect(store.detectRecurring(txns)[0].next_date).toBe('2026-04-01');
+      // `today` pins "now" next to the fixture: detections whose last charge is
+      // more than two periods old are dropped as stopped.
+      expect(store.detectRecurring(txns, [], { today: '2026-03-15' })[0].next_date).toBe('2026-04-01');
       const sep = txns.map((t, i) => ({ ...t, date: `2026-0${7 + i}-01` }));
-      expect(store.detectRecurring(sep)[0].next_date).toBe('2026-10-01');
+      expect(store.detectRecurring(sep, [], { today: '2026-09-15' })[0].next_date).toBe('2026-10-01');
     } finally {
       if (prevTZ === undefined) delete process.env.TZ; else process.env.TZ = prevTZ;
     }
+  });
+});
+
+describe('detectRecurring — schedules and staleness', () => {
+  it('clamps month math instead of skipping a month (Jan 31 -> Feb 28, not Mar 3)', () => {
+    const txns = [
+      { payee: 'Gym', amount: -40, date: '2025-11-30' },
+      { payee: 'Gym', amount: -40, date: '2025-12-31' },
+      { payee: 'Gym', amount: -40, date: '2026-01-31' },
+    ];
+    expect(store.detectRecurring(txns, [], { today: '2026-02-10' })[0].next_date).toBe('2026-02-28');
+  });
+
+  it('drops a series that stopped charging more than two periods ago', () => {
+    const txns = [
+      { payee: 'Gym', amount: -899.99, date: '2024-01-10' },
+      { payee: 'Gym', amount: -899.99, date: '2024-02-10' },
+      { payee: 'Gym', amount: -899.99, date: '2024-03-10' },
+    ];
+    expect(store.detectRecurring(txns, [], { today: '2024-04-20' })).toHaveLength(1); // one missed period: still live
+    expect(store.detectRecurring(txns, [], { today: '2026-10-10' })).toHaveLength(0);
+  });
+
+  it('never treats a transfer between the user\'s own accounts as a recurring bill', () => {
+    const categories = [{ id: 'sav', name: 'Savings', group: 'transfers' }];
+    const txns = [
+      { payee: 'To savings', amount: -500, date: '2026-07-01', category_id: 'sav' },
+      { payee: 'To savings', amount: -500, date: '2026-08-01', category_id: 'sav' },
+      { payee: 'To savings', amount: -500, date: '2026-09-01', category_id: 'sav' },
+    ];
+    expect(calc.detectRecurring(txns, [], { categories, today: '2026-09-10' })).toHaveLength(0);
   });
 });
 

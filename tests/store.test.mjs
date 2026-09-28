@@ -180,19 +180,59 @@ describe('recurring auto-post to transactions', () => {
     expect(store.getAccounts()[0].balance).toBe(500);
   });
 
-  it('caps catch-up per item, reports the truncation, and continues on the next call', () => {
+  // A long catch-up used to back-post silently (100 rows per launch). It now
+  // waits for the user's OK, then posts in one go.
+  it('asks before a long catch-up, then posts it when confirmed', () => {
     const acc = store.createAccount('Checking', 'checking', 0);
-    // ~2 years of missed weekly bills = 105 periods; cap is 100 per call.
+    // ~2 years of missed weekly bills = 105 periods.
     const r = store.createRecurring({ payee: 'Stale', amount: 1, cadence: 'weekly', kind: 'bill', next_date: ymd(-7 * 104), account_id: acc.id });
 
     const first = store.postDueRecurring();
-    expect(first.posted).toBe(100);
-    expect(first.truncated).toEqual([{ id: r.id, payee: 'Stale', remaining: 5 }]);
+    expect(first.posted).toBe(0);
+    expect(first.needsConfirm).toEqual([expect.objectContaining({ id: r.id, payee: 'Stale', periods: 105, amount: -1 })]);
+    expect(store.getTransactions()).toHaveLength(0);
 
-    const second = store.postDueRecurring();
-    expect(second.posted).toBe(5);
-    expect(second.truncated).toEqual([]);
+    const confirmed = store.postDueRecurring({ confirmIds: [r.id] });
+    expect(confirmed.posted).toBe(105);
+    expect(confirmed.needsConfirm).toEqual([]);
     expect(store.getTransactions()).toHaveLength(105);
+    expect(store.postDueRecurring().posted).toBe(0);
+  });
+
+  it('posts a short catch-up on its own', () => {
+    const acc = store.createAccount('Checking', 'checking', 0);
+    store.createRecurring({ payee: 'Weekly', amount: 5, cadence: 'weekly', kind: 'bill', next_date: ymd(-7 * 3), account_id: acc.id });
+    expect(store.postDueRecurring().posted).toBe(4);
+  });
+
+  it('commits an item\'s posts and its next_date together, or not at all', () => {
+    const acc = store.createAccount('Checking', 'checking', 0);
+    const r = store.createRecurring({ payee: 'Weekly', amount: 5, cadence: 'weekly', kind: 'bill', next_date: ymd(-7 * 3), account_id: acc.id });
+    // Fail the 3rd insert: nothing from this item may stick, and next_date
+    // must not move — so the retry posts each date exactly once.
+    // A real (not TEMP) trigger, so it fires on whichever connection posts.
+    db().exec(`CREATE TRIGGER fail_third_post BEFORE INSERT ON transactions
+      WHEN (SELECT COUNT(*) FROM transactions WHERE payee = 'Weekly') >= 2
+      BEGIN SELECT RAISE(ABORT, 'disk full'); END`);
+    try {
+      expect(() => store.postDueRecurring()).toThrow('disk full');
+    } finally {
+      db().exec('DROP TRIGGER fail_third_post');
+    }
+    expect(store.getTransactions()).toHaveLength(0);
+    expect(store.getDeclaredRecurring().find((x) => x.id === r.id).next_date).toBe(ymd(-7 * 3));
+    expect(store.postDueRecurring().posted).toBe(4);
+    expect(new Set(store.getTransactions().map((t) => t.date)).size).toBe(4);
+  });
+
+  it('keeps a 31st-of-the-month schedule on the 31st after a short month', () => {
+    const acc = store.createAccount('Checking', 'checking', 0);
+    const r = store.createRecurring({ payee: 'Rent', amount: 100, cadence: 'monthly', kind: 'bill', next_date: '2026-01-31', account_id: acc.id });
+    const dates = [];
+    let next = r.next_date;
+    for (let i = 0; i < 4; i++) { dates.push(next); next = store.advanceDate(next, 'monthly', 31); }
+    expect(dates).toEqual(['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30']);
+    expect(store.getDeclaredRecurring().find((x) => x.id === r.id).anchor_day).toBe(31);
   });
 
   it('records the last auto-post result in meta', () => {

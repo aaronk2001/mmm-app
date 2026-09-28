@@ -184,16 +184,16 @@ describe('C1 — Learn variables agree with the app\'s own runway computation', 
   it('computes runway_days from detected (not just declared) recurring, matching store.getRunway()', async () => {
     const acc = store.createAccount('Checking', 'checking', 5000);
     const ymd = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
-    // Rent posted twice, ~monthly cadence, but BOTH postings are older than the
-    // 90-day actual-spend window runway.js scores burn from — so there is zero
-    // "actual" spend in-window, and the only way to see this bill at all is by
-    // running store.detectRecurring() over full transaction history (as every
-    // other money route does) rather than reading declared-only recurring
-    // (store.readData().recurring, which is empty here — never manually
-    // declared). Declared-only would score this 'unknown'/sample; detection
-    // should score it a real (non-sample) recurring-driven runway.
-    store.createTransaction(acc.id, ymd(170), -1800, 'Landlord LLC');
-    store.createTransaction(acc.id, ymd(200), -1800, 'Landlord LLC');
+    // Rent posted twice, ~monthly cadence. Nothing is declared (declared-only
+    // recurring is empty), so a 'recurring' burn source can only come from
+    // running store.detectRecurring() over the transaction history, as every
+    // other money route does. The postings are recent: a series whose last
+    // charge is more than two periods old is now treated as stopped (it used
+    // to be projected forever), so this fixture was moved from 170/200 days
+    // ago. Detected rent ($1,800/mo) still outweighs the in-window average, so
+    // runway scores it from recurring and the learn variable must match.
+    store.createTransaction(acc.id, ymd(31), -1800, 'Landlord LLC');
+    store.createTransaction(acc.id, ymd(61), -1800, 'Landlord LLC');
 
     const appRunway = store.getRunway();
     expect(appRunway.burnSource).toBe('recurring'); // sanity: only visible via detection
