@@ -474,6 +474,12 @@ function upsertHttpCache(d, entry) {
   `).run(entry.cache_key, entry.feature || null, entry.url || null, jsonText(entry.data, null), entry.cached_at);
   return getHttpCacheEntry(d, entry.cache_key);
 }
+// Drops rows fetched before `cutoffIso` (an ISO instant, the same format
+// cached_at is written in, so the string comparison is chronological).
+// Returns the number of rows removed.
+function pruneHttpCache(d, cutoffIso) {
+  return d.prepare('DELETE FROM http_cache WHERE cached_at < ?').run(cutoffIso).changes;
+}
 
 // ── paper trading ledger (Sprint A, Track 3) ────────────────────────────────
 // Paper-only forever. Money is INTEGER cents at rest; this layer converts to
@@ -1367,7 +1373,7 @@ module.exports = {
   getHoldings, createHolding, updateHolding, deleteHolding,
   getSnapshots, insertSnapshotIfMissing,
   getRecurring, createRecurring, updateRecurring, deleteRecurring,
-  getHttpCacheEntry, getAllHttpCache, upsertHttpCache,
+  getHttpCacheEntry, getAllHttpCache, upsertHttpCache, pruneHttpCache,
   getPaperAccount, importPaperAccount, adjustPaperAccountCapital,
   getPaperPositions, getPaperPosition, createPaperPosition, deletePaperPosition,
   getPaperTrades, getPaperTrade, createPaperTrade, updatePaperTrade,

@@ -53,8 +53,15 @@ const SAMPLE = [
   },
 ];
 
+// providers.js reaches the seam through Node's require, a separate module
+// instance from this file's ESM import; its (now host-scoped) cooldowns must
+// be reset too, or the dead-endpoint test would cool down Marketaux for the
+// route tests that follow.
+const onlineRequired = require('../server/online/index.js');
+
 beforeEach(() => {
   online._resetForTests();
+  onlineRequired._resetForTests();
   keys.setKeys({});
   repo.setSettings(db(), { online: Object.fromEntries(online.FEATURES.map((f) => [f, false])) });
 });
