@@ -303,3 +303,88 @@ describe('runBacktest — config validation', () => {
     expect(() => runBacktest({ bars, strategy: buyAndHold('A'), initialCashCents: 10.5 })).toThrow();
   });
 });
+
+// ── #5: null means hold — no phantom fills from float round-trips ───────────
+// Re-deriving a held quantity from its own weight, floor((q*p/E) * E / p),
+// lands one share short for many (q, p, E) — e.g. q=5, p=11926¢,
+// E=10000035¢ -> 4 — which fired a 1-share sell (commission + slippage, and a
+// "closed trade" in win rate) on bars where the strategy asked for nothing.
+describe('runBacktest — null / omitted weights hold positions exactly', () => {
+  function lcg(seed) {
+    let s = seed;
+    return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  }
+  function randomWalk(n, p0, rnd) {
+    const dates = dateSeq(n);
+    const out = [];
+    let p = p0;
+    for (let i = 0; i < n; i++) {
+      const open = p;
+      p = Math.max(0.5, p * (1 + (rnd() - 0.5) * 0.04));
+      const o = Math.round(open * 100) / 100;
+      const c = Math.round(p * 100) / 100;
+      out.push({ date: dates[i], open: o, high: Math.max(o, c), low: Math.min(o, c), close: c, volume: 1000 });
+    }
+    return out;
+  }
+  const rebalanceEvery = (weights, n) => ({ onBar: (view) => (view.currentIndex % n === 0 ? { weights: { ...weights } } : null) });
+
+  it('a periodic rebalancer only ever trades on its rebalance bars (seeded, 40 runs)', () => {
+    const rnd = lcg(7);
+    let fills = 0;
+    for (let k = 0; k < 40; k++) {
+      const bars = { A: randomWalk(252, 20 + rnd() * 100, rnd), B: randomWalk(252, 50 + rnd() * 200, rnd) };
+      const { trades } = runBacktest({ bars, strategy: rebalanceEvery({ A: 0.5, B: 0.5 }, 21), initialCashCents: 10_000_000 });
+      for (const t of trades) expect((t.decisionIndex + 1) % 21).toBe(0);
+      fills += trades.length;
+    }
+    expect(fills).toBeGreaterThan(0);
+  });
+
+  it('buy-and-hold makes exactly one fill (seeded, 150 runs)', () => {
+    // Seed 7 includes a run where the old engine fired a phantom 1-share sell.
+    const rnd = lcg(7);
+    for (let k = 0; k < 150; k++) {
+      const bars = { X: randomWalk(250, 5 + rnd() * 400, rnd) };
+      const { trades } = runBacktest({ bars, strategy: buyAndHold('X'), initialCashCents: Math.round(1e6 + rnd() * 1e7) });
+      expect(trades).toHaveLength(1);
+    }
+  });
+
+  it('a symbol the strategy leaves out of its weights keeps its exact share count', () => {
+    const rnd = lcg(23);
+    const bars = { A: randomWalk(120, 40, rnd), B: randomWalk(120, 119.26, rnd) };
+    // Names both once, then only ever A: B must never trade again.
+    const strategy = { onBar: (view) => (view.currentIndex === 1 ? { weights: { A: 0.3, B: 0.3 } } : { weights: { A: 0.3 } }) };
+    const { trades } = runBacktest({ bars, strategy, initialCashCents: 10_000_035 });
+    const bFills = trades.filter((t) => t.symbol === 'B');
+    expect(bFills).toHaveLength(1);
+    expect(bFills[0].side).toBe('buy');
+  });
+
+  it('the risk clamp still trims an unnamed symbol when a request pushes gross exposure over 100%', () => {
+    const dates = dateSeq(6);
+    const bars = { A: barsFromCloses([10, 10, 10, 10, 10, 10], dates), B: barsFromCloses([10, 10, 10, 10, 10, 10], dates) };
+    const strategy = { onBar: (view) => (view.currentIndex === 1 ? { weights: { B: 0.5 } } : view.currentIndex === 3 ? { weights: { A: 1 } } : null) };
+    const { trades } = runBacktest({ bars, strategy, initialCashCents: 100_000, slippageBps: 0, commissionCents: 0 });
+    // A:1 + B's held 0.5 = 1.5 gross -> rescaled to A 2/3, B 1/3: B is sold down.
+    expect(trades.some((t) => t.symbol === 'B' && t.side === 'sell')).toBe(true);
+  });
+});
+
+// ── #6: fee-inclusive cost basis ───────────────────────────────────────────
+describe('runBacktest — realized P&L includes the buy commission', () => {
+  it('a round trip that loses 50¢ net reports pnl_cents -50 (it used to report +50, a "win")', () => {
+    const px = [100, 100, 100, 100.01, 100.01, 100.01];
+    const dates = dateSeq(px.length);
+    const bars = { A: px.map((p, i) => ({ date: dates[i], open: p, high: p, low: p, close: p })) };
+    const strategy = { onBar: (view) => (view.currentIndex === 1 ? { weights: { A: 1 } } : view.currentIndex === 4 ? { weights: { A: 0 } } : null) };
+    const initialCashCents = 1_500_100;
+    const r = runBacktest({ bars, strategy, initialCashCents, slippageBps: 0, commissionCents: 100 });
+    const sell = r.trades.find((t) => t.side === 'sell');
+    expect(r.trades.map((t) => [t.side, t.qty, t.priceCents])).toEqual([['buy', 150, 10000], ['sell', 150, 10001]]);
+    expect(sell.pnl_cents).toBe(-50);
+    // Flat to flat: realized P&L is exactly the cash the round trip made.
+    expect(r.finalCashCents - initialCashCents).toBe(sell.pnl_cents);
+  });
+});

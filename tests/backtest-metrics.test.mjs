@@ -181,11 +181,14 @@ describe('calmarRatio', () => {
 // realized P&L via average-cost replay (same accounting engine.js itself
 // uses for avgCostCents).
 describe('winRate and profitFactor (average-cost reconstruction from real fills)', () => {
-  // Symbol X: buy 10 @ $10.00 (avgCost 1000), buy 10 @ $12.00 (avgCost
-  // (10000+12000)/20 = 1100), sell all 20 @ $13.00 -> proceeds
-  // 26000-100=25900, basis 1100*20=22000, pnl = +3900 (win).
-  // Then buy 5 @ $10.00 (avgCost 1000), sell 5 @ $9.00 -> proceeds
-  // 4500-100=4400, basis 1000*5=5000, pnl = -600 (loss).
+  // The cost basis is fee-inclusive, like engine.js's: each buy's $1
+  // commission is part of what its shares cost, so a round trip's P&L
+  // carries both commissions (it used to carry only the sell's).
+  // Symbol X: buy 10 @ $10.00 +$1 (basis 10100), buy 10 @ $12.00 +$1 (basis
+  // 10100+12100 = 22200, avgCost 1110), sell all 20 @ $13.00 -> proceeds
+  // 26000-100=25900, pnl = 25900-22200 = +3700 (win).
+  // Then buy 5 @ $10.00 +$1 (basis 5100), sell 5 @ $9.00 -> proceeds
+  // 4500-100=4400, pnl = 4400-5100 = -700 (loss).
   const trades = [
     { symbol: 'X', side: 'buy', qty: 10, priceCents: 1000, grossCents: 10000, commissionCents: 100, slippageCents: 0, cashDeltaCents: -10100, date: '2024-01-01' },
     { symbol: 'X', side: 'buy', qty: 10, priceCents: 1200, grossCents: 12000, commissionCents: 100, slippageCents: 0, cashDeltaCents: -12100, date: '2024-01-02' },
@@ -198,8 +201,17 @@ describe('winRate and profitFactor (average-cost reconstruction from real fills)
     expect(winRate(trades)).toBe(0.5);
   });
 
-  it('profitFactor = gross profit 3900 / gross loss 600 = 6.5', () => {
-    expect(profitFactor(trades)).toBeCloseTo(6.5, 9);
+  it('profitFactor = gross profit 3700 / gross loss 700', () => {
+    expect(profitFactor(trades)).toBeCloseTo(3700 / 700, 9);
+  });
+
+  it('a round trip that nets a loss only once BOTH commissions count is a loss, not a win', () => {
+    // buy 150 @ $100.00 (+$1), sell 150 @ $100.01 (-$1): +$1.50 gross, -$0.50 net.
+    const roundTrip = [
+      { symbol: 'Y', side: 'buy', qty: 150, priceCents: 10000, grossCents: 1_500_000, commissionCents: 100, cashDeltaCents: -1_500_100, date: '2024-01-01' },
+      { symbol: 'Y', side: 'sell', qty: 150, priceCents: 10001, grossCents: 1_500_150, commissionCents: 100, cashDeltaCents: 1_500_050, date: '2024-01-02' },
+    ];
+    expect(winRate(roundTrip)).toBe(0);
   });
 
   it('both return null on an empty trade list', () => {

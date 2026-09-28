@@ -1,11 +1,12 @@
 'use strict';
 
 // Background interval jobs that run inside the forked server process, apart
-// from the daily backup scheduler (server/backup/scheduler.js). Currently
-// just the market snapshot job (Sprint A, Track 2): opt-in, 30 min, market
-// hours only, `.unref()`'d so it never holds the process open. The UI never
-// triggers a fetch itself — this job (and the explicit Refresh route) are
-// the only things that write into price_cache.
+// from the daily backup scheduler (server/backup/scheduler.js). The market
+// snapshot job (Sprint A, Track 2): opt-in, 30 min, market hours only,
+// `.unref()`'d so it never holds the process open — plus the online seam's
+// http_cache pruning, which rides the same tick. The UI never triggers a
+// fetch itself — this job (and the explicit Refresh route) are the only
+// things that write into price_cache.
 
 const online = require('./online');
 const { refreshSnapshots } = require('./market/snapshots');
@@ -30,15 +31,23 @@ function isUsMarketHours(date = new Date()) {
 
 let timer = null;
 
+// One interval tick. http_cache housekeeping runs on every tick (it is
+// throttled to once an hour inside the seam, and needs no network) so rows
+// older than 30 days are dropped even when nothing is being fetched. The
+// snapshot refresh itself is opt-in and market-hours only; refreshSnapshots
+// coalesces with a run that is still in flight, so a slow run can't stack a
+// second one on top of it.
+function tick() {
+  online.maybePruneCache();
+  if (!online.enabled('market') || !isUsMarketHours()) return null;
+  return refreshSnapshots().catch((e) => console.error('[MMM market] snapshot refresh failed:', e.message));
+}
+
 function startMarketSnapshotJob() {
-  const kickoff = () => {
-    if (!online.enabled('market') || !isUsMarketHours()) return;
-    refreshSnapshots().catch((e) => console.error('[MMM market] snapshot refresh failed:', e.message));
-  };
-  kickoff();
-  timer = setInterval(kickoff, INTERVAL_MS);
+  tick();
+  timer = setInterval(tick, INTERVAL_MS);
   timer.unref();
   console.log('[MMM market] snapshot job started — every 30 min, market hours only, opt-in');
 }
 
-module.exports = { startMarketSnapshotJob, isUsMarketHours };
+module.exports = { startMarketSnapshotJob, isUsMarketHours, tick };

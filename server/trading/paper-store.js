@@ -211,16 +211,35 @@ function close(positionId, exitPrice, { what_happened = '', lesson = '' } = {}) 
     const pos = repo.getPaperPosition(d, positionId);
     if (!pos) return { ok: false, status: 404, error: 'Position not found' };
 
+    const short = pos.direction === 'SHORT';
     const exitPriceCents = Math.round(toCents(exitPrice));
     const slippageCents = Math.round(exitPriceCents * SLIPPAGE_RATE);
-    const fillPriceCents = pos.direction === 'LONG' ? exitPriceCents - slippageCents : exitPriceCents + slippageCents;
+    // Closing a LONG sells (slippage lowers the fill); covering a SHORT buys
+    // the shares back (slippage raises it).
+    const fillPriceCents = short ? exitPriceCents + slippageCents : exitPriceCents - slippageCents;
     const entryPriceCents = Math.round(toCents(pos.entry_price));
 
     // Rebuild both legs from integer cents so pnl == the actual capital
-    // delta by construction (see module header, deviation #1).
-    const costCents = entryPriceCents * pos.shares + COMMISSION_CENTS;
-    const proceedsCents = fillPriceCents * pos.shares - COMMISSION_CENTS;
-    const pnlCents = Math.round(proceedsCents - costCents);
+    // delta by construction (see module header, deviation #1). Every figure
+    // is rounded to a whole cent before it is stored: `shares` is REAL, and a
+    // fractional position (restorable from a backup) used to write a
+    // fractional capital_cents.
+    const entryGrossCents = Math.round(entryPriceCents * pos.shares);
+    const exitGrossCents = Math.round(fillPriceCents * pos.shares);
+    // What the position tied up at open: its notional plus the opening
+    // commission. For a LONG that is what the shares cost. A SHORT (only
+    // reachable through a restore — open() is LONG-only) is treated as
+    // cash-secured: the same notional set aside as collateral, which is also
+    // how getAccount()'s mark-to-cost equity counts it.
+    const costCents = entryGrossCents + COMMISSION_CENTS;
+    // A SHORT profits when the price falls. It used to get the LONG formula:
+    // a winning short (100 @ $100 covered at $90) booked -$993, a "loss"
+    // that could blacklist its sector, and credited capital with the cost of
+    // buying the shares back as if it were sale proceeds.
+    const pnlCents = (short ? entryGrossCents - exitGrossCents : exitGrossCents - entryGrossCents) - 2 * COMMISSION_CENTS;
+    // Released back to capital: what was tied up plus the realized P&L. For
+    // a LONG this is exactly the sale proceeds (exit notional - commission).
+    const creditCents = costCents + pnlCents;
     const pnlPct = costCents !== 0 ? Math.round((pnlCents / costCents) * 10000) / 100 : 0;
 
     repo.deletePaperPosition(d, positionId);
@@ -243,7 +262,7 @@ function close(positionId, exitPrice, { what_happened = '', lesson = '' } = {}) 
       source: pos.source,
     });
 
-    db().prepare("UPDATE paper_account SET capital_cents = capital_cents + ? WHERE id = 'default'").run(proceedsCents);
+    db().prepare("UPDATE paper_account SET capital_cents = capital_cents + ? WHERE id = 'default'").run(creditCents);
 
     repo.appendAgentEvent(d, {
       ts: trade.closed_at, event: 'close', ticker: trade.ticker, sector: trade.sector,
@@ -266,6 +285,12 @@ function reset() {
     for (const t of repo.getPaperTrades(d)) {
       if (t.source === 'app') db().prepare('DELETE FROM paper_trades WHERE id = ?').run(t.id);
     }
+    // The strategy gate's rolling memory — trades this week, per-sector loss
+    // streaks — is derived from agent_events, which only this module writes
+    // (open/close). Left behind, a freshly reset portfolio was still refused
+    // new BUYs for up to a week ("3/3 trades this week") and kept sector
+    // blacklists for up to 14 days, over trades that no longer exist.
+    d.prepare('DELETE FROM agent_events').run();
     const acct = repo.getPaperAccount(d);
     db().prepare("UPDATE paper_account SET capital_cents = ? WHERE id = 'default'").run(toCents(acct.starting_capital));
     return { ok: true, account: repo.getPaperAccount(d) };

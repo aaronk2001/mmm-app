@@ -29,6 +29,8 @@ const crypto = require('crypto');
 const DEFAULT_SLIPPAGE_BPS = 10; // 0.10%, matches paper-store.js SLIPPAGE_RATE
 const DEFAULT_COMMISSION_CENTS = 100; // $1 flat, matches paper-store.js COMMISSION_CENTS
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+const WEIGHT_EPS = 1e-9; // "the clamp didn't move this weight"
+const QTY_EPS = 1e-9;    // shares; float noise below this is not a real shortfall
 
 const toCents = (dollars) => Math.round(dollars * 100);
 
@@ -90,10 +92,12 @@ function hashResult(result) {
  * @typedef {{date: string, equity_cents: number}} EquityPoint
  * @typedef {{id: number, symbol: string, side: ('buy'|'sell'), qty: number, date: string, priceCents: number, grossCents: number, commissionCents: number, slippageCents: number, cashDeltaCents: number, decisionIndex: number, pnl_cents?: number}} Trade
  *   pnl_cents is present on 'sell' fills only — realized P&L against the
- *   split-adjusted average cost held at the moment of the sell (correct
- *   across corporate actions, unlike a downstream replay of the ledger that
- *   doesn't know about splits). Absent on 'buy' fills (no realized P&L to
- *   report; they only open/add to a position).
+ *   split-adjusted, fee-inclusive average cost held at the moment of the
+ *   sell (correct across corporate actions, unlike a downstream replay of
+ *   the ledger that doesn't know about splits). Summed over a position that
+ *   is opened and fully closed, it equals the cash that position made or
+ *   lost — both commissions included. Absent on 'buy' fills (no realized
+ *   P&L to report; they only open/add to a position).
  */
 
 /**
@@ -107,7 +111,8 @@ function hashResult(result) {
  *   (default 0) is a per-share cash dividend paid at this bar, both dollars.
  * @param {{onBar: function(object, object): ({weights: Object<string, number>}|null|undefined)}} config.strategy
  *   `onBar(view, ctx)` returns a full-or-partial target-weight map (symbols
- *   omitted from it keep their current weight) or null/undefined for no change.
+ *   omitted from it keep their current position unless the risk clamp has
+ *   to rescale them) or null/undefined for no change — no orders at all.
  * @param {number} config.initialCashCents
  * @param {number} [config.slippageBps=10]  applied against the side that hurts.
  * @param {number} [config.commissionCents=100]  flat, charged on every fill.
@@ -177,14 +182,27 @@ function runBacktest(config) {
     const view = { ...createUniverseView(bars, symbols, i + 1), currentDate: ctx.currentDate };
 
     const result = strategy.onBar(view, ctx);
-    const requested = result && result.weights ? result.weights : {};
+    // null/undefined (or no weights) means "no change": every position is
+    // held exactly as it is. Re-deriving a held quantity from its own weight,
+    // floor((qty*p/E) * E / p), round-trips through floating point and lands
+    // one share short for many (qty, price, equity) combinations — which used
+    // to fire a phantom 1-share sell, commission and slippage included, on
+    // bars where the strategy asked for nothing.
+    if (!result || !result.weights) continue;
+    const requested = result.weights;
     const clamped = clampWeights({ ...currentWeights, ...requested }, { maxWeightPerAsset });
 
     const orders = [];
     for (const s of symbols) {
+      // A symbol the strategy didn't name keeps its current weight — and its
+      // exact share count — unless the risk clamp had to move it (a gross
+      // exposure rescale or the per-asset cap).
+      const named = Object.prototype.hasOwnProperty.call(requested, s);
+      if (!named && Math.abs(clamped[s] - currentWeights[s]) <= WEIGHT_EPS) continue;
       const priceCents = toCents(bars[s][i].close);
       if (priceCents <= 0) continue;
-      const desiredQty = Math.floor((clamped[s] * ctxEquityCents) / priceCents);
+      // QTY_EPS absorbs float noise in weight*equity/price (4.9999999999 -> 5).
+      const desiredQty = Math.floor((clamped[s] * ctxEquityCents) / priceCents + QTY_EPS);
       const deltaQty = desiredQty - qty[s];
       if (deltaQty !== 0) orders.push({ symbol: s, qty: deltaQty });
     }
@@ -225,14 +243,18 @@ function runBacktest(config) {
         const priorQty = qty[order.symbol];
         const priorCostCents = avgCostCents[order.symbol] * priorQty;
         qty[order.symbol] = priorQty + qtyAbs;
-        avgCostCents[order.symbol] = (priorCostCents + grossCents) / qty[order.symbol];
+        // Fee-inclusive cost basis: the buy commission is part of what the
+        // shares cost. Leaving it out (NEXUS's bug, which paper-store.js
+        // already fixed) overstated every realized P&L by one commission per
+        // buy fill, turning small net losers into "wins".
+        avgCostCents[order.symbol] = (priorCostCents + costCents) / qty[order.symbol];
         trade.cashDeltaCents = -costCents;
       } else {
         const proceedsCents = grossCents - commissionCents;
         cashCents += proceedsCents;
         qty[order.symbol] -= qtyAbs;
-        // Realized P&L against the split-adjusted avgCostCents held at this
-        // moment — BEFORE it gets reset to 0 below. This is what metrics.js
+        // Realized P&L against the split-adjusted, fee-inclusive
+        // avgCostCents held at this moment — BEFORE it gets reset to 0 below. This is what metrics.js
         // trusts directly instead of replaying (split-blind) average-cost
         // accounting from the fill ledger alone.
         trade.pnl_cents = Math.round(proceedsCents - avgCostCents[order.symbol] * qtyAbs);
