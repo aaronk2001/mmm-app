@@ -4,6 +4,7 @@ const cors        = require('cors');
 const helmet      = require('helmet');
 const rateLimit   = require('express-rate-limit');
 const { skipApiLimiter } = require('./api-limiter');
+const { createRequestGuard } = require('./request-guard');
 const compression = require('compression');
 const path        = require('path');
 
@@ -30,9 +31,13 @@ const PORT = process.env.PORT || 5006;
 // Electron sets its own CSP via onHeadersReceived in electron.js.
 app.use(helmet({ frameguard: false, contentSecurityPolicy: false }));
 
-// ─── CORS ─────────────────────────────────────────────────────────────────────
-// Scoped to the Vite dev server and the Electron origin only.
+// ─── CORS + request guard ─────────────────────────────────────────────────────
+// CORS is scoped to the Vite dev server and the Electron origin, but it only
+// stops other origins from reading responses. The guard runs first and stops
+// them from sending anything that changes data (CSRF) and refuses rebound
+// Host headers (DNS rebinding) — see server/request-guard.js.
 const ORIGINS = (process.env.MMM_CORS_ORIGINS || 'http://localhost:5006,http://localhost:5173,http://127.0.0.1:5006,file://').split(',').map(s => s.trim()).filter(Boolean);
+app.use(createRequestGuard({ port: PORT, origins: ORIGINS }));
 app.use(cors({ origin: ORIGINS }));
 
 // ─── Compression ─────────────────────────────────────────────────────────────
