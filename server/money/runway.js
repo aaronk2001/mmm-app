@@ -10,11 +10,15 @@
 // nothing to go on (reported as 'unknown' band either way).
 //
 // History length (the burn's denominator) runs from the oldest liquid-account
-// transaction of ANY sign — or the earliest liquid account's creation, if that
-// is older — through today, capped at the 90-day window. It used to start at
-// the oldest OUTFLOW, a fencepost that inflates periodic spending: a year of
-// history with three monthly $2,000 payments 61/31/1 days ago read as a
-// $2,903/mo burn (+45%) and a 'critical' band instead of 'tight'.
+// transaction of ANY sign — or that account's creation, when it was created
+// within a month before its first transaction — through today, capped at the
+// 90-day window. It used to start at the oldest OUTFLOW, a fencepost that
+// inflates periodic spending: a year of history with three monthly $2,000
+// payments 61/31/1 days ago read as a $2,903/mo burn (+45%) and a 'critical'
+// band instead of 'tight'. A creation date further back than that is not
+// evidence of tracking (an account set up long before its transactions were
+// entered): counting it would dilute the burn and overstate the runway.
+const CREATION_GAP_DAYS = 31;
 const { LIQUID_TYPES } = require('./account-types');
 const WINDOW_DAYS = 90;
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -71,19 +75,30 @@ function computeRunway({ accounts = [], transactions = [], recurring = [], categ
   );
   const actualTotal = spend.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
-  // Oldest evidence of the liquid accounts being tracked: any transaction on
-  // them (inflows count — a paycheck 80 days ago proves 80 days of history),
-  // or an account's creation date.
-  const starts = [
-    ...transactions
-      .filter(t => !t.account_id || liquidAccountIds.has(t.account_id))
-      .map(t => String(t.date).slice(0, 10)),
-    ...accounts.filter(a => LIQUID_TYPES.has(a.type)).map(a => localDayOf(a.created_at)),
-  ].filter(s => s && isDayKey(s) && s <= todayStr);
+  // Oldest evidence of the liquid accounts being tracked: their oldest
+  // transaction of any sign (a paycheck 80 days ago proves 80 days of
+  // history), pulled back to the account's creation when that was at most a
+  // month earlier (see CREATION_GAP_DAYS above).
+  const daysBetween = (from, to) => Math.round((localDateFromStr(to) - localDateFromStr(from)) / 86400000);
+  const firstByAccount = new Map();
+  for (const t of transactions) {
+    if (t.account_id && !liquidAccountIds.has(t.account_id)) continue;
+    const d = String(t.date).slice(0, 10);
+    if (!isDayKey(d) || d > todayStr) continue;
+    const key = t.account_id || '';
+    if (!firstByAccount.has(key) || d < firstByAccount.get(key)) firstByAccount.set(key, d);
+  }
+  const starts = [];
+  for (const [accountId, first] of firstByAccount) {
+    const acct = accountId ? accounts.find(a => a.id === accountId) : null;
+    const created = acct ? localDayOf(acct.created_at) : null;
+    const pulledBack = created && isDayKey(created) && created < first && daysBetween(created, first) <= CREATION_GAP_DAYS;
+    starts.push(pulledBack ? created : first);
+  }
   let historyDays = 0;
   if (starts.length) {
     const oldest = starts.reduce((m, s) => (s < m ? s : m), todayStr);
-    historyDays = Math.min(WINDOW_DAYS, Math.round((startOfToday - localDateFromStr(oldest)) / 86400000) + 1);
+    historyDays = Math.min(WINDOW_DAYS, daysBetween(oldest, todayStr) + 1);
   }
 
   const actualMonthly = spend.length ? actualTotal / Math.max(historyDays, 1) * 30 : 0;

@@ -143,6 +143,23 @@ describe('computeRunway', () => {
     expect(r.grade).toBe('B');
   });
 
+  it('does not let an account created long before its first transaction dilute the burn', () => {
+    // Set up two years ago, transactions entered only for the last 24 days (the
+    // bundled sample data looks like this): counting from creation would read
+    // 90 days of history and a burn ~3.7x too low — a runway that looks safe.
+    const r = computeRunway({
+      accounts: [{ id: 'chk', type: 'checking', balance: 16000, created_at: '2024-01-15T10:00:00Z' }],
+      transactions: [
+        { date: daysAgo(24), amount: 3500, payee: 'Payroll', account_id: 'chk' },
+        { date: daysAgo(23), amount: -1200, payee: 'Rent', account_id: 'chk' },
+        { date: daysAgo(5), amount: -2000, payee: 'Card payment', account_id: 'chk' },
+      ],
+      recurring: [], today,
+    });
+    expect(r.historyDays).toBe(25);
+    expect(r.monthlyBurn).toBe(3840); // 3,200 / 25 x 30
+  });
+
   it('ignores transactions on non-liquid accounts and future dates when measuring history', () => {
     const r = computeRunway({
       accounts, today,
