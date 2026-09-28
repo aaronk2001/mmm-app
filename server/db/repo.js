@@ -622,7 +622,7 @@ function getAgentEvents(d, { since = null, event = null, limit = null } = {}) {
   const args = [];
   if (since) { sql += ' AND ts >= ?'; args.push(since); }
   if (event) { sql += ' AND event = ?'; args.push(event); }
-  sql += ' ORDER BY ts DESC';
+  sql += ' ORDER BY ts DESC, id DESC';
   if (limit) { sql += ' LIMIT ?'; args.push(limit); }
   return d.prepare(sql).all(...args).map(rowAgentEvent);
 }
