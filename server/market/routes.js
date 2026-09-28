@@ -118,8 +118,17 @@ router.get('/forex', async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────
 // Investments "Refresh prices" — the explicit, UI-triggered action that sets
 // holding.price_source='yahoo'. Manual entry (Investments.jsx's own price
-// edit) stays the default; this only overwrites a holding once a live quote
-// actually came back for its symbol.
+// edit) stays the default; this only overwrites a holding once a FRESH quote
+// in the holding's own currency actually came back for its symbol.
+//   - A quote the seam served from its cache because the network failed
+//     (offline) or that is past its TTL (stale) is refused: it may be older
+//     than the price the user typed in by hand.
+//   - Minor-unit quotes (London pence, Johannesburg cents, Tel Aviv agorot)
+//     are converted to the major unit first.
+//   - A quote in another currency than the holding's (its account's
+//     currency, else the base currency) is refused — there is no conversion
+//     here, and writing euros into a dollar account is worse than no update.
+// Every refused holding is reported in `skipped` with its reason.
 // ────────────────────────────────────────────────────────────────────────────
 
 router.post('/refresh-holdings', async (req, res) => {
@@ -127,22 +136,37 @@ router.post('/refresh-holdings', async (req, res) => {
     if (!online.enabled('market')) return res.status(400).json({ error: 'Market data is off. Enable it in Settings first.' });
     const d = db();
     const holdings = repo.getHoldings(d);
+    const accountCurrency = new Map(repo.getAccounts(d).map((a) => [a.id, a.currency]));
+    const baseCurrency = repo.getSettings(d).baseCurrency || 'USD';
     const symbols = [...new Set(holdings.map((h) => String(h.symbol).toUpperCase()))];
-    const prices = {};
+
+    const quotes = {}; // symbol -> major-unit quote, or { reason } when unusable
     for (const symbol of symbols) {
       // eslint-disable-next-line no-await-in-loop
       const q = await providers.yahoo.quote(symbol);
-      if (q.quote?.price != null) prices[symbol] = q.quote.price;
+      if (q.quote?.price == null) quotes[symbol] = { reason: 'no quote' };
+      else if (q.offline || q.stale) quotes[symbol] = { reason: 'no fresh quote (offline or stale); kept the current price' };
+      else quotes[symbol] = providers.toMajorUnits(q.quote);
     }
+
     let updated = 0;
+    const skipped = [];
     for (const h of holdings) {
-      const price = prices[String(h.symbol).toUpperCase()];
-      if (price != null) {
-        repo.updateHolding(d, h.id, { current_price: price, price_source: 'yahoo' });
-        updated += 1;
+      const symbol = String(h.symbol).toUpperCase();
+      const quote = quotes[symbol];
+      if (!quote || quote.reason) {
+        skipped.push({ id: h.id, symbol, reason: quote ? quote.reason : 'no quote' });
+        continue;
       }
+      const want = accountCurrency.get(h.account_id) || baseCurrency;
+      if (quote.currency !== want) {
+        skipped.push({ id: h.id, symbol, reason: `quote is in ${quote.currency}, holding is in ${want}` });
+        continue;
+      }
+      repo.updateHolding(d, h.id, { current_price: quote.price, price_source: 'yahoo' });
+      updated += 1;
     }
-    res.json({ ok: true, updated, total: holdings.length, holdings: repo.getHoldings(d) });
+    res.json({ ok: true, updated, total: holdings.length, skipped, holdings: repo.getHoldings(d) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
