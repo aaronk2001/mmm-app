@@ -53,8 +53,14 @@ function routeFor(url) {
   return okResponse({});
 }
 
+// providers.js reaches the seam through Node's require, a separate module
+// instance from this file's ESM import — reset the one it actually uses too,
+// so a (host-scoped) cooldown from one test can't leak into the next.
+const onlineRequired = require('../server/online/index.js');
+
 beforeEach(() => {
   online._resetForTests();
+  onlineRequired._resetForTests();
   keys.setKeys({});
   setFeatures(Object.fromEntries(online.FEATURES.map((f) => [f, false])));
 });
