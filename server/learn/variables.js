@@ -172,7 +172,9 @@ function computeVariables({
     out.budget_variance_top3 = { value: SAMPLE_DATA.budget_variance_top3, formatted: 'Food: $140 over (sample)', grade: 'C', sample: true };
   } else {
     const nameOf = new Map(categories.map((c) => [c.id, c.name || c.id]));
-    const rows = calc.computeBudgetStatus(budgets, transactions)
+    // This variable reads as "this month" in the lessons, so it grades only
+    // monthly budgets (computeBudgetStatus now reports every period).
+    const rows = calc.computeBudgetStatus(budgets.filter((b) => b.period === 'monthly'), transactions)
       .map((b) => {
         const variance = Math.round((b.spent - b.limit) * 100) / 100;
         return {
@@ -186,8 +188,8 @@ function computeVariables({
       })
       .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))
       .slice(0, 3);
-    // computeBudgetStatus only evaluates period === 'monthly' budgets, so a
-    // user with only weekly/annual budgets lands here too — that's an absence
+    // Only monthly budgets are graded here, so a user with only weekly/annual
+    // budgets lands here too — that's an absence
     // of evidence (the filter, not the data), not a graded-A "no variance"
     // result, so it can't claim grade A.
     const formatted = rows.length

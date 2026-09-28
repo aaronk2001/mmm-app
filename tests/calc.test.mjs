@@ -61,7 +61,14 @@ describe('computeBudgetStatus', () => {
       { category_id: 'fod', amount: -75, date: '2020-01-15' },  // old month ignored
     ];
     const [status] = store.computeBudgetStatus(budgets, txns);
-    expect(status).toEqual({ budget_id: 'b1', category_id: 'fod', limit: 500, spent: 250, pct: 50 });
+    const ym = thisMonth().slice(0, 7);
+    const d = new Date();
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    expect(status).toEqual({
+      budget_id: 'b1', category_id: 'fod', period: 'monthly', rollover: false,
+      limit: 500, carried: 0, available: 500, spent: 250, remaining: 250, pct: 50, over: false,
+      period_start: `${ym}-01`, period_end: `${ym}-${String(last).padStart(2, '0')}`,
+    });
   });
 
   it('counts transactions dated the 1st of the month (UTC/local regression)', () => {
@@ -75,14 +82,51 @@ describe('computeBudgetStatus', () => {
     expect(status.spent).toBe(10);
   });
 
-  it('skips non-monthly budgets and handles zero limits', () => {
+  it('handles a zero limit without dividing by zero', () => {
+    const budgets = [{ id: 'b2', category_id: 'tra', period: 'monthly', limit: 0 }];
+    const [status] = store.computeBudgetStatus(budgets, [{ category_id: 'tra', amount: -10, date: thisMonth() }]);
+    expect(status).toMatchObject({ budget_id: 'b2', pct: 0, spent: 10, over: true });
+  });
+
+  // Weekly/biweekly/annual budgets used to be filtered out of the status
+  // entirely — the validator accepted them and they then vanished.
+  it('reports weekly, biweekly and annual budgets over their own local windows', () => {
     const budgets = [
-      { id: 'b1', category_id: 'fod', period: 'weekly', limit: 100 },
-      { id: 'b2', category_id: 'tra', period: 'monthly', limit: 0 },
+      { id: 'w', category_id: 'fod', period: 'weekly', limit: 100 },
+      { id: 'b', category_id: 'fod', period: 'biweekly', limit: 200 },
+      { id: 'a', category_id: 'fod', period: 'annual', limit: 5000 },
     ];
-    const out = store.computeBudgetStatus(budgets, [{ category_id: 'tra', amount: -10, date: thisMonth() }]);
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ budget_id: 'b2', pct: 0, spent: 10 });
+    const txns = [
+      { category_id: 'fod', amount: -30, date: '2026-09-28' }, // Monday: this week
+      { category_id: 'fod', amount: -20, date: '2026-09-30' }, // this week
+      { category_id: 'fod', amount: -40, date: '2026-09-27' }, // Sunday: last week
+      { category_id: 'fod', amount: -50, date: '2026-01-02' }, // this year only
+      { category_id: 'fod', amount: -60, date: '2025-12-31' }, // last year
+    ];
+    const byId = Object.fromEntries(store.computeBudgetStatus(budgets, txns, '2026-09-30').map((s) => [s.budget_id, s]));
+    expect(byId.w).toMatchObject({ period_start: '2026-09-28', period_end: '2026-10-04', spent: 50 });
+    // Biweekly windows count from Monday 2024-01-01: 2026-09-21..2026-10-04.
+    expect(byId.b).toMatchObject({ period_start: '2026-09-21', period_end: '2026-10-04', spent: 90 });
+    expect(byId.a).toMatchObject({ period_start: '2026-01-01', period_end: '2026-12-31', spent: 140 });
+  });
+
+  // Rollover was stored and toggled but never read.
+  it('rolls last period\'s remainder into this period for rollover budgets', () => {
+    const txns = [
+      { category_id: 'fod', amount: -300, date: '2026-08-10' }, // August: 200 unspent of 500
+      { category_id: 'fod', amount: -600, date: '2026-09-10' },
+    ];
+    const [under] = store.computeBudgetStatus([{ id: 'r', category_id: 'fod', period: 'monthly', limit: 500, rollover: true }], txns, '2026-09-30');
+    expect(under).toMatchObject({ rollover: true, carried: 200, available: 700, spent: 600, remaining: 100, over: false, pct: 86 });
+
+    const [plain] = store.computeBudgetStatus([{ id: 'p', category_id: 'fod', period: 'monthly', limit: 500 }], txns, '2026-09-30');
+    expect(plain).toMatchObject({ rollover: false, carried: 0, available: 500, remaining: -100, over: true });
+
+    // Overspending last period is carried too, as a smaller budget this period.
+    const [overspent] = store.computeBudgetStatus(
+      [{ id: 'o', category_id: 'fod', period: 'monthly', limit: 500, rollover: true }],
+      [{ category_id: 'fod', amount: -650, date: '2026-08-10' }], '2026-09-30');
+    expect(overspent).toMatchObject({ carried: -150, available: 350 });
   });
 });
 
