@@ -26,25 +26,30 @@ describe('computeRunway', () => {
     expect(r.liquid).toBe(5000); // chk 3000 + sav 2000 (cc/brk excluded)
 
     // spend = the three $1500 Rent rows (Old is outside the window, Income is positive).
-    // oldest is 70 days ago => historyDays = round(70) + 1 = 71 (inclusive of today)
-    expect(r.historyDays).toBe(71);
+    // History length changed deliberately (finding #14): it used to run from the
+    // oldest OUTFLOW (70 days ago => 71 days => $1,901/mo, 27% above the real
+    // $1,500 rent). It now runs from the oldest transaction on a liquid account —
+    // "Old", 100 days ago — capped at the 90-day window.
+    expect(r.historyDays).toBe(90);
 
-    // actualTotal = 4500; actualMonthly = 4500 / 71 * 30 = 1901.408450... >= recurringMonthly (800) => actual-driven
-    expect(r.monthlyBurn).toBeCloseTo(1901.41, 1);
+    // actualTotal = 4500; actualMonthly = 4500 / 90 * 30 = 1500 (>= recurringMonthly 800)
+    expect(r.monthlyBurn).toBe(1500);
     expect(r.burnSource).toBe('actual');
+    expect(r.actualMonthly).toBe(1500);
+    expect(r.recurringMonthly).toBe(800);
 
-    // grade: historyDays 71 -> not >=90, but >=14 => 'B'
-    expect(r.grade).toBe('B');
+    // grade: a full 90-day history => 'A'
+    expect(r.grade).toBe('A');
 
-    // months = 5000 / 1901.41 = 2.629628... => rounds to 2.63; < 3 => 'critical'
-    expect(r.months).toBeCloseTo(2.63, 2);
-    expect(r.band).toBe('critical');
+    // months = 5000 / 1500 = 3.33 => 'tight' (3 to 6 months)
+    expect(r.months).toBeCloseTo(3.33, 2);
+    expect(r.band).toBe('tight');
 
-    // daysLeft = floor(5000 / (1901.41 / 30)) = floor(5000 / 63.380333...) = floor(78.8887) = 78
-    expect(r.daysLeft).toBe(78);
+    // daysLeft = floor(5000 / (1500 / 30)) = 100
+    expect(r.daysLeft).toBe(100);
 
-    // today (2026-09-16) + 78 days: 14 left in Sep + 31 Oct + 30 Nov = 75, +3 more => Dec 3
-    expect(r.dateMoneyRunsOut).toBe('2026-12-03');
+    // today (2026-09-16) + 100 days: 14 left in Sep + 31 Oct + 30 Nov = 75, +25 more => Dec 25
+    expect(r.dateMoneyRunsOut).toBe('2026-12-25');
 
     expect(r.largestOutflow).toEqual({ payee: 'Rent', amount: 4500 });
   });
@@ -109,5 +114,45 @@ describe('computeRunway', () => {
     expect(r.largestOutflow).toEqual({ payee: 'Card payment', amount: 900 });
     // historyDays = round(9) + 1 = 10; monthlyBurn = 900 / 10 * 30 = 2700 (single $900 counted once)
     expect(r.monthlyBurn).toBe(2700);
+  });
+
+  // Finding #14: periodic outflows used to be divided by the time since the
+  // FIRST outflow. Three monthly $2,000 payments 61/31/1 days ago, with a year
+  // of paychecks behind them, read as $2,903/mo and a 'critical' band.
+  it('divides burn by the whole observed history, not the time since the first outflow', () => {
+    const transactions = [];
+    for (let m = 0; m < 12; m++) transactions.push({ date: daysAgo(15 + 30 * m), amount: 2500, payee: 'Payroll', account_id: 'chk' });
+    for (const n of [61, 31, 1]) transactions.push({ date: daysAgo(n), amount: -2000, payee: 'Rent + card', account_id: 'chk' });
+    const r = computeRunway({ accounts: [{ id: 'chk', type: 'checking', balance: 6000 }], transactions, recurring: [], today });
+    expect(r.historyDays).toBe(90);
+    expect(r.monthlyBurn).toBe(2000); // 3 x 2000 over the 90-day window
+    expect(r.months).toBe(3);
+    expect(r.band).toBe('tight');
+  });
+
+  it("counts an account's creation date as the start of its history", () => {
+    const created = new Date(today); created.setDate(created.getDate() - 45);
+    const r = computeRunway({
+      accounts: [{ id: 'chk', type: 'checking', balance: 3000, created_at: created.toISOString() }],
+      transactions: [{ date: daysAgo(15), amount: -900, payee: 'Rent', account_id: 'chk' }],
+      recurring: [], today,
+    });
+    // created 45 days ago => 46 days of history (inclusive), not the 16 since the one outflow
+    expect(r.historyDays).toBe(46);
+    expect(r.monthlyBurn).toBeCloseTo(900 / 46 * 30, 2);
+    expect(r.grade).toBe('B');
+  });
+
+  it('ignores transactions on non-liquid accounts and future dates when measuring history', () => {
+    const r = computeRunway({
+      accounts, today,
+      transactions: [
+        { date: daysAgo(80), amount: -50, payee: 'Card swipe', account_id: 'cc' }, // credit card: not liquid
+        { date: daysAgo(-5), amount: -10, payee: 'Scheduled', account_id: 'chk' }, // future-dated
+        { date: daysAgo(20), amount: -300, payee: 'Groceries', account_id: 'chk' },
+      ],
+      recurring: [],
+    });
+    expect(r.historyDays).toBe(21);
   });
 });
