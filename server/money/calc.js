@@ -8,6 +8,8 @@
 // are local, which silently dropped transactions dated the 1st of the month in
 // UTC-negative timezones (found by the Phase-1 characterization tests).
 
+const { isLiability, isLiquid } = require('./account-types');
+
 // Multi-currency. fxRates are "value of 1 unit in USD" (USD per unit). Convert an
 // amount in `currency` to `baseCurrency`: amount * (rate[currency] / rate[base]).
 const DEFAULT_FX_RATES = { USD: 1, EUR: 1.08, GBP: 1.27, JPY: 0.0064, CAD: 0.73, CHF: 1.12, AUD: 0.66, NZD: 0.60 };
@@ -34,7 +36,7 @@ function computeNetWorth(accounts, baseCurrency = 'USD', fxRates = null) {
     const balance = convertAmount(parseFloat(acc.balance) || 0, acc.currency, baseCurrency, fxRates);
     const type = acc.type;
 
-    if (type === 'loan' || type === 'credit') {
+    if (isLiability(type)) {
       liabilities += Math.abs(balance); // Treat as positive liabilities
     } else {
       assets += Math.max(0, balance); // Only count positive balances
@@ -48,31 +50,73 @@ function computeNetWorth(accounts, baseCurrency = 'USD', fxRates = null) {
   };
 }
 
-// Current-month spend per monthly budget. Month membership is a string-prefix
-// check on the local calendar month.
-function computeBudgetStatus(budgets, transactions) {
-  const ym = localDate().slice(0, 7);
+// ── budgets ──────────────────────────────────────────────────────────────────
+// Every period the validator accepts gets a status (weekly/biweekly/annual
+// budgets used to vanish), windows are LOCAL calendar dates, and rollover is
+// real: a rollover budget carries last period's remainder into this one —
+// unspent money adds to what's available, overspending subtracts from it.
 
-  return budgets
-    .filter(b => b.period === 'monthly')
-    .map(budget => {
-      const spent = transactions
-        .filter(t => t.category_id === budget.category_id &&
-                     t.amount < 0 &&
-                     String(t.date).slice(0, 7) === ym)
-        .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount) || 0), 0);
+const pad2 = (n) => String(n).padStart(2, '0');
+const ymdOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const dateOf = (ymd) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (ymd, n) => { const d = dateOf(ymd); d.setDate(d.getDate() + n); return ymdOf(d); };
+// Biweekly windows are counted from a fixed Monday so they're stable.
+const BIWEEKLY_EPOCH = '2024-01-01';
 
-      const limit = parseFloat(budget.limit) || 0;
-      const pct = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+// [start, end] (inclusive YYYY-MM-DD) of the `period` window containing `ymd`.
+function budgetWindow(period, ymd) {
+  const d = dateOf(ymd);
+  if (period === 'annual') return [`${d.getFullYear()}-01-01`, `${d.getFullYear()}-12-31`];
+  if (period === 'weekly') {
+    const start = addDays(ymd, -((d.getDay() + 6) % 7)); // Monday
+    return [start, addDays(start, 6)];
+  }
+  if (period === 'biweekly') {
+    const days = Math.round((dateOf(ymd) - dateOf(BIWEEKLY_EPOCH)) / 86400000);
+    const start = addDays(BIWEEKLY_EPOCH, Math.floor(days / 14) * 14);
+    return [start, addDays(start, 13)];
+  }
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const ym = ymd.slice(0, 7);
+  return [`${ym}-01`, `${ym}-${pad2(last)}`];
+}
 
-      return {
-        budget_id: budget.id,
-        category_id: budget.category_id,
-        limit: Math.round(limit * 100) / 100,
-        spent: Math.round(spent * 100) / 100,
-        pct,
-      };
-    });
+function computeBudgetStatus(budgets, transactions, today = localDate()) {
+  const outflowByCategory = {};
+  for (const t of transactions) {
+    const amt = parseFloat(t.amount) || 0;
+    if (amt >= 0 || !t.category_id) continue;
+    (outflowByCategory[t.category_id] = outflowByCategory[t.category_id] || []).push([String(t.date).slice(0, 10), -amt]);
+  }
+  const spentIn = (categoryId, [start, end]) => (outflowByCategory[categoryId] || [])
+    .reduce((sum, [date, amt]) => (date >= start && date <= end ? sum + amt : sum), 0);
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  return budgets.map((budget) => {
+    const window = budgetWindow(budget.period, today);
+    const limit = parseFloat(budget.limit) || 0;
+    const spent = spentIn(budget.category_id, window);
+    const carried = budget.rollover
+      ? limit - spentIn(budget.category_id, budgetWindow(budget.period, addDays(window[0], -1)))
+      : 0;
+    const available = limit + carried;
+    const base = available > 0 ? available : limit;
+    return {
+      budget_id: budget.id,
+      category_id: budget.category_id,
+      period: budget.period,
+      rollover: !!budget.rollover,
+      limit: round2(limit),
+      carried: round2(carried),
+      available: round2(available),
+      spent: round2(spent),
+      remaining: round2(available - spent),
+      pct: base > 0 ? Math.round((spent / base) * 100) : 0,
+      over: spent > available + 0.005,
+      period_start: window[0],
+      period_end: window[1],
+    };
+  });
 }
 
 function autoCategorize(payee, amount) {
@@ -194,7 +238,7 @@ function advanceCadence(d, cadence) {
 // caller (store computes it from recent transactions) so this stays pure.
 function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary = 0) {
   const startBalance = accounts
-    .filter(a => a.type === 'checking' || a.type === 'savings' || a.type === 'cash')
+    .filter(a => isLiquid(a.type))
     .reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0);
 
   const projection = [];
@@ -298,7 +342,7 @@ function computeGoalInsights(accounts, transactions, recurring = []) {
   const monthlyIncome = Math.max(txnMonthlyIncome, recurringIncome);
 
   const liquidAssets = accounts
-    .filter(a => a.type === 'checking' || a.type === 'savings' || a.type === 'cash')
+    .filter(a => isLiquid(a.type))
     .reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0);
 
   const emergencyFundMonths = 6;
@@ -363,6 +407,95 @@ function computeInvestmentMetrics(holdings) {
   };
 }
 
+// ── debt payoff ──────────────────────────────────────────────────────────────
+// Used when an account has no APR / minimum payment on file. Every debt says
+// whether it's using one, so the UI can label the figure as an assumption.
+const DEFAULT_APR = { credit: 0.20, loan: 0.07 };
+const defaultMinPayment = (balance) => Math.max(2, Math.round(balance * 0.02 * 100) / 100);
+
+function debtsFromAccounts(accounts) {
+  return accounts
+    .filter((a) => isLiability(a.type))
+    .map((a) => {
+      const balance = Math.abs(parseFloat(a.balance) || 0);
+      const hasApr = a.apr !== null && a.apr !== undefined && a.apr !== '';
+      const hasMin = a.min_payment !== null && a.min_payment !== undefined && a.min_payment !== '';
+      return {
+        account_id: a.id,
+        name: a.name,
+        type: a.type,
+        balance,
+        apr: hasApr ? Number(a.apr) : DEFAULT_APR[a.type],
+        apr_is_default: !hasApr,
+        min_payment: hasMin ? Number(a.min_payment) : defaultMinPayment(balance),
+        min_payment_is_default: !hasMin,
+      };
+    });
+}
+
+// Month-by-month avalanche/snowball simulation. The monthly budget is fixed at
+// the sum of every debt's minimum plus `monthlyExtra`, so once a debt is paid
+// off its minimum keeps working on the next target — the rollover that makes
+// both strategies work. (The route used to count a freed minimum only in the
+// month the debt hit zero, which on the sample data reported 97 months to
+// debt-free instead of 64.) Minimum payments below the interest never pay off;
+// that returns paysOff:false and monthsToFree:null instead of a fake date.
+function simulateDebtPayoff(debts, { strategy = 'avalanche', monthlyExtra = 0, maxMonths = 600 } = {}) {
+  const active = debts.filter((d) => d.balance > 0.005);
+  const ordered = [...active].sort(strategy === 'snowball'
+    ? (a, b) => a.balance - b.balance || b.apr - a.apr
+    : (a, b) => b.apr - a.apr || a.balance - b.balance);
+  const extra = Math.max(0, Number(monthlyExtra) || 0);
+  const state = ordered.map((d) => ({ ...d, remaining: d.balance, paidOffMonth: null }));
+  const budget = state.reduce((sum, d) => sum + d.min_payment, 0) + extra;
+
+  let month = 0;
+  let totalInterest = 0;
+  const schedule = [];
+  while (state.some((d) => d.remaining > 0.005) && month < maxMonths) {
+    month++;
+    for (const d of state) {
+      if (d.remaining <= 0.005) continue;
+      const interest = d.remaining * (d.apr / 12);
+      d.remaining += interest;
+      totalInterest += interest;
+    }
+    let left = budget;
+    for (const d of state) {                    // minimums first
+      if (d.remaining <= 0.005) continue;
+      const pmt = Math.min(d.min_payment, d.remaining);
+      d.remaining -= pmt;
+      left -= pmt;
+    }
+    for (const d of state) {                    // everything else to the target
+      if (left <= 0.005) break;
+      if (d.remaining <= 0.005) continue;
+      const pmt = Math.min(left, d.remaining);
+      d.remaining -= pmt;
+      left -= pmt;
+    }
+    for (const d of state) if (d.remaining <= 0.005 && d.paidOffMonth === null) { d.remaining = 0; d.paidOffMonth = month; }
+    if (month % 3 === 0 || state.every((d) => d.remaining <= 0.005)) {
+      schedule.push({ month, balances: state.map((d) => ({ name: d.name, remaining: Math.round(d.remaining * 100) / 100 })) });
+    }
+  }
+
+  const paysOff = state.every((d) => d.remaining <= 0.005);
+  return {
+    strategy,
+    order: state.map((d) => d.name),
+    monthsToFree: paysOff ? month : null,
+    paysOff,
+    totalInterest: Math.round(totalInterest),
+    payoff: state.map((d) => ({ account_id: d.account_id, name: d.name, month: d.paidOffMonth })),
+    assumptions: {
+      default_apr: state.filter((d) => d.apr_is_default).map((d) => d.name),
+      default_min_payment: state.filter((d) => d.min_payment_is_default).map((d) => d.name),
+    },
+    schedule,
+  };
+}
+
 module.exports = {
   DEFAULT_FX_RATES,
   AVAILABLE_CURRENCIES,
@@ -372,6 +505,9 @@ module.exports = {
   convertAmount,
   computeNetWorth,
   computeBudgetStatus,
+  budgetWindow,
+  debtsFromAccounts,
+  simulateDebtPayoff,
   autoCategorize,
   detectRecurring,
   projectCashflow,

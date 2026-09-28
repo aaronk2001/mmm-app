@@ -144,20 +144,25 @@ function computeAdvice(input = {}) {
   }
 
   // ── 4. Budget overspend ────────────────────────────────────────────────────
+  const PERIOD_WORD = { weekly: 'week', biweekly: 'two weeks', annual: 'year' };
   budgetStatus
     .filter((b) => b.limit > 0)
     .forEach((b) => {
-      const over = b.pct > 100;
+      // `available` includes a rollover budget's carried remainder; older
+      // callers only pass `limit`.
+      const available = b.available ?? b.limit;
+      const over = b.over ?? b.pct > 100;
       if (!over && b.pct < 85) return;
       const name = catName(b.category_id);
+      const period = PERIOD_WORD[b.period] || 'month';
       add({
         id: `budget-${b.category_id}`,
         severity: over ? 'warn' : 'info',
         category: 'budget',
         title: over ? `Over budget on ${name}` : `Close to your ${name} limit`,
         detail: over
-          ? `You've spent ${money(b.spent)} of your ${money(b.limit)} ${name} budget — ${b.pct - 100}% over. Ease off for the rest of the month.`
-          : `${b.pct}% of your ${name} budget used. Watch it the rest of the month.`,
+          ? `You've spent ${money(b.spent)} of your ${money(available)} ${name} budget — ${Math.max(0, b.pct - 100)}% over. Ease off for the rest of the ${period}.`
+          : `${b.pct}% of your ${name} budget used. Watch it the rest of the ${period}.`,
         impact: scored(over ? 'warn' : 'info', clamp((b.pct - 85) / 60, 0, 1)),
         action: { label: `Review ${name}`, route: '/transactions', params: { category: name } },
       });

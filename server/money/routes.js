@@ -3,7 +3,9 @@ const store = require('./store');
 const advice = require('./advice');
 const ollama = require('./ollama');
 const { coachSystemPrompt } = require('./coach-persona');
-const { localDate } = require('./calc');
+const calc = require('./calc');
+const { localDate } = calc;
+const { isLiability } = require('./account-types');
 const v = require('../middleware/validators');
 
 const router = express.Router();
@@ -94,8 +96,8 @@ router.get('/accounts', (req, res) => {
 router.post('/accounts', (req, res) => {
   try {
     if (invalid(res, v.validateAccount(req.body))) return;
-    const { name, type, balance, institution, currency, status, custom } = req.body;
-    const account = store.createAccount(name, type, balance, institution, currency, status, custom);
+    const { name, type, balance, institution, currency, status, custom, apr, min_payment } = req.body;
+    const account = store.createAccount(name, type, balance, institution, currency, status, custom, { apr, min_payment });
     res.status(201).json({ account });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -516,18 +518,9 @@ router.get('/goals/insights', (req, res) => {
 
 router.get('/debt', (req, res) => {
   try {
-    const data = store.readData();
-    const debts = data.accounts
-      .filter(a => a.type === 'loan' || a.type === 'credit')
-      .map(a => ({
-        account_id: a.id,
-        name: a.name,
-        balance: Math.abs(parseFloat(a.balance) || 0),
-        type: a.type,
-        apr: a.apr || (a.type === 'credit' ? 0.20 : 0.07),
-        min_payment: a.min_payment || Math.max(2, Math.abs(parseFloat(a.balance) || 0) * 0.02),
-      }));
-    res.json({ debts });
+    // APR / minimum payment come from the account; a debt without them uses a
+    // labelled default (apr_is_default / min_payment_is_default).
+    res.json({ debts: calc.debtsFromAccounts(store.getAccounts()) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -535,106 +528,12 @@ router.get('/debt', (req, res) => {
 
 router.post('/debt/payoff', (req, res) => {
   try {
-    const { strategy, monthly_extra } = req.body;
+    const { strategy, monthly_extra } = req.body || {};
     if (!strategy || !['avalanche', 'snowball'].includes(strategy)) {
       return res.status(400).json({ error: 'strategy must be avalanche or snowball' });
     }
-
-    const data = store.readData();
-    const debts = data.accounts
-      .filter(a => a.type === 'loan' || a.type === 'credit')
-      .map(a => ({
-        account_id: a.id,
-        name: a.name,
-        balance: Math.abs(parseFloat(a.balance) || 0),
-        type: a.type,
-        rate: (a.apr || (a.type === 'credit' ? 0.20 : 0.07)) * 100,
-        min_payment: a.min_payment || Math.max(2, Math.abs(parseFloat(a.balance) || 0) * 0.02),
-      }))
-      .filter(d => d.balance > 0);
-
-    if (debts.length === 0) {
-      return res.json({
-        strategy,
-        order: [],
-        monthsToFree: 0,
-        totalInterest: 0,
-        schedule: [],
-      });
-    }
-
-    const extra = Math.max(0, Number(monthly_extra) || 0);
-
-    // Sort by strategy
-    let ordered = [...debts];
-    if (strategy === 'snowball') {
-      ordered.sort((a, b) => a.balance - b.balance);
-    } else {
-      ordered.sort((a, b) => b.rate - a.rate);
-    }
-
-    // Simulate payoff
-    const state = ordered.map(d => ({
-      name: d.name,
-      remaining: d.balance,
-      min: d.min_payment,
-      rate: d.rate,
-    }));
-
-    let month = 0;
-    let totalInterest = 0;
-    const schedule = [];
-
-    while (state.some(d => d.remaining > 0.01) && month < 600) {
-      month++;
-
-      // Accrue interest
-      state.forEach(d => {
-        if (d.remaining > 0.01) {
-          const interest = d.remaining * (d.rate / 100 / 12);
-          d.remaining += interest;
-          totalInterest += interest;
-        }
-      });
-
-      // Pay minimums
-      let freed = 0;
-      state.forEach(d => {
-        if (d.remaining > 0.01) {
-          const pmt = Math.min(d.min, d.remaining);
-          d.remaining = Math.max(0, d.remaining - pmt);
-          if (d.remaining < 0.01) freed += d.min - pmt;
-        }
-      });
-
-      // Apply extra payment to first debt with balance
-      let extraApplied = extra + freed;
-      for (const d of state) {
-        if (d.remaining > 0.01 && extraApplied > 0.01) {
-          const pmt = Math.min(extraApplied, d.remaining);
-          d.remaining = Math.max(0, d.remaining - pmt);
-          extraApplied -= pmt;
-        }
-      }
-
-      if (month % 3 === 0 || state.every(d => d.remaining < 0.01)) {
-        schedule.push({
-          month,
-          balances: state.map(d => ({
-            name: d.name,
-            remaining: Math.round(d.remaining * 100) / 100,
-          })),
-        });
-      }
-    }
-
-    res.json({
-      strategy,
-      order: ordered.map(d => d.name),
-      monthsToFree: month,
-      totalInterest: Math.round(totalInterest),
-      schedule,
-    });
+    const debts = calc.debtsFromAccounts(store.getAccounts());
+    res.json(calc.simulateDebtPayoff(debts, { strategy, monthlyExtra: monthly_extra }));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -707,13 +606,8 @@ function adviceContext() {
   const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
   const cashflow = store.projectCashflow(store.getAccounts(), recurring, 90);
   const investments = store.computeInvestmentMetrics(store.getHoldings());
-  const debts = data.accounts
-    .filter((a) => a.type === 'loan' || a.type === 'credit')
-    .map((a) => ({
-      name: a.name,
-      balance: Math.abs(parseFloat(a.balance) || 0),
-      apr: a.apr || (a.type === 'credit' ? 0.20 : 0.07),
-    }));
+  const debts = calc.debtsFromAccounts(data.accounts)
+    .map(({ name, balance, apr, apr_is_default }) => ({ name, balance, apr, apr_is_default }));
 
   // Current vs previous full month expense totals (string-prefix month match,
   // same convention as /overview to avoid UTC drift).
@@ -843,7 +737,7 @@ router.post('/coach', async (req, res) => {
       liquidSavings: metrics.liquid_savings,
       emergencyFund: goalInsights.emergencyFund || null,
       accounts: data.accounts
-        .filter((a) => a.type !== 'loan' && a.type !== 'credit')
+        .filter((a) => !isLiability(a.type))
         .slice(0, 12)
         .map((a) => ({ name: a.name, type: a.type, balance: parseFloat(a.balance) || 0 })),
       debts: input.debts,
