@@ -113,7 +113,7 @@ function sectorFailures() {
   const events = repo
     .getAgentEvents(db(), { since })
     .filter((e) => (e.event === 'close' || e.event === 'sell') && e.sector && e.outcome)
-    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.id - b.id);
 
   const consec = {};
   for (const e of events) {
