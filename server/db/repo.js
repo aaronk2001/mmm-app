@@ -445,6 +445,10 @@ function insertSnapshotIfMissing(d, s) {
   d.prepare('INSERT OR IGNORE INTO networth_snapshots (date, assets_cents, liabilities_cents, net_cents) VALUES (?,?,?,?)')
     .run(s.date, toCents(s.assets), toCents(s.liabilities), toCents(s.net));
 }
+function upsertSnapshot(d, s) {
+  d.prepare('INSERT OR REPLACE INTO networth_snapshots (date, assets_cents, liabilities_cents, net_cents) VALUES (?,?,?,?)')
+    .run(s.date, toCents(s.assets), toCents(s.liabilities), toCents(s.net));
+}
 
 // ── declared recurring ────────────────────────────────────────────────────────
 
@@ -1416,7 +1420,7 @@ module.exports = {
   getGoals, createGoal, updateGoal, deleteGoal,
   getRules, createRule, updateRule, deleteRule,
   getHoldings, createHolding, updateHolding, deleteHolding,
-  getSnapshots, insertSnapshotIfMissing,
+  getSnapshots, insertSnapshotIfMissing, upsertSnapshot,
   getRecurring, createRecurring, updateRecurring, deleteRecurring,
   getHttpCacheEntry, getAllHttpCache, upsertHttpCache,
   getPaperAccount, importPaperAccount, adjustPaperAccountCapital,

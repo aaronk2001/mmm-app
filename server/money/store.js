@@ -28,6 +28,25 @@ function writeData(data, opts) {
   repo.writeAll(db(), data, opts);
 }
 
+// The money ledger only — what the request-path reads need. readData() also
+// reads every market, backtest, cache and learn table: 342-357 ms and ~26 MB
+// per call once price bars accumulate, on /overview, /advice, /goals and the
+// Learn variables.
+function readLedger() {
+  const d = db();
+  return {
+    accounts: repo.getAccounts(d),
+    transactions: repo.getTransactions(d),
+    categories: repo.getCategories(d),
+    budgets: repo.getBudgets(d),
+    goals: repo.getGoals(d),
+    rules: repo.getRules(d),
+    holdings: repo.getHoldings(d),
+    recurring: repo.getRecurring(d),
+    networth_snapshots: repo.getSnapshots(d),
+  };
+}
+
 function getSettings() {
   return repo.getSettings(db()) || {};
 }
@@ -265,10 +284,14 @@ function deleteHolding(id) {
 
 // ── net worth & snapshots ─────────────────────────────────────────────────────
 
+// Today's point is upserted, so it ends the day on the day's closing value
+// (insert-once froze the first read — including, before the currency fix,
+// yen summed as dollars — into the history for good). Past days never change.
 function getNetWorthSnapshots() {
   const d = db();
-  const nw = calc.computeNetWorth(repo.getAccounts(d));
-  repo.insertSnapshotIfMissing(d, { date: calc.localDate(), ...nw });
+  const cc = getCurrencyConfig();
+  const nw = calc.computeNetWorth(repo.getAccounts(d), cc.baseCurrency, cc.fxRates);
+  repo.upsertSnapshot(d, { date: calc.localDate(), ...nw });
   return repo.getSnapshots(d);
 }
 
@@ -295,75 +318,79 @@ function ymd(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Adds n months to Date `d`, clamping the day-of-month to the target month's
-// last day instead of letting it roll into the following month (setMonth on
-// Jan 31 + 1 rolls to Mar 3, not Feb 28 — the clamp fixes that).
-function addMonthsClamped(d, n) {
-  const day = d.getDate();
-  const probe = new Date(d.getFullYear(), d.getMonth() + n, 1);
-  const lastDay = new Date(probe.getFullYear(), probe.getMonth() + 1, 0).getDate();
-  probe.setDate(Math.min(day, lastDay));
-  return probe;
-}
-
-function advanceDate(dateStr, cadence) {
+// One period later, pinned to the schedule's anchor day for month-based
+// cadences (see calc.addMonthsClamped) — so the 31st returns to the 31st after
+// a short month instead of drifting to the 28th for good.
+function advanceDate(dateStr, cadence, anchorDay = null) {
   const [y, m, dd] = String(dateStr).slice(0, 10).split('-').map(Number);
-  const d = new Date(y, m - 1, dd);
-  if (cadence === 'weekly') { d.setDate(d.getDate() + 7); return ymd(d); }
-  if (cadence === 'biweekly') { d.setDate(d.getDate() + 14); return ymd(d); }
-  if (cadence === 'quarterly') return ymd(addMonthsClamped(d, 3));
-  if (cadence === 'annual') return ymd(addMonthsClamped(d, 12));
-  return ymd(addMonthsClamped(d, 1)); // monthly (default)
+  const next = calc.advanceCadence(new Date(y, m - 1, dd), cadence, anchorDay) ||
+    calc.advanceCadence(new Date(y, m - 1, dd), 'monthly', anchorDay);
+  return ymd(next);
 }
 
-// Per-item cap on catch-up posts per call. A stale item (e.g. a weekly bill
-// two years old) posts up to this many rows, is reported in `truncated`, and
-// finishes on the next launch instead of silently stopping short.
-const AUTOPOST_CAP = 100;
+// Catch-ups up to this many periods post on their own. Anything longer (the
+// app was closed for months, or next_date was set far in the past) is
+// returned as `needsConfirm` and waits for the user, instead of silently
+// back-posting a pile of transactions.
+const AUTOPOST_AUTO_LIMIT = 12;
+// Hard ceiling per item per call even when confirmed; the rest is reported in
+// `truncated` and finishes on the next call.
+const AUTOPOST_CAP = 500;
 
 // Auto-post every recurring item whose next_date has arrived into a real
-// transaction on its linked account, catching up each missed period. Advancing
-// next_date past today is the idempotency guard — safe to call repeatedly (on
-// each app launch). Items without an account_id are skipped (forecast-only).
-function postDueRecurring() {
+// transaction on its linked account, catching up each missed period. Each
+// item's posts and its next_date advance commit in ONE transaction: before,
+// every post committed on its own and next_date was written after the loop,
+// so a crash (or a full disk, or Windows killing the server on quit) mid-item
+// re-posted the same dates on the next launch. Items without an account_id are
+// skipped (forecast-only). `confirmIds` approves long catch-ups.
+function postDueRecurring({ confirmIds = [] } = {}) {
   const today = ymd(new Date());
+  const confirmed = new Set(confirmIds);
   const items = repo.getRecurring(db());
   let posted = 0;
   const truncated = [];
+  const needsConfirm = [];
 
   for (const r of items) {
     if (!r.account_id || !r.next_date) continue;
     if (!repo.getAccount(db(), r.account_id)) continue; // account deleted — skip
 
+    const anchor = r.anchor_day || Number(String(r.next_date).slice(8, 10)) || null;
+    const amount = r.kind === 'income' ? Math.abs(r.amount) : -Math.abs(r.amount);
+    const due = [];
     let next = String(r.next_date).slice(0, 10);
-    const original = next;
-    let count = 0;
+    while (next <= today && due.length <= AUTOPOST_CAP) {
+      due.push(next);
+      next = advanceDate(next, r.cadence, anchor);
+    }
+    if (!due.length) continue;
 
-    while (next <= today && count < AUTOPOST_CAP) {
-      const amount = r.kind === 'income' ? Math.abs(r.amount) : -Math.abs(r.amount);
-      createTransaction(r.account_id, next, amount, r.payee, null, [], 'Auto-posted from recurring', 'recurring');
-      next = advanceDate(next, r.cadence);
-      posted += 1;
-      count += 1;
+    if (due.length > AUTOPOST_AUTO_LIMIT && !confirmed.has(r.id)) {
+      needsConfirm.push({ id: r.id, payee: r.payee, periods: due.length, from: due[0], to: due[due.length - 1], amount });
+      continue;
     }
 
-    if (next <= today) {
-      // Count what is still owed without posting it.
-      let remaining = 0;
-      let probe = next;
-      while (probe <= today && remaining < 100000) { probe = advanceDate(probe, r.cadence); remaining += 1; }
-      truncated.push({ id: r.id, payee: r.payee, remaining });
-      console.warn(`[MMM recurring] truncated catch-up for "${r.payee}" — ${remaining} period(s) still due, will continue next launch`);
+    const batch = due.slice(0, AUTOPOST_CAP);
+    const resume = batch.length < due.length ? due[batch.length] : next;
+    db().transaction(() => {
+      for (const date of batch) {
+        createTransaction(r.account_id, date, amount, r.payee, null, [], 'Auto-posted from recurring', 'recurring');
+      }
+      repo.updateRecurring(db(), r.id, { next_date: resume, anchor_day: anchor });
+    })();
+    posted += batch.length;
+    if (resume <= today) {
+      truncated.push({ id: r.id, payee: r.payee });
+      console.warn(`[MMM recurring] catch-up for "${r.payee}" capped at ${AUTOPOST_CAP}; the rest posts on the next run`);
     }
-
-    if (next !== original) repo.updateRecurring(db(), r.id, { next_date: next });
   }
 
-  const result = { posted, truncated };
+  const result = { posted, truncated, needsConfirm };
   // Only persist when something actually happened — a posted:0 call (e.g. the
   // Cash Flow mount effect firing with nothing due) must not overwrite a real
   // earlier record with a fresher, emptier one.
-  if (posted > 0 || truncated.length > 0) {
+  if (posted > 0 || truncated.length > 0 || needsConfirm.length > 0) {
     repo.setMeta(db(), 'last_autopost', { at: new Date().toISOString(), ...result });
   }
   return result;
@@ -376,17 +403,26 @@ function getLastAutopost() {
 // ── cashflow ──────────────────────────────────────────────────────────────────
 
 function projectCashflow(accounts, recurring, days = 90) {
-  // Average daily discretionary spend over the last 60 days.
+  // Average daily DISCRETIONARY spend over the last 60 days: outflows that
+  // aren't transfers and aren't one of the recurring bills the projection
+  // subtracts on their own dates. It used to average every outflow, so rent
+  // was subtracted twice — $10k with $2k rent forecast -$2,067 instead of
+  // $4,000 and raised a critical "balance going negative" alert.
   const cutoff = calc.localDate(-60);
+  const transferIds = calc.transferCategoryIds(getCategories());
+  const recurringPayees = new Set((recurring || []).map((r) => String(r.payee || '').trim().toLowerCase()));
+  const cc = getCurrencyConfig();
+  const byAccount = new Map(accounts.map((a) => [a.id, a.currency]));
   const recentExpenses = repo.getTransactions(db(), { from: cutoff })
-    .filter(t => t.amount < 0)
-    .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount) || 0), 0);
-  return calc.projectCashflow(accounts, recurring, days, recentExpenses / 60);
+    .filter(t => t.amount < 0 && !calc.isTransferTxn(t, transferIds) &&
+      !recurringPayees.has(String(t.payee || '').trim().toLowerCase()))
+    .reduce((sum, t) => sum + Math.abs(calc.amountInBase(t, byAccount, cc)), 0);
+  return calc.projectCashflow(accounts, recurring, days, recentExpenses / 60, { cc });
 }
 
 function getRunway() {
   const data = readData();
-  const recurring = calc.detectRecurring(data.transactions, getDeclaredRecurring());
+  const recurring = calc.detectRecurring(data.transactions, getDeclaredRecurring(), { categories: data.categories });
   return computeRunway({ accounts: data.accounts, transactions: data.transactions, recurring, categories: data.categories });
 }
 
@@ -407,14 +443,16 @@ function getMetrics() {
   const nw = calc.computeNetWorth(accounts, cc.baseCurrency, cc.fxRates);
 
   const cutoff = calc.localDate(-60);
-  const recent = transactions.filter(t => String(t.date).slice(0, 10) >= cutoff);
+  const transferIds = calc.transferCategoryIds(repo.getCategories(d));
+  const byAccount = new Map(accounts.map((a) => [a.id, a.currency]));
+  const recent = transactions.filter(t => String(t.date).slice(0, 10) >= cutoff && !calc.isTransferTxn(t, transferIds));
   const monthly_income = recent.filter(t => t.amount > 0)
-    .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0) / 2;
+    .reduce((s, t) => s + calc.amountInBase(t, byAccount, cc), 0) / 2;
   const monthly_expenses = recent.filter(t => t.amount < 0)
-    .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0) / 2;
+    .reduce((s, t) => s + Math.abs(calc.amountInBase(t, byAccount, cc)), 0) / 2;
   const liquid_savings = accounts
     .filter(a => isLiquid(a.type))
-    .reduce((s, a) => s + (parseFloat(a.balance) || 0), 0);
+    .reduce((s, a) => s + calc.balanceInBase(a, cc), 0);
 
   const monthly_surplus = monthly_income - monthly_expenses;
   const annual_income = monthly_income * 12;
@@ -424,7 +462,7 @@ function getMetrics() {
   // Custom-field aggregates: cf_<slug>_<value>_count / _sum
   const settings = repo.getSettings(d) || {};
   const cf = {};
-  for (const field of settings.customFields || []) {
+  for (const field of Array.isArray(settings.customFields) ? settings.customFields : []) {
     const rows = field.entity === 'transaction' ? transactions
       : field.entity === 'account' ? accounts
       : field.entity === 'goal' ? goals : [];
@@ -563,6 +601,7 @@ function reset() {
 
 module.exports = {
   readData,
+  readLedger,
   writeData,
   isEmpty,
   getSettings,
@@ -576,8 +615,10 @@ module.exports = {
   autoCategorize: calc.autoCategorize,
   computeNetWorth: calc.computeNetWorth,
   computeBudgetStatus: calc.computeBudgetStatus,
-  detectRecurring: calc.detectRecurring,
-  computeGoalInsights: calc.computeGoalInsights,
+  detectRecurring: (transactions, declared, opts = {}) =>
+    calc.detectRecurring(transactions, declared, { categories: getCategories(), ...opts }),
+  computeGoalInsights: (accounts, transactions, recurring) =>
+    calc.computeGoalInsights(accounts, transactions, recurring, { categories: getCategories(), cc: getCurrencyConfig() }),
   computeInvestmentMetrics: calc.computeInvestmentMetrics,
 
   getCurrencyConfig,

@@ -29,7 +29,7 @@ const CONTENT_DIR = path.join(__dirname, '..', '..', 'content');
 const router = express.Router();
 
 function currentVariables() {
-  const data = store.readData();
+  const data = store.readLedger();
   return variables.computeVariables({ ...data, recurring: store.detectRecurring(data.transactions, data.recurring) });
 }
 

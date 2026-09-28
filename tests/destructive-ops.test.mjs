@@ -88,7 +88,7 @@ describe('reset', () => {
 
 describe('export / import', () => {
   it('round-trips settings and keeps tables an older export predates', async () => {
-    store.saveSettings({ baseCurrency: 'EUR', customFields: { account: [] } });
+    store.saveSettings({ baseCurrency: 'EUR', customFields: [] });
     const exported = await call('GET', '/export');
     expect(exported.body.format).toBe('mmm-backup@1');
     expect(exported.body.settings.baseCurrency).toBe('EUR');

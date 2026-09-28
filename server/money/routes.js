@@ -24,7 +24,8 @@ function invalid(res, check) {
 
 router.get('/overview', (req, res) => {
   try {
-    const data = store.readData();
+    const data = store.readLedger();
+    const transferIds = calc.transferCategoryIds(data.categories);
     const cc = store.getCurrencyConfig();
     const nw = store.computeNetWorth(data.accounts, cc.baseCurrency, cc.fxRates);
 
@@ -36,7 +37,7 @@ router.get('/overview', (req, res) => {
 
     const categorySpend = {};
     data.transactions
-      .filter(t => t.amount < 0 && String(t.date).slice(0, 7) === ym)
+      .filter(t => t.amount < 0 && String(t.date).slice(0, 7) === ym && !calc.isTransferTxn(t, transferIds))
       .forEach(t => {
         if (!categorySpend[t.category_id]) categorySpend[t.category_id] = 0;
         categorySpend[t.category_id] += Math.abs(t.amount);
@@ -53,7 +54,7 @@ router.get('/overview', (req, res) => {
         };
       });
 
-    // Budget status (only monthly, active)
+    // Budget status (every period; see calc.computeBudgetStatus)
     const budgetStatus = store.computeBudgetStatus(data.budgets, data.transactions);
 
     // Recent snapshots (last 30 days) — string-compared dates.
@@ -415,9 +416,12 @@ router.post('/recurring', (req, res) => {
 
 // Post every due recurring item into transactions (idempotent). Runs on app
 // launch server-side; exposed so the client can trigger + refetch on demand.
+// { confirm: [ids] } approves catch-ups longer than the automatic limit, which
+// come back in `needsConfirm` instead of being back-posted silently.
 router.post('/recurring/post-due', (req, res) => {
   try {
-    res.json(store.postDueRecurring());
+    const confirmIds = Array.isArray(req.body?.confirm) ? req.body.confirm.map(String) : [];
+    res.json(store.postDueRecurring({ confirmIds }));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -447,7 +451,9 @@ router.delete('/recurring/:id', (req, res) => {
 
 router.get('/cashflow', (req, res) => {
   try {
-    const days = parseInt(req.query.days, 10) || 90;
+    // Two years is far past any view in the app; an unbounded ?days= was a
+    // way for any page to pin the server's CPU.
+    const days = Math.min(730, Math.max(1, parseInt(req.query.days, 10) || 90));
     const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
     const projection = store.projectCashflow(store.getAccounts(), recurring, days);
     res.json(projection);
@@ -504,7 +510,7 @@ router.delete('/goals/:id', (req, res) => {
 
 router.get('/goals/insights', (req, res) => {
   try {
-    const data = store.readData();
+    const data = store.readLedger();
     const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
     const insights = store.computeGoalInsights(data.accounts, data.transactions, recurring);
     res.json(insights);
@@ -584,9 +590,8 @@ router.delete('/rules/:id', (req, res) => {
 
 router.post('/rules/apply', (req, res) => {
   try {
-    const data = store.readData();
     const rules = store.getRules();
-    const updated = store.applyRules(data.transactions, rules);
+    const updated = store.applyRules(store.getTransactions(), rules);
     res.json({ updated: updated.length });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -600,7 +605,11 @@ router.post('/rules/apply', (req, res) => {
 // Gather everything computeAdvice() needs. Shared by /advice and /digest so the
 // finding set is identical in both surfaces.
 function adviceContext() {
-  const data = store.readData();
+  const data = store.readLedger();
+  // Money moving between the user's own accounts is neither spending nor
+  // income for the month/week comparisons below.
+  const transferIds = calc.transferCategoryIds(data.categories);
+  const flows = data.transactions.filter((t) => !calc.isTransferTxn(t, transferIds));
   const metrics = store.getMetrics();
   const recurring = store.detectRecurring(store.getTransactions(), store.getDeclaredRecurring());
   const goalInsights = store.computeGoalInsights(data.accounts, data.transactions, recurring);
@@ -616,7 +625,7 @@ function adviceContext() {
   const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastYm = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-  const sumMonth = (ym) => data.transactions
+  const sumMonth = (ym) => flows
     .filter((t) => t.amount < 0 && String(t.date).slice(0, 7) === ym)
     .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
@@ -625,7 +634,7 @@ function adviceContext() {
     debts, goals: data.goals, accounts: data.accounts, recurring, investments,
     spendThisMonth: sumMonth(thisYm), spendLastMonth: sumMonth(lastYm),
   };
-  return { data, metrics, goalInsights, input };
+  return { data, flows, metrics, goalInsights, input };
 }
 
 router.get('/advice', (req, res) => {
@@ -638,7 +647,7 @@ router.get('/advice', (req, res) => {
 
 router.get('/digest', (req, res) => {
   try {
-    const { data, metrics, goalInsights, input } = adviceContext();
+    const { data, flows, metrics, goalInsights, input } = adviceContext();
     const findings = advice.computeAdvice(input);
 
     // Rolling 7-day windows (local calendar dates, string-compared).
@@ -653,7 +662,7 @@ router.get('/digest', (req, res) => {
     const lastEnd = dayStr(-7);
     const inRange = (d, a, b) => { const s = String(d).slice(0, 10); return s >= a && s <= b; };
 
-    const tx = data.transactions;
+    const tx = flows;
     const spendIn = (a, b) => tx.filter((t) => t.amount < 0 && inRange(t.date, a, b)).reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
     const incomeIn = (a, b) => tx.filter((t) => t.amount > 0 && inRange(t.date, a, b)).reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
     const spendThisWeek = spendIn(thisStart, today);
