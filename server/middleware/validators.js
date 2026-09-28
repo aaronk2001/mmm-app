@@ -194,6 +194,46 @@ function validateImport(body) {
   return result(e);
 }
 
+// PUT /api/settings deep-merges into one shared object that many features
+// read, so a wrong shape breaks routes far from the write: {"customFields": 5}
+// made /metrics, /advice and /digest 500, and a non-numeric fxRates entry
+// turned net worth into null. Known keys are shape-checked; unknown keys pass
+// (features add their own sections).
+const SETTINGS_OBJECT_KEYS = ['appearance', 'coach', 'dashboards', 'profile', 'online', 'trading', 'nav', 'shared', 'customMetric'];
+const SETTINGS_BOOLEAN_KEYS = ['insightsSeeded', 'insightsGrown'];
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+function validateSettings(body, { currencies = null } = {}) {
+  const e = [];
+  if (!isPlainObject(body)) return result(['settings must be an object']);
+  if (body.baseCurrency !== undefined &&
+      (typeof body.baseCurrency !== 'string' || (currencies && !currencies.includes(body.baseCurrency)))) {
+    e.push(`baseCurrency must be one of: ${(currencies || []).join(', ')}`);
+  }
+  if (body.fxRates !== undefined) {
+    if (!isPlainObject(body.fxRates)) e.push('fxRates must be an object of currency -> rate');
+    else {
+      for (const [code, rate] of Object.entries(body.fxRates)) {
+        if (!/^[A-Z]{3}$/.test(code) || typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
+          e.push(`fxRates.${code} must be a positive number`);
+          break;
+        }
+      }
+    }
+  }
+  if (body.customFields !== undefined &&
+      (!Array.isArray(body.customFields) || !body.customFields.every(isPlainObject))) {
+    e.push('customFields must be an array of field definitions');
+  }
+  for (const k of SETTINGS_OBJECT_KEYS) {
+    if (body[k] !== undefined && body[k] !== null && !isPlainObject(body[k])) e.push(`${k} must be an object`);
+  }
+  for (const k of SETTINGS_BOOLEAN_KEYS) {
+    if (body[k] !== undefined && typeof body[k] !== 'boolean') e.push(`${k} must be true or false`);
+  }
+  return result(e);
+}
+
 function validateBulkIds(body) {
   const e = [];
   if (!Array.isArray(body.ids) || body.ids.length === 0) e.push('ids must be a non-empty array');
@@ -204,4 +244,5 @@ module.exports = {
   ACCOUNT_TYPES, PERIODS, CADENCES, KINDS,
   validateAccount, validateTransaction, validateBudget, validateGoal,
   validateRule, validateHolding, validateRecurring, validateCategory, validateImport, validateBulkIds,
+  validateSettings,
 };

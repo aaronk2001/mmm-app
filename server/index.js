@@ -83,7 +83,14 @@ const TIMEOUT_EXEMPT = [
 app.use((req, res, next) => {
   if (TIMEOUT_EXEMPT.some((re) => re.test(req.path))) return next();
   const timer = setTimeout(() => {
-    if (!res.headersSent) res.status(503).json({ error: 'Request timed out.' });
+    if (res.headersSent) return;
+    res.status(503).json({ error: 'Request timed out.' });
+    // The handler is still running and will try to reply when it finishes;
+    // that second reply threw ERR_HTTP_HEADERS_SENT inside its own try, and
+    // the catch block's reply then escaped as an unhandledRejection. Make any
+    // late reply a no-op instead.
+    const noop = () => res;
+    res.status = noop; res.json = noop; res.send = noop; res.sendStatus = noop;
   }, REQUEST_TIMEOUT_MS);
   res.on('finish', () => clearTimeout(timer));
   res.on('close',  () => clearTimeout(timer));
