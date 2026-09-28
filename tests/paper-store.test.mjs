@@ -187,3 +187,74 @@ describe('getSummary', () => {
     expect(summary.open_positions).toHaveLength(0);
   });
 });
+
+// SHORT positions and fractional shares only arrive through a restore
+// (writeAll / a backup) — open() is LONG-only — but close() must still get
+// them right, and must never write a non-integer into capital_cents.
+describe('close — SHORT positions and fractional shares', () => {
+  const capitalCents = () => db().prepare("SELECT capital_cents FROM paper_account WHERE id = 'default'").get().capital_cents;
+
+  it('a winning SHORT books a profit, and the round trip reconciles to the cent', () => {
+    const before = capitalCents();
+    // 100 short @ $100 — cash-secured: the notional + commission is set aside.
+    const pos = repo.createPaperPosition(db(), {
+      ticker: 'SHRT', direction: 'SHORT', shares: 100, entry_price: 100,
+      opened_at: new Date().toISOString(), source: 'app', sector: 'energy',
+    });
+    db().prepare("UPDATE paper_account SET capital_cents = capital_cents - ? WHERE id = 'default'").run(100 * 10000 + 100);
+
+    const closed = paperStore.close(pos.id, 90); // covered at $90 (+0.1% slippage -> $90.09)
+    expect(closed.ok).toBe(true);
+    // (100.00 - 90.09) * 100 - 2 * $1 = $989 — it used to book -$993.
+    expect(closed.trade.pnl).toBe(989);
+    expect(capitalCents() - before).toBe(98_900);
+    expect(paperStore.sectorFailures().energy || 0).toBe(0); // a win, not a sector loss
+  });
+
+  it('a losing SHORT books a loss', () => {
+    const pos = repo.createPaperPosition(db(), {
+      ticker: 'SHRT', direction: 'SHORT', shares: 10, entry_price: 50,
+      opened_at: new Date().toISOString(), source: 'app',
+    });
+    const closed = paperStore.close(pos.id, 60);
+    // (50.00 - 60.06) * 10 - $2 = -$102.60
+    expect(closed.trade.pnl).toBeCloseTo(-102.6, 2);
+  });
+
+  it('fractional shares still store whole cents', () => {
+    const pos = repo.createPaperPosition(db(), {
+      ticker: 'FRAC', direction: 'LONG', shares: 0.5, entry_price: 123.45,
+      opened_at: new Date().toISOString(), source: 'app',
+    });
+    const before = capitalCents();
+    const closed = paperStore.close(pos.id, 123.45);
+    const row = db().prepare("SELECT capital_cents, typeof(capital_cents) AS t FROM paper_account WHERE id = 'default'").get();
+    expect(row.t).toBe('integer');
+    expect(Number.isInteger(Math.round(closed.trade.pnl * 100))).toBe(true);
+    // LONG credit = exit notional (rounded to the cent) - commission.
+    expect(row.capital_cents - before).toBe(Math.round(12333 * 0.5) - 100);
+  });
+});
+
+describe('reset — clears the strategy gate\'s rolling memory', () => {
+  it('a reset portfolio can trade again (the weekly trade limit starts over)', () => {
+    for (const symbol of ['AAA', 'BBB', 'CCC']) expect(paperStore.open(buy({ symbol }), 10).ok).toBe(true);
+    expect(paperStore.open(buy({ symbol: 'DDD' }), 10).violations.join(' ')).toMatch(/trades this week/);
+
+    paperStore.reset();
+    expect(paperStore.tradesThisWeek()).toBe(0);
+    expect(paperStore.open(buy({ symbol: 'DDD' }), 10).ok).toBe(true);
+  });
+
+  it('a reset lifts a sector blacklist built from trades it erased', () => {
+    for (let i = 0; i < 2; i++) {
+      const o = paperStore.open(buy({ symbol: 'AAPL', sector: 'tech' }), 100);
+      paperStore.close(o.position.id, 50); // two losses -> blacklisted
+    }
+    expect(paperStore.open(buy({ symbol: 'MSFT', sector: 'tech' }), 100).ok).toBe(false);
+
+    paperStore.reset();
+    expect(paperStore.sectorFailures()).toEqual({});
+    expect(paperStore.open(buy({ symbol: 'MSFT', sector: 'tech' }), 100).ok).toBe(true);
+  });
+});
