@@ -54,10 +54,17 @@ function saveSettings(patch) {
   return repo.setSettings(db(), patch);
 }
 
-// No accounts and no transactions: the only state in which a full replace
-// (loading the sample) can't destroy anything.
+// Nothing the user entered anywhere — not just the ledger, since a reset or a
+// sample load also replaces paper trades, learn progress, the watchlist and
+// saved strategies. Only then can a full replace skip its confirmation and
+// safety snapshot.
+const USER_TABLES = [
+  'accounts', 'transactions', 'budgets', 'goals', 'recurring', 'rules', 'holdings',
+  'paper_positions', 'paper_trades', 'watchlist', 'strategies', 'backtest_runs', 'learn_progress',
+];
 function isEmpty() {
-  return db().prepare('SELECT (SELECT COUNT(*) FROM accounts) + (SELECT COUNT(*) FROM transactions) AS n').get().n === 0;
+  const sql = `SELECT ${USER_TABLES.map((t) => `(SELECT COUNT(*) FROM ${t})`).join(' + ')} AS n`;
+  return db().prepare(sql).get().n === 0;
 }
 
 function getEmptyData() {
