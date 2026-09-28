@@ -280,7 +280,7 @@ export default function Settings() {
     }))) return;
     try {
       await api('money/backups/run', { method: 'POST' }); // safety snapshot first
-      await api('money/reset', { method: 'POST' });
+      await api('money/reset', { method: 'POST', body: JSON.stringify({ confirm: true }) });
       toast.success('Data erased — add your accounts to begin.');
       queryClient.clear();
       // Enter the (now empty) app after reload instead of the welcome card, so

@@ -263,7 +263,7 @@ export default function MoneyHub() {
   const handleReset = async () => {
     setSeeding(true);
     try {
-      await api('money/reset', { method: 'POST' });
+      await api('money/reset', { method: 'POST', body: JSON.stringify({ confirm: true }) });
       setIsEmpty(true);
       enterApp(); // drop into the empty app so they can add their own data
       toast.success('Starting fresh — add your accounts to begin.');

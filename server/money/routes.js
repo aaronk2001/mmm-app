@@ -4,6 +4,7 @@ const advice = require('./advice');
 const ollama = require('./ollama');
 const { coachSystemPrompt } = require('./coach-persona');
 const calc = require('./calc');
+const backup = require('../backup/scheduler');
 const { localDate } = calc;
 const { isLiability } = require('./account-types');
 const v = require('../middleware/validators');
@@ -784,12 +785,24 @@ router.get('/glossary', (req, res) => {
 // Seed & reset
 // ────────────────────────────────────────────────────────────────────────────
 
+// Loading the sample is a full replace. Over real data it needs an explicit
+// { replace: true } (a "Load Sample" button on a filtered-empty list once
+// erased everything with one click), and it's snapshotted first either way.
 router.post('/seed-sample', (req, res) => {
   try {
+    if (!store.isEmpty() && req.body?.replace !== true) {
+      return res.status(409).json({
+        error: 'Loading the sample data replaces everything you have entered. Confirm to continue.',
+        needsConfirm: true,
+      });
+    }
+    const safety = backup.snapshotBeforeChange('sample');
     const path = require('path');
     const samplePath = path.join(__dirname, '..', 'store', 'money', 'sample.money.json');
-    store.seedSample(samplePath);
-    res.json({ seeded: true });
+    if (!store.seedSample(samplePath)) {
+      return res.status(500).json({ error: 'Could not load the sample data.' });
+    }
+    res.json({ seeded: true, safety });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -797,8 +810,12 @@ router.post('/seed-sample', (req, res) => {
 
 router.post('/reset', (req, res) => {
   try {
+    if (req.body?.confirm !== true) {
+      return res.status(400).json({ error: 'Erasing everything needs { confirm: true }.', needsConfirm: true });
+    }
+    const safety = backup.snapshotBeforeChange('reset');
     store.reset();
-    res.json({ reset: true });
+    res.json({ reset: true, safety });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -808,9 +825,16 @@ router.post('/reset', (req, res) => {
 // Backup export / import (full data blob — stays on the device)
 // ────────────────────────────────────────────────────────────────────────────
 
+// The same wrapper the daily backups use, so an export carries the profile,
+// custom fields and currency settings and Import restores them.
 router.get('/export', (req, res) => {
   try {
-    res.json(store.readData());
+    res.json({
+      format: 'mmm-backup@1',
+      created: new Date().toISOString(),
+      data: store.readData(),
+      settings: store.getSettings(),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -826,9 +850,16 @@ router.post('/import', (req, res) => {
         !Array.isArray(data.accounts) || !Array.isArray(data.transactions)) {
       return res.status(400).json({ error: 'Not a valid MMM backup (missing accounts/transactions arrays).' });
     }
-    store.writeData(data);
+    // Snapshot first; keep any table group the file predates (an older export
+    // has no paper-trading, backtest or learn tables — those used to be wiped).
+    const safety = backup.snapshotBeforeChange('import');
+    store.writeData(data, { partial: true });
+    if (body.format === 'mmm-backup@1' && body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings)) {
+      store.saveSettings(body.settings);
+    }
     res.json({
       imported: true,
+      safety,
       counts: {
         accounts: data.accounts.length,
         transactions: data.transactions.length,

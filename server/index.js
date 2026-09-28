@@ -43,8 +43,12 @@ app.use(cors({ origin: ORIGINS }));
 // ─── Compression ─────────────────────────────────────────────────────────────
 app.use(compression());
 
-// ─── Body parsing — 2 MB cap (settings + CSV/backup import) ───
-app.use(express.json({ limit: '2mb' })); // larger for settings + CSV/backup import
+// ─── Body parsing ─────────────────────────────────────────────────────────────
+// 2 MB everywhere, except Settings → Import, which posts a whole export: a few
+// years of transactions is well past 2 MB and used to fail with a 413. (It
+// must be mounted first — express.json skips a body that's already parsed.)
+app.use('/api/money/import', express.json({ limit: '100mb' }));
+app.use(express.json({ limit: '2mb' }));
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 // General API limiter — 120 req/min on writes and network-reaching reads;
