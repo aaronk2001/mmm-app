@@ -503,10 +503,10 @@ const parseCustom = (s) => {
   try { const v = JSON.parse(s); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; }
 };
 
-function shiftYmd(ymd, days) {
-  const [y, m, d] = ymd.split('-').map(Number);
-  const dt = new Date(y, m - 1, d + days);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+// Whole days since the epoch for a 'YYYY-MM-DD' key (UTC arithmetic: no DST).
+function dayNumber(ymd) {
+  const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000);
 }
 
 function contentExternalId(accountId, date, cents, payee, occurrence) {
@@ -526,13 +526,28 @@ function importRows(account_id, rawRows, { dateFormat, decimal, source }) {
   let claimed = 0;
 
   const hasExternal = d.prepare('SELECT 1 FROM transactions WHERE account_id = ? AND external_id = ?');
-  const findClaim = d.prepare(`
-    SELECT id, date, payee, source, custom FROM transactions
-    WHERE account_id = ? AND source = 'recurring' AND external_id IS NULL AND amount_cents = ?
-      AND date BETWEEN ? AND ?
-    ORDER BY ABS(julianday(date) - julianday(?)), rowid
-    LIMIT 1`);
   const claim = d.prepare('UPDATE transactions SET date = ?, payee = ?, external_id = ?, source = ?, custom = ? WHERE id = ?');
+  // Unclaimed auto-posted rows, loaded once and matched in memory — a query
+  // per imported row scanned the whole account (34 s for 20k rows into an
+  // account that already had 20k).
+  const unclaimed = new Map(); // amount_cents -> rows in rowid order
+  for (const row of d.prepare(`
+    SELECT id, date, payee, source, custom, amount_cents FROM transactions
+    WHERE account_id = ? AND source = 'recurring' AND external_id IS NULL ORDER BY rowid`).all(account_id)) {
+    if (!unclaimed.has(row.amount_cents)) unclaimed.set(row.amount_cents, []);
+    unclaimed.get(row.amount_cents).push(row);
+  }
+  const takeClaim = (cents, date) => {
+    const list = unclaimed.get(cents);
+    if (!list || !list.length) return null;
+    const day = dayNumber(date);
+    let best = -1;
+    for (let i = 0; i < list.length; i++) {
+      const gap = Math.abs(dayNumber(list[i].date) - day);
+      if (gap <= CLAIM_WINDOW_DAYS && (best < 0 || gap < Math.abs(dayNumber(list[best].date) - day))) best = i;
+    }
+    return best < 0 ? null : list.splice(best, 1)[0]; // closest date, then the oldest row
+  };
 
   const inserted = d.transaction(() => {
     const toInsert = [];
@@ -549,8 +564,7 @@ function importRows(account_id, rawRows, { dateFormat, decimal, source }) {
       }
       if (hasExternal.get(account_id, externalId)) { duplicates += 1; continue; }
 
-      const match = findClaim.get(account_id, cents,
-        shiftYmd(r.date, -CLAIM_WINDOW_DAYS), shiftYmd(r.date, CLAIM_WINDOW_DAYS), r.date);
+      const match = takeClaim(cents, r.date);
       if (match) {
         const custom = parseCustom(match.custom);
         custom._import_claim = { batch_id: batchId, date: match.date, payee: match.payee, source: match.source };
