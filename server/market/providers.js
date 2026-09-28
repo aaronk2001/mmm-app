@@ -9,17 +9,12 @@
 // Transport: quote/chart/indices/futures/fred/coingecko/frankfurter all go
 // through `online.fetch()` — Yahoo's `/v8/finance/chart` endpoint needs no
 // session crumb, so it's a plain GET-and-cache like every other provider
-// here. `earnings` and `screener` are the one deliberate exception: Yahoo's
-// `quoteSummary` and `screener` endpoints require a crumb obtained through a
-// cookie-jar handshake that `online.fetch`'s single-shot fetch(url)->JSON
-// contract has no seam for, so those two call the `yahoo-finance2` SDK
-// directly (it owns that handshake) — gated by the same `online.enabled`
-// check, never throwing, and backed by the same `price_cache` table so a
-// disabled feature or a failed call still renders cached data instead of an
-// error. See the Track 2 report for the full writeup of this deviation.
+// here. `earnings` and `screener` need a crumb obtained through a cookie-jar
+// handshake that only the `yahoo-finance2` SDK performs, so the SDK does the
+// I/O — but inside `online.guard()`, which gives those calls the same feature
+// gate, http_cache TTL, cooldowns (sharing the chart host's rate limit),
+// concurrency slots and deadline as every other provider, and never throws.
 
-const { db } = require('../db/connection');
-const repo = require('../db/repo');
 const online = require('../online');
 const keys = require('../online/keys');
 
@@ -71,17 +66,71 @@ function chartMetaToQuote(meta) {
   };
 }
 
+// Yahoo quotes some exchanges in the currency's MINOR unit: London in pence
+// ('GBp', sometimes 'GBX'), Johannesburg in cents ('ZAc'), Tel Aviv in agorot
+// ('ILA'). Anything that persists a price as money (a snapshot row, a
+// holding's current_price) must convert to the major unit first, or a
+// 70.5p share lands as 70.50 of whole currency — 100x too high.
+const MINOR_UNIT_CURRENCIES = { GBp: 'GBP', GBX: 'GBP', ZAc: 'ZAR', ZAC: 'ZAR', ILA: 'ILS' };
+
+/**
+ * A copy of a chartMetaToQuote() quote expressed in the currency's major
+ * unit (every price-like field / 100, currency renamed); quotes already in a
+ * major unit come back unchanged. changePct and volume are unit-free.
+ */
+function toMajorUnits(quote) {
+  if (!quote) return quote;
+  const major = MINOR_UNIT_CURRENCIES[quote.currency];
+  if (!major) return quote;
+  const scale = (v) => (v == null ? v : v / 100);
+  return {
+    ...quote,
+    currency: major,
+    price: scale(quote.price),
+    previousClose: scale(quote.previousClose),
+    change: scale(quote.change),
+    dayHigh: scale(quote.dayHigh),
+    dayLow: scale(quote.dayLow),
+    weekHigh52: scale(quote.weekHigh52),
+    weekLow52: scale(quote.weekLow52),
+  };
+}
+
+const dayKey = (epochSeconds) => new Date(epochSeconds * 1000).toISOString().slice(0, 10);
+
+// Dividends arrive as `events.dividends`, keyed by timestamp: { amount, date }
+// per ex-date. chart() asks for them (events=div|split) and the backtest bar
+// sync needs them — without them every Yahoo-sourced backtest was price-only.
+// Each amount lands on the bar for its ex-date (or the next bar, if that day
+// has no bar). Split events are deliberately NOT surfaced: Yahoo's `close`
+// series is already split-adjusted, so applying them again would double-count.
+function dividendsByDay(result, days) {
+  const out = new Map();
+  const events = Object.values(result.events?.dividends || {});
+  for (const ev of events) {
+    const amount = Number(ev && ev.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(Number(ev.date))) continue;
+    const exDay = dayKey(Number(ev.date));
+    const day = days.find((d) => d >= exDay);
+    if (day) out.set(day, (out.get(day) || 0) + amount);
+  }
+  return out;
+}
+
 function seriesFromChart(result) {
   const ts = result.timestamp || [];
   const q = result.indicators?.quote?.[0] || {};
-  return ts.map((t, i) => ({
-    time: new Date(t * 1000).toISOString().slice(0, 10),
+  const rows = ts.map((t, i) => ({
+    time: dayKey(t),
     open: q.open?.[i] ?? null,
     high: q.high?.[i] ?? null,
     low: q.low?.[i] ?? null,
     close: q.close?.[i] ?? null,
     volume: q.volume?.[i] ?? null,
   })).filter((row) => row.close != null);
+  const divs = dividendsByDay(result, rows.map((r) => r.time));
+  for (const row of rows) if (divs.has(row.time)) row.dividend = divs.get(row.time);
+  return rows;
 }
 
 // ── yahoo: chart-backed quote/chart/indices/futures (no crumb needed) ──────
@@ -123,55 +172,50 @@ async function sectors(opts = {}) {
 
 // ── yahoo: earnings + predefined screener (crumb required — SDK transport) ─
 
-function offlineFromPriceCache(kind, key) {
-  const row = repo.getPriceCacheEntry(db(), `${kind}:${key}`);
-  return {
-    data: row ? row.data : null,
-    cached_at: row ? row.fetched_at : null,
-    stale: true,
-    offline: true,
-  };
-}
+// The SDK's requests go to Yahoo's query hosts; they share the chart host's
+// cooldown because Yahoo rate-limits per client, not per path.
+const YF_RATE_LIMIT_HOST = new URL(YF_HOST).host;
 
-function withTimeout(promise, ms) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timed out')), ms);
-    promise.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
-  });
-}
-
-// Lazily required — keeps module load cheap and makes it trivial to
-// `vi.mock('yahoo-finance2')` in tests without ever touching the network.
+// Lazily required — keeps module load cheap, and with the market feature off
+// the SDK is never even loaded. yahoo-finance2 v3+ (v4 is installed) exports a
+// CLASS; the v2-era `require('yahoo-finance2').default.quoteSummary(...)`
+// throws "Call `new YahooFinance()` first", so earnings/screener could only
+// ever return their offline envelope. versionCheck is off because on a schema
+// mismatch the SDK otherwise fetches registry.npmjs.org — a host outside the
+// online seam that the user never opted into.
 let _yf = null;
 function yf() {
-  if (!_yf) _yf = require('yahoo-finance2').default;
+  if (!_yf) {
+    const mod = require('yahoo-finance2');
+    const YahooFinance = mod.default || mod;
+    _yf = typeof YahooFinance === 'function'
+      ? new YahooFinance({ versionCheck: false, suppressNotices: ['yahooSurvey'] })
+      : YahooFinance; // a pre-built instance (v2 shape)
+  }
   return _yf;
 }
+// Tests inject a stand-in client instead of loading the real SDK.
+function _setYahooClientForTests(client) { _yf = client; }
+
+// Per-call SDK options: the seam's AbortSignal cancels the request (and the
+// crumb handshake) at the deadline, and schema drift in Yahoo's payload
+// degrades to "whatever came back" instead of a thrown validation error.
+const sdkOptions = (signal) => ({ validateResult: false, fetchOptions: { signal } });
 
 async function earnings(symbol, { ttl = SLOW_TTL } = {}) {
   const key = String(symbol).toUpperCase();
-  if (!online.enabled('market')) return offlineFromPriceCache('earnings', key);
-  try {
-    const data = await withTimeout(yf().quoteSummary(key, { modules: ['calendarEvents', 'earnings'] }), 8000);
-    repo.upsertPriceCache(db(), { id: `earnings:${key}`, kind: 'earnings', symbol: key, data, source: 'yahoo', fetched_at: new Date().toISOString() });
-    return { data, cached_at: new Date().toISOString(), stale: false, offline: false };
-  } catch {
-    return offlineFromPriceCache('earnings', key);
-  }
-  // eslint-disable-next-line no-unreachable
-  void ttl; // ttl kept for interface symmetry with the other providers
+  return online.guard(
+    (signal) => yf().quoteSummary(key, { modules: ['calendarEvents', 'earnings'] }, sdkOptions(signal)),
+    { feature: 'market', cacheKey: `yahoo:earnings:${key}`, host: YF_RATE_LIMIT_HOST, ttl },
+  );
 }
 
-async function screener(screenId, { count = 25 } = {}) {
+async function screener(screenId, { count = 25, ttl = SLOW_TTL } = {}) {
   if (!SCREENS[screenId]) throw new Error(`Unknown predefined screen: ${screenId}`);
-  if (!online.enabled('market')) return offlineFromPriceCache('screener', screenId);
-  try {
-    const data = await withTimeout(yf().screener({ scrIds: screenId, count }), 8000);
-    repo.upsertPriceCache(db(), { id: `screener:${screenId}`, kind: 'screener', symbol: screenId, data, source: 'yahoo', fetched_at: new Date().toISOString() });
-    return { data, cached_at: new Date().toISOString(), stale: false, offline: false };
-  } catch {
-    return offlineFromPriceCache('screener', screenId);
-  }
+  return online.guard(
+    (signal) => yf().screener(screenId, { count }, sdkOptions(signal)),
+    { feature: 'market', cacheKey: `yahoo:screener:${screenId}:${count}`, host: YF_RATE_LIMIT_HOST, ttl },
+  );
 }
 
 // ── fred: macro series (real, optional key — no key means every request
@@ -210,6 +254,10 @@ module.exports = {
   FUTURES_SYMBOLS,
   SECTOR_SYMBOLS,
   SCREENS,
+  MINOR_UNIT_CURRENCIES,
+  toMajorUnits,
+  seriesFromChart,
+  _setYahooClientForTests,
   yahoo: { quote, chart, indices, futures, sectors, earnings, screener },
   fred: { series },
   coingecko: { simplePrice },
