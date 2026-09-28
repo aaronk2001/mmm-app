@@ -370,6 +370,37 @@ function projectCashflow(accounts, recurring, days = 90, avgDailyDiscretionary =
   };
 }
 
+// FIRE projection. Assumed annual REAL return (after inflation) on invested
+// net worth; override per call through projectYearsToFire's realReturn.
+const FIRE_REAL_RETURN = 0.05;
+const FIRE_MAX_YEARS = 100;
+
+// Years until net worth reaches the FIRE number, compounding what's already
+// invested plus a year-end contribution of `annualSavings`:
+//   W·(1+r)^n + S·((1+r)^n − 1)/r = F   =>   n = ln((F + S/r) / (W + S/r)) / ln(1+r)
+// The old formula divided the gap by 1.1x a year's savings and ignored growth
+// on the existing portfolio: $500k saved, $1.2M target, $24k/yr read 26.5 years
+// (11 at a 5% real return), and it went negative once the target was met.
+// -> 0 when already there, null when there's no target or it's out of reach
+// within FIRE_MAX_YEARS; rounded to one decimal.
+function projectYearsToFire({ fireNumber, netWorth, annualSavings, realReturn = FIRE_REAL_RETURN }) {
+  const F = Number(fireNumber) || 0;
+  const W = Number(netWorth) || 0;
+  const S = Number(annualSavings) || 0;
+  const r = Number(realReturn) || 0;
+  if (!(F > 0)) return null;
+  if (W >= F) return 0;
+  let n;
+  if (r === 0) {
+    n = S > 0 ? (F - W) / S : Infinity;
+  } else {
+    const start = W + S / r;
+    const end = F + S / r;
+    n = start > 0 && end / start > 1 ? Math.log(end / start) / Math.log(1 + r) : Infinity;
+  }
+  return Number.isFinite(n) && n <= FIRE_MAX_YEARS ? Math.round(n * 10) / 10 : null;
+}
+
 function computeGoalInsights(accounts, transactions, recurring = [], { categories = null, cc = null } = {}) {
   const cutoff = localDate(-60);
   const transferIds = categories ? transferCategoryIds(categories) : null;
@@ -420,10 +451,11 @@ function computeGoalInsights(accounts, transactions, recurring = [], { categorie
 
   const annualExpenses = monthlyExpenses * 12;
   const fireNumber = annualExpenses * 25;
-  const fireProgress = (nw.net / fireNumber) * 100;
+  // No expense history means no FIRE number to make progress against.
+  const fireProgress = fireNumber > 0 ? (nw.net / fireNumber) * 100 : null;
 
   const monthlySavings = monthlyIncome - monthlyExpenses;
-  const yearsToFire = monthlySavings > 0 ? (fireNumber - nw.net) / (monthlySavings * 12 * 0.1 + monthlySavings * 12) : null;
+  const yearsToFire = projectYearsToFire({ fireNumber, netWorth: nw.net, annualSavings: monthlySavings * 12 });
 
   return {
     emergencyFund: {
@@ -438,8 +470,9 @@ function computeGoalInsights(accounts, transactions, recurring = [], { categorie
       annualExpenses: Math.round(annualExpenses * 100) / 100,
       fireNumber: Math.round(fireNumber),
       currentNetWorth: Math.round(nw.net * 100) / 100,
-      progressPct: Math.round(fireProgress * 10) / 10,
-      yearsToFire: yearsToFire ? Math.round(yearsToFire * 10) / 10 : null,
+      progressPct: fireProgress === null ? null : Math.round(fireProgress * 10) / 10,
+      yearsToFire,
+      realReturn: FIRE_REAL_RETURN,
     },
   };
 }
@@ -583,5 +616,7 @@ module.exports = {
   detectRecurring,
   projectCashflow,
   computeGoalInsights,
+  projectYearsToFire,
+  FIRE_REAL_RETURN,
   computeInvestmentMetrics,
 };

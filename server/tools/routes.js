@@ -4,8 +4,10 @@ const repo    = require('../db/repo');
 const { db }  = require('../db/connection');
 const loans   = require('./loans');
 const planning = require('./planning');
-const { profileFromMmm, validateProfile } = require('./profile');
+const { profileFromMmm, inBaseCurrency, currencyConfig, validateProfile } = require('./profile');
+const calc = require('../money/calc');
 const { computeRunway } = require('../money/runway');
+const { isLiability } = require('../money/account-types');
 
 const router = express.Router();
 
@@ -63,11 +65,16 @@ router.put('/profile', (req, res) => {
 // Take-home / raise / offer
 // ────────────────────────────────────────────────────────────────────────────
 
+// State and filing status come from the body, else the saved profile. There is
+// no default state: unset means no state tax, flagged in the response.
 router.post('/take-home', (req, res) => {
   try {
     const gross = num(req.body.gross_salary);
     if (!need(res, 'gross_salary', gross)) return;
-    res.json(planning.calcTakeHome(gross, req.body.state || 'AZ'));
+    const profile = repo.getSettings(db()).profile || {};
+    const state = req.body.state !== undefined ? req.body.state : (profile.state || null);
+    const filingStatus = req.body.filing_status || profile.filing_status || 'single';
+    res.json(planning.calcTakeHome(gross, state, filingStatus));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -78,11 +85,14 @@ router.post('/offer', (req, res) => {
     const gapWeeks = num(req.body.gap_weeks) || 0;
     const snap = snapshot();
     const state = req.body.state || snap.context.state;
-    const data = store.readData();
+    const filingStatus = req.body.filing_status || snap.context.filing_status;
+    // Balances and spending in the base currency, like the snapshot.
+    const raw = store.readData();
+    const data = { ...raw, ...inBaseCurrency(raw, repo.getSettings(db()) || {}) };
 
     const current = snap.income.current_gross
-      ? planning.calcTakeHome(snap.income.current_gross, state) : null;
-    const offer = planning.calcTakeHome(newSalary, state);
+      ? planning.calcTakeHome(snap.income.current_gross, state, filingStatus) : null;
+    const offer = planning.calcTakeHome(newSalary, state, filingStatus);
 
     // Δ runway: re-run the real runway engine with the new monthly take-home
     // added to liquid cash for one month. Same engine as the Overview headline,
@@ -234,9 +244,13 @@ router.post('/dti', (req, res) => {
   try {
     const snap = snapshot();
     const data = store.readData();
+    // The stored minimum payment where there is one, in the base currency.
+    const { baseCurrency, fxRates } = currencyConfig(repo.getSettings(db()) || {});
     const defaultDebts = data.accounts
-      .filter((a) => a.type === 'loan' || a.type === 'credit')
-      .reduce((sum, a) => sum + (a.min_payment || Math.max(2, Math.abs(parseFloat(a.balance) || 0) * 0.02)), 0);
+      .filter((a) => isLiability(a.type))
+      .reduce((sum, a) => sum + calc.convertAmount(
+        a.min_payment || Math.max(2, Math.abs(parseFloat(a.balance) || 0) * 0.02),
+        a.currency || baseCurrency, baseCurrency, fxRates), 0);
     const grossMonthlyIncome = num(req.body.gross_monthly_income)
       ?? (snap.income.current_gross ? snap.income.current_gross / 12 : null);
     const monthlyDebts = num(req.body.monthly_debts) ?? defaultDebts;

@@ -176,19 +176,22 @@ function validateCategory(body) {
 const MAX_IMPORT_CHARS = 2 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 20000;
 
+const IMPORT_DATE_FORMATS = ['auto', 'MDY', 'DMY', 'YMD'];
+const IMPORT_DECIMAL_MARKS = ['auto', '.', ','];
+const IMPORT_FILE_FORMATS = ['ofx', 'qif'];
+
+// Request-level checks only. Individual rows are NOT validated here: import
+// normalizes each row (bank formats like "$1,234.56" or "15-Jan-2026" are
+// expected) and skips-and-reports a bad one — one bad row must never reject
+// the batch.
 function validateImport(body) {
   const e = [];
   if (!body.account_id) e.push('account_id is required');
   if (body.rows !== undefined && (!Array.isArray(body.rows) || body.rows.length > MAX_IMPORT_ROWS)) e.push(`rows must be an array of at most ${MAX_IMPORT_ROWS}`);
-  if (Array.isArray(body.rows)) {
-    for (let i = 0; i < body.rows.length; i++) {
-      const row = body.rows[i] || {};
-      if (row.amount !== undefined && row.amount !== '' && !isMoney(row.amount)) {
-        e.push(`row ${i + 1}: amount must be a number`);
-        break;
-      }
-    }
-  }
+  if (body.dateFormat !== undefined && !IMPORT_DATE_FORMATS.includes(body.dateFormat)) e.push(`dateFormat must be one of: ${IMPORT_DATE_FORMATS.join(', ')}`);
+  if (body.decimal !== undefined && !IMPORT_DECIMAL_MARKS.includes(body.decimal)) e.push(`decimal must be one of: ${IMPORT_DECIMAL_MARKS.map((m) => `"${m}"`).join(', ')}`);
+  if (body.format !== undefined && !IMPORT_FILE_FORMATS.includes(String(body.format).toLowerCase())) e.push(`format must be one of: ${IMPORT_FILE_FORMATS.join(', ')}`);
+  if (body.mapping !== undefined && body.mapping !== null && (typeof body.mapping !== 'object' || Array.isArray(body.mapping))) e.push('mapping must be an object');
   const text = body.csv ?? body.content;
   if (text !== undefined && (typeof text !== 'string' || text.length > MAX_IMPORT_CHARS)) e.push('file content too large (max 2 MB)');
   return result(e);

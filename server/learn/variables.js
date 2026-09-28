@@ -26,6 +26,7 @@
 
 const calc = require('../money/calc');
 const { computeRunway } = require('../money/runway');
+const { isLiability } = require('../money/account-types');
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -244,7 +245,7 @@ function computeVariables({
     };
   } else {
     const debts = accounts
-      .filter((a) => a.type === 'loan' || a.type === 'credit')
+      .filter((a) => isLiability(a.type))
       .map((a) => ({ name: a.name, balance: Math.round(Math.abs(parseFloat(a.balance) || 0) * 100) / 100, type: a.type }));
     const formatted = debts.length ? debts.map((d) => `${d.name}: ${usd0.format(d.balance)}`).join('; ') : 'No debt on record';
     out.debt_ledger = { value: debts, formatted, grade: 'A', sample: false };
