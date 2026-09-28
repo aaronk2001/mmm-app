@@ -106,16 +106,25 @@ function parsePolymarket(data) {
 
 // Kalshi quotes yes_bid/yes_ask in CENTS (1-99), not the 0-1 decimals NEXUS's
 // comment claimed — its cards therefore rendered a 51c market as 5100%.
-function kalshiProb(v) {
-  const x = Number(v);
-  if (!Number.isFinite(x) || x <= 0) return null;
-  return x > 1 ? x / 100 : x;
+// They are ALWAYS cents: the `x > 1 ? x / 100 : x` guess that replaced it
+// read a 1c quote as 1.00, so the common long-shot shape {bid 0, ask 1}
+// showed as a 100% YES and topped the "most decided" sort. 0 means no bid;
+// 100 means no ask (the YES ask is 100 minus the best NO bid). The newer
+// *_dollars strings ("0.0100"), when present, win over the cent fields.
+function kalshiSide(m, field) {
+  const dollars = m[`${field}_dollars`];
+  if (dollars !== undefined && dollars !== null && dollars !== '') {
+    const x = Number(dollars);
+    return Number.isFinite(x) && x > 0 && x < 1 ? x : null;
+  }
+  const cents = Number(m[field]);
+  return Number.isFinite(cents) && cents > 0 && cents < 100 ? cents / 100 : null;
 }
 
 function parseKalshi(data) {
   return (data?.markets || []).map((m) => {
-    const bid = kalshiProb(m.yes_bid);
-    const ask = kalshiProb(m.yes_ask);
+    const bid = kalshiSide(m, 'yes_bid');
+    const ask = kalshiSide(m, 'yes_ask');
     const mid = bid != null && ask != null ? (bid + ask) / 2 : (bid ?? ask);
     if (mid == null) return null;
     return pmRow({
