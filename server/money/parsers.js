@@ -187,8 +187,8 @@ function amountParts(raw) {
   if (typeof raw === 'number') return Number.isFinite(raw) ? { number: raw } : null;
   if (isBlank(raw)) return null;
   let s = String(raw).trim()
-    .replace(/[−‒–—]/g, '-') // minus sign / dashes
-    .replace(/[    ]/g, ' '); // no-break and thin spaces
+    .replace(/[\u2212\u2012\u2013\u2014]/g, '-') // minus sign / dashes
+    .replace(/[\u00a0\u2007\u202f\u2009]/g, ' '); // no-break and thin spaces
   let neg = false;
 
   let m = s.match(/^\((.*)\)$/);
@@ -211,8 +211,8 @@ function amountParts(raw) {
   if (m) { if (m[2] === '-') neg = true; s = m[1]; }
   s = s.trim();
 
-  if (!/^[\d.,' ’]+$/.test(s) || !/\d/.test(s)) return null;
-  return { neg, core: s.replace(/’/g, "'") };
+  if (!/^[\d.,' \u2019]+$/.test(s) || !/\d/.test(s)) return null;
+  return { neg, core: s.replace(/\u2019/g, "'") };
 }
 
 // What one value says about the file's decimal mark:
