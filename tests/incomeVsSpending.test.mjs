@@ -74,3 +74,21 @@ describe('computeIncomeVsSpending', () => {
     expect(totals.spending).toBe(1200);
   });
 });
+
+describe('computeIncomeVsSpending — transfers', () => {
+  it('leaves money moved between your own accounts out of both columns when categories are given', () => {
+    const today = new Date(2026, 8, 15);
+    const categories = [{ id: 'sav', group: 'transfers' }, { id: 'fod', group: 'expenses' }];
+    const transactions = [
+      { date: '2026-09-05', amount: -2500, category_id: 'sav' },
+      { date: '2026-09-05', amount: 2500, category_id: 'sav' },
+      { date: '2026-09-06', amount: -80, category_id: 'fod' },
+      { date: '2026-09-07', amount: 3000, category_id: 'inc' },
+    ];
+    const rows = (out) => (out.rows || out);
+    const sept = (out) => rows(out).find((r) => r.month === '2026-09');
+    expect(sept(computeIncomeVsSpending({ transactions, today, categories }))).toMatchObject({ income: 3000, spending: 80 });
+    // Without categories (older callers) nothing is filtered.
+    expect(sept(computeIncomeVsSpending({ transactions, today }))).toMatchObject({ income: 5500, spending: 2580 });
+  });
+});

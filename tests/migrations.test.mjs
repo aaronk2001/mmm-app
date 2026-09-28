@@ -20,6 +20,8 @@ function oldSchemaDb() {
       custom TEXT DEFAULT '{}');
     CREATE TABLE recurring (id TEXT PRIMARY KEY, payee TEXT NOT NULL, amount_cents INTEGER NOT NULL,
       cadence TEXT NOT NULL, kind TEXT NOT NULL, next_date TEXT, note TEXT DEFAULT '');
+    CREATE TABLE categories (id TEXT PRIMARY KEY, name TEXT NOT NULL, "group" TEXT, color TEXT, icon TEXT);
+    INSERT INTO categories (id, name, "group") VALUES ('fod', 'Food & Dining', 'expenses');
     INSERT INTO accounts (id, name, type) VALUES ('a1', 'Checking', 'checking');
     INSERT INTO transactions (id, account_id, date, amount_cents) VALUES ('t1', 'a1', '2026-09-01', -500);
   `);
@@ -35,6 +37,13 @@ describe('applyAdditiveMigrations', () => {
     expect(cols(d, 'transactions')).toEqual(expect.arrayContaining(['external_id', 'import_batch_id']));
     expect(cols(d, 'recurring')).toEqual(expect.arrayContaining(['account_id', 'anchor_day']));
     expect(d.prepare('SELECT amount_cents FROM transactions').get().amount_cents).toBe(-500);
+  });
+
+  it('gives an existing ledger the Transfer category, once', () => {
+    const d = oldSchemaDb();
+    applyAdditiveMigrations(d);
+    applyAdditiveMigrations(d);
+    expect(d.prepare("SELECT name, \"group\" AS g FROM categories WHERE id = 'xfr'").all()).toEqual([{ name: 'Transfer', g: 'transfers' }]);
   });
 
   it('is idempotent', () => {

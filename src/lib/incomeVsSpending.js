@@ -24,14 +24,25 @@ function advance(d, cadence) {
   return addMonthsClamped(d, 1); // monthly (default)
 }
 
-export function computeIncomeVsSpending({ transactions = [], recurring = [], today = new Date() }) {
+// Categories in the 'transfers' group (Savings, Transfer) are money moving
+// between the user's own accounts — neither income nor spending. Mirrors
+// server/money/calc.js transferCategoryIds. Pass `categories` to apply it.
+function transferIds(categories) {
+  const ids = new Set(['transfer', 'transfers']);
+  for (const c of categories || []) if (String(c.group || '').toLowerCase() === 'transfers') ids.add(c.id);
+  return ids;
+}
+
+export function computeIncomeVsSpending({ transactions = [], recurring = [], today = new Date(), categories = null }) {
   const byMonth = {};
+  const skip = categories ? transferIds(categories) : null;
   const addTo = (m, field, amt) => {
     if (!byMonth[m]) byMonth[m] = { month: m, income: 0, spending: 0 };
     byMonth[m][field] += amt;
   };
 
   for (const t of transactions) {
+    if (skip && t.category_id && skip.has(t.category_id)) continue;
     const m = String(t.date).slice(0, 7);
     if (t.amount >= 0) addTo(m, 'income', t.amount);
     else addTo(m, 'spending', Math.abs(t.amount));

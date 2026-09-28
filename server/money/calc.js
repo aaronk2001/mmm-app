@@ -157,7 +157,12 @@ function autoCategorize(payee, amount) {
 
   const p = payee.toLowerCase();
 
-  if (/payroll|salary|deposit|transfer in|direct deposit/i.test(p)) return 'inc';
+  // Money between your own accounts first: "Transfer from Checking" isn't
+  // income and "Payment - Thank You" on a card isn't spending.
+  if (/\btransfer\b|credit card payment|card payment|autopay|payment[ -]+thank you|online payment/i.test(p)) {
+    return /savings/i.test(p) ? 'sav' : 'xfr';
+  }
+  if (/payroll|salary|deposit|direct deposit/i.test(p)) return 'inc';
   if (/rent|mortgage|landlord|property/i.test(p)) return 'hou';
   if (/whole foods|grocery|safeway|kroger|trader joe|restaurant|chipotle|pizza|mcdonalds|subway|doordash|ubereats|grubhub|dine/i.test(p)) return 'fod';
   if (/uber|lyft|taxi|gas|shell|chevron|exxon|parking|metro|transit|train|bus|car wash|mechanic|honda|ford|tesla|auto|vehicle/i.test(p)) return 'tra';
