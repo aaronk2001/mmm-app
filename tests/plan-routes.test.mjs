@@ -79,10 +79,10 @@ describe('POST /offer', () => {
   it('returns the three deltas the Plan section shows', async () => {
     const { status, body } = await post('/offer', { new_salary: 85000, gap_weeks: 0 });
     expect(status).toBe(200);
-    expect(body.delta_monthly_take_home).toBe(1131);
+    expect(body.delta_monthly_take_home).toBe(1143); // 5,575 - 4,432 on the 2026 tables (was 1,131 on 2024's)
     expect(typeof body.delta_runway_months).toBe('number');
     expect(typeof body.delta_net_worth_18mo).toBe('number');
-    expect(body.tax_year).toBe(2024);
+    expect(body.tax_year).toBe(2026);
   });
 
   it('400s without a new_salary', async () => {
@@ -148,5 +148,39 @@ describe('POST /what-if', () => {
     const { body } = await post('/what-if', { new_salary: 85000, savings_rate: 0.3 });
     expect(body.timeline).toHaveLength(18);
     expect(Array.isArray(body.milestones)).toBe(true);
+  });
+});
+
+describe('POST /take-home (finding #11)', () => {
+  it('uses the filing status and state it is given', async () => {
+    const { body } = await post('/take-home', { gross_salary: 120000, state: 'TX', filing_status: 'married_joint' });
+    expect(body).toMatchObject({ federal_tax: 10040, state_tax: 0, state_tax_basis: 'no_income_tax', filing_status: 'married_joint', tax_year: 2026 });
+  });
+
+  it("falls back to the saved profile's state — never to a default AZ", async () => {
+    expect((await post('/take-home', { gross_salary: 60000 })).body).toMatchObject({ state: 'AZ', state_tax_basis: 'flat' });
+    expect((await post('/take-home', { gross_salary: 60000, state: '' })).body)
+      .toMatchObject({ state: null, state_tax: 0, state_tax_basis: 'no_state', state_tax_estimated: false });
+  });
+});
+
+describe('GET /snapshot expenses (finding #9)', () => {
+  it('reflects actual spending when no bills are declared', async () => {
+    const d = (n) => { const x = new Date(); x.setDate(x.getDate() - n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    const data = store.readData();
+    data.accounts = [{ id: 'a1', name: 'Checking', type: 'checking', balance: 9000 }];
+    data.transactions = [
+      { id: 't0', account_id: 'a1', date: d(95), amount: 4000, payee: 'Payroll' },
+      { id: 't1', account_id: 'a1', date: d(75), amount: -2100, payee: 'Rent' },
+      { id: 't2', account_id: 'a1', date: d(45), amount: -2100, payee: 'Rent' },
+      { id: 't3', account_id: 'a1', date: d(15), amount: -2100, payee: 'Rent' },
+    ];
+    data.recurring = [];
+    store.writeData(data);
+    const body = await (await fetch(`${base}/snapshot`)).json();
+    // Before: 0 (declared bills only), so the FIRE number and 6-month target were $0.
+    expect(body.expenses).toMatchObject({ total_monthly: 2100, actual_monthly: 2100, declared_monthly: 0, source: 'actual' });
+    const fire = await (await fetch(`${base}/fire`)).json();
+    expect(fire.fire_number).toBe(2100 * 12 * 25);
   });
 });

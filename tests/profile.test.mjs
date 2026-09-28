@@ -54,10 +54,14 @@ describe('profileFromMmm', () => {
     expect(s.income.current_gross).toBeNull();
   });
 
-  it('defaults the state to AZ and never re-types an account', () => {
+  // Deliberate change (finding #11): an unset state used to become 'AZ', so
+  // every user without a profile was taxed as an Arizona resident. It now stays
+  // unset and planning reports "no state tax" with a flag.
+  it('leaves the state unset rather than assuming AZ, and never re-types an account', () => {
     const d = data();
     const s = profileFromMmm(d, {});
-    expect(s.context.state).toBe('AZ');
+    expect(s.context.state).toBeNull();
+    expect(s.context.filing_status).toBe('single');
     expect(d.accounts.map((a) => a.type)).toEqual(
       ['checking', 'savings', 'cash', 'investment', 'credit', 'loan']);
   });
@@ -104,5 +108,77 @@ describe('validateProfile', () => {
     expect(PROFILE_FIELDS[0]).toBe('name');
     expect(PROFILE_FIELDS).toContain('gross_salary');
     expect(PROFILE_FIELDS).toHaveLength(9);
+  });
+});
+
+// Finding #9: the Plan tab took monthly expenses from DECLARED recurring bills
+// only — $0/month (FIRE number $0) for anyone who hadn't typed their bills in.
+describe('profileFromMmm expenses: max(actual burn, declared bills)', () => {
+  const today = new Date(2026, 8, 16);
+  const day = (n) => { const d = new Date(today); d.setDate(d.getDate() - n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const base = () => ({
+    accounts: [{ id: 'chk', name: 'Checking', type: 'checking', balance: 5000 }],
+    transactions: [
+      { account_id: 'chk', date: day(100), amount: 3000, payee: 'Payroll' },
+      { account_id: 'chk', date: day(70), amount: -1800, payee: 'Rent' },
+      { account_id: 'chk', date: day(40), amount: -1800, payee: 'Rent' },
+      { account_id: 'chk', date: day(10), amount: -1800, payee: 'Rent' },
+      { account_id: 'chk', date: day(9), amount: -900, payee: 'To savings', category_id: 'sav' },
+    ],
+    recurring: [],
+    categories: [{ id: 'sav', name: 'Savings', group: 'transfers' }],
+  });
+
+  it('uses the actual burn (runway spend definition) when nothing is declared', () => {
+    const s = profileFromMmm(base(), {}, { today });
+    // 3 x $1,800 over a full 90-day history; the transfer to savings is not spend
+    expect(s.expenses.actual_monthly).toBe(1800);
+    expect(s.expenses.declared_monthly).toBe(0);
+    expect(s.expenses.total_monthly).toBe(1800);
+    expect(s.expenses.source).toBe('actual');
+  });
+
+  it('uses declared bills when they are higher than the recorded spending', () => {
+    const d = base();
+    d.recurring = [{ payee: 'Rent', amount: 2400, cadence: 'monthly', kind: 'bill' }];
+    const s = profileFromMmm(d, {}, { today });
+    expect(s.expenses.total_monthly).toBe(2400);
+    expect(s.expenses.source).toBe('declared');
+  });
+});
+
+// Finding #10: account types from account-types.js, signed liabilities, and
+// foreign-currency balances in the base currency.
+describe('profileFromMmm balances', () => {
+  it('buckets retirement/investment and brokerage/crypto separately', () => {
+    const s = profileFromMmm({ accounts: [
+      { id: 'r', type: 'retirement', balance: 40000 },
+      { id: 'i', type: 'investment', balance: 10000 },
+      { id: 'b', type: 'brokerage', balance: 7000 },
+      { id: 'c', type: 'crypto', balance: 3000 },
+    ] }, {});
+    expect(s.assets.retirement).toBe(50000);
+    expect(s.assets.investments).toBe(10000);
+    expect(s.context.current_net_worth).toBe(60000);
+  });
+
+  it('counts a liability typed as a positive "amount owed" as debt', () => {
+    const s = profileFromMmm({ accounts: [
+      { id: 'c', type: 'checking', balance: 1000 },
+      { id: 'v', type: 'credit', balance: 2000 },
+    ] }, {});
+    expect(s.context.current_net_worth).toBe(-1000); // was +3000
+  });
+
+  it('converts foreign-currency balances and spending to the base currency', () => {
+    const s = profileFromMmm({
+      accounts: [
+        { id: 'usd', type: 'checking', balance: 1000, currency: 'USD' },
+        { id: 'jpy', type: 'savings', balance: 1000000, currency: 'JPY' },
+      ],
+    }, { baseCurrency: 'USD', fxRates: { JPY: 0.0064 } });
+    expect(s.assets.savings).toBe(6400); // not 1,000,000
+    expect(s.context.current_net_worth).toBe(7400);
+    expect(s.currency).toBe('USD');
   });
 });

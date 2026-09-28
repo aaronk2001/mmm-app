@@ -14,31 +14,73 @@ const snap = () => ({
   grade: 'A',
 });
 
+// Deliberate re-pin (finding #11): the model moved from 2024 single-filer
+// brackets, uncapped FICA and flat state rates on gross to the 2026 tables
+// (sources in server/tools/planning.js). Every expected figure below is worked
+// by hand in the comment next to it.
 describe('calcTakeHome', () => {
-  it('applies 2024 federal brackets, state tax and FICA', () => {
+  it('applies 2026 federal brackets, state tax and FICA', () => {
     const t = calcTakeHome(85000, 'AZ');
-    expect(t.federal_tax).toBe(10541);
-    expect(t.state_tax).toBe(2125);
-    expect(t.fica).toBe(6503);
-    expect(t.annual_take_home).toBe(65832);
-    expect(t.monthly_take_home).toBe(5486);
-    expect(t.effective_rate).toBe(22.6);
+    // taxable = 85,000 - 16,100 = 68,900
+    // federal = 10% x 12,400 + 12% x 38,000 + 22% x 18,500 = 1,240 + 4,560 + 4,070
+    expect(t.federal_tax).toBe(9870);
+    expect(t.state_tax).toBe(1723);            // AZ 2.5% x 68,900 (federal std. deduction)
+    expect(t.fica).toBe(6503);                 // 6.2% x 85,000 + 1.45% x 85,000
+    expect(t.annual_take_home).toBe(66905);
+    expect(t.monthly_take_home).toBe(5575);
+    expect(t.effective_rate).toBe(21.3);
+    expect(t).toMatchObject({ state: 'AZ', state_tax_estimated: true, state_tax_basis: 'flat', filing_status: 'single' });
   });
 
   it('carries its tax year and a B grade so stale brackets are visible', () => {
     const t = calcTakeHome(85000, 'AZ');
     expect(t.tax_year).toBe(TAX_YEAR);
-    expect(TAX_YEAR).toBe(2024);
+    expect(TAX_YEAR).toBe(2026);
     expect(t.grade).toBe('B');
   });
 
-  it('zeroes state tax in a no-income-tax state', () => {
-    expect(calcTakeHome(85000, 'TX').state_tax).toBe(0);
+  it('uses the filing status it is given', () => {
+    // $120k: single taxable 103,900 -> 1,240 + 4,560 + 22% x 53,500 = 17,570
+    expect(calcTakeHome(120000, 'TX').federal_tax).toBe(17570);
+    // married jointly: taxable 87,800 -> 10% x 24,800 + 12% x 63,000 = 10,040
+    expect(calcTakeHome(120000, 'TX', 'married_joint').federal_tax).toBe(10040);
+    // head of household $80k: taxable 55,850 -> 10% x 17,700 + 12% x 38,150 = 6,348
+    expect(calcTakeHome(80000, 'TX', 'head_of_household').federal_tax).toBe(6348);
+    // married separately hits 37% above $384,350 (single: $640,600)
+    expect(calcTakeHome(450000, 'TX', 'married_separate').federal_tax).toBe(121625);
+    expect(calcTakeHome(450000, 'TX').federal_tax).toBe(120634);
+    expect(calcTakeHome(60000, 'TX', 'nonsense').filing_status).toBe('single');
+  });
+
+  it('caps Social Security at the 2026 wage base and adds the 0.9% Additional Medicare Tax', () => {
+    // 6.2% x 184,500 = 11,439; 1.45% x 300,000 = 4,350; 0.9% x (300,000 - 200,000) = 900
+    expect(calcTakeHome(300000, 'TX').fica).toBe(16689); // was 22,950 (7.65% of everything)
+    expect(calcTakeHome(300000, 'TX', 'married_joint').fica).toBe(16239); // threshold $250k
+    expect(calcTakeHome(300000, 'TX', 'married_separate').fica).toBe(17364); // threshold $125k
+  });
+
+  it('zeroes state tax in every no-income-tax state', () => {
+    for (const st of ['AK', 'FL', 'NV', 'NH', 'SD', 'TN', 'TX', 'WA', 'WY']) {
+      expect(calcTakeHome(60000, st)).toMatchObject({ state_tax: 0, state_tax_basis: 'no_income_tax' });
+    }
     expect(calcTakeHome(85000, 'tx').state_tax).toBe(0); // case-insensitive
   });
 
-  it('falls back to a 5% blended rate for an unlisted state', () => {
-    expect(calcTakeHome(100000, 'ME').state_tax).toBe(5000);
+  it('estimates California from its brackets, not 9.3% of gross', () => {
+    // CA taxable 50,000 - 5,706 = 44,294 -> 110.79 + 303.70 + 607.52 + 170.52 = 1,192.53, less the $153 credit
+    expect(calcTakeHome(50000, 'CA')).toMatchObject({ state_tax: 1040, state_tax_basis: 'brackets', state_tax_estimated: true, state_tax_year: 2025 });
+    expect(calcTakeHome(80000, 'CA', 'head_of_household').state_tax_note).toMatch(/single-filer schedule/);
+  });
+
+  it('applies the flat-rate states to their own base', () => {
+    expect(calcTakeHome(100000, 'IL', 'married_joint').state_tax).toBe(4660); // 4.95% x (100,000 - 2 x 2,925)
+    expect(calcTakeHome(100000, 'CO').state_tax).toBe(3692);                  // 4.4% x 83,900 federal taxable
+  });
+
+  it('flags an unset or unmodelled state instead of guessing', () => {
+    expect(calcTakeHome(60000)).toMatchObject({ state: null, state_tax: 0, state_tax_basis: 'no_state', state_tax_estimated: false });
+    // Deliberate change: an unlisted state used to be charged a 5% "blended" rate.
+    expect(calcTakeHome(100000, 'ME')).toMatchObject({ state: 'ME', state_tax: 0, state_tax_basis: 'not_modeled', state_tax_estimated: false });
   });
 
   it('never taxes below the standard deduction', () => {
@@ -58,11 +100,11 @@ describe('modelRaise', () => {
   it('computes the monthly and annual delta between two salaries', () => {
     const r = modelRaise(snap(), 85000, 0);
     expect(r.needs_profile).toBe(false);
-    expect(r.current_monthly_takehome).toBe(4355);
-    expect(r.new_monthly_takehome).toBe(5486);
-    expect(r.monthly_delta).toBe(1131);
-    expect(r.annual_delta).toBe(13572);
-    expect(r.net_12mo_gain).toBe(13572);
+    expect(r.current_monthly_takehome).toBe(4432); // 2026 tables (was 4,355 on 2024's)
+    expect(r.new_monthly_takehome).toBe(5575);
+    expect(r.monthly_delta).toBe(1143);
+    expect(r.annual_delta).toBe(13716);
+    expect(r.net_12mo_gain).toBe(13716);
   });
 
   it('charges an unemployment gap against the first-year gain', () => {
@@ -106,7 +148,7 @@ describe('modelEmergencyFund', () => {
   it('derives the monthly surplus from real take-home math', () => {
     const e = modelEmergencyFund(snap());
     expect(e.estimated_monthly_surplus).toBe(calcTakeHome(65000, 'AZ').monthly_take_home - 3200);
-    expect(e.estimated_monthly_surplus).toBe(1155);
+    expect(e.estimated_monthly_surplus).toBe(1232); // 4,432 - 3,200 on the 2026 tables
     expect(e.months_to_6mo_goal).toBe(8);
   });
 
@@ -147,9 +189,15 @@ describe('modelRothIra', () => {
 
   it('caps the contribution at the IRS limit and says which year', () => {
     const r = modelRothIra(20000, 30, 65);
-    expect(r.annual_contribution).toBe(7000);
-    expect(r.irs_limit).toBe(7000);
+    expect(r.annual_contribution).toBe(7500); // 2026 limit (IRS Notice 2025-67)
+    expect(r.irs_limit).toBe(7500);
     expect(r.tax_year).toBe(TAX_YEAR);
+  });
+
+  it('adds the $1,100 catch-up from age 50', () => {
+    const r = modelRothIra(20000, 48, 52, 0);
+    expect(r.catch_up_limit).toBe(1100);
+    expect(r.total_contributions).toBe(7500 * 2 + 8600 * 2); // ages 48, 49 then 50, 51
   });
 
   // Ruling R8.
@@ -166,9 +214,9 @@ describe('modelNetWorth18mo', () => {
   it('projects 18 rows of net worth from the savings rate', () => {
     const n = modelNetWorth18mo(snap(), 85000, 0.30);
     expect(n.timeline).toHaveLength(18);
-    expect(n.monthly_save).toBe(686);
-    expect(n.timeline[0]).toEqual({ month: 1, net_worth: 12686, monthly_save: 686 });
-    expect(n.final_net_worth).toBe(24344);
+    expect(n.monthly_save).toBe(713); // (5,575 - 3,200) x 0.30 = 712.5
+    expect(n.timeline[0]).toEqual({ month: 1, net_worth: 12713, monthly_save: 713 });
+    expect(n.final_net_worth).toBe(24825); // 12,000 + 18 x 712.5
   });
 
   it('subtracts the gap cost before the first month', () => {
@@ -176,7 +224,7 @@ describe('modelNetWorth18mo', () => {
     s.context.gap_period_weeks = 4;
     const n = modelNetWorth18mo(s, 85000, 0.30);
     expect(n.gap_cost).toBe(Math.round((3200 / 4.33) * 4));
-    expect(n.timeline[0].net_worth).toBeLessThan(12686);
+    expect(n.timeline[0].net_worth).toBeLessThan(12713);
   });
 
   it('reports the month the target is reached, or null', () => {

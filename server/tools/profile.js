@@ -1,8 +1,16 @@
 // Fuses real MMM data with the user's declared profile into the one snapshot
 // every planning model consumes. Pure: it opens nothing and mutates nothing.
-const LIQUID_CHECKING = new Set(['checking']);
-const LIQUID_SAVINGS  = new Set(['savings', 'cash']);
-const RETIREMENT      = new Set(['investment']);
+const calc = require('../money/calc');
+const { computeRunway } = require('../money/runway');
+const { signedBalance } = require('../money/account-types');
+
+// Buckets over server/money/account-types.js's list. 'investment' stays under
+// retirement for backwards compatibility (it was the only investing type before
+// that list existed); brokerage and crypto are taxable investments.
+const CHECKING    = new Set(['checking']);
+const SAVINGS     = new Set(['savings', 'cash']);
+const RETIREMENT  = new Set(['retirement', 'investment']);
+const INVESTMENTS = new Set(['brokerage', 'crypto']);
 
 const PROFILE_FIELDS = [
   'name', 'age', 'state', 'filing_status', 'gross_salary',
@@ -23,53 +31,111 @@ function perMonth(amount, cadence) {
   return a;
 }
 
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// Base currency + FX rates, the same way store.getCurrencyConfig resolves them.
+function currencyConfig(settings) {
+  return {
+    baseCurrency: settings?.baseCurrency || 'USD',
+    fxRates: { ...calc.DEFAULT_FX_RATES, ...(settings?.fxRates || {}) },
+  };
+}
+
+// Accounts, transactions and recurring amounts restated in the base currency.
+// A transaction or linked recurring item takes its account's currency; an
+// unlinked recurring item is taken to be in the base currency already.
+function inBaseCurrency(data, settings) {
+  const { baseCurrency, fxRates } = currencyConfig(settings);
+  const accounts = data?.accounts || [];
+  const currencyOf = new Map(accounts.map((a) => [a.id, a.currency || 'USD']));
+  const conv = (amount, currency) =>
+    calc.convertAmount(Number(amount) || 0, currency || baseCurrency, baseCurrency, fxRates);
+  return {
+    baseCurrency,
+    accounts: accounts.map((a) => ({ ...a, balance: conv(a.balance, a.currency || 'USD'), currency: baseCurrency })),
+    transactions: (data?.transactions || []).map((t) => ({ ...t, amount: conv(t.amount, currencyOf.get(t.account_id)) })),
+    recurring: (data?.recurring || []).map((r) => ({ ...r, amount: conv(r.amount, currencyOf.get(r.account_id)) })),
+  };
+}
+
 /**
  * @param {object} data  the shape returned by server/money/store.js readData()
  *   (`repo.readAll()`): `{ accounts, transactions, recurring, categories, goals }`.
- *   Account balances are dollars; liabilities (credit, loan) already carry a
- *   negative balance. `recurring[].amount` is dollars (repo.readAll converts
- *   amount_cents on the way out — see server/money/runway.js).
- * @param {{ profile?: object }} settings  settings.profile holds the user's
- *   declared facts (name, age, state, gross_salary, ...).
+ *   Balances and amounts are dollars in each account's currency; they are
+ *   converted to the base currency (settings.baseCurrency / fxRates) here.
+ *   `recurring` is the DECLARED list.
+ * @param {{ profile?: object, baseCurrency?: string, fxRates?: object }} settings
+ *   settings.profile holds the user's declared facts (name, age, state, gross_salary, ...).
+ * @param {{ today?: Date }} [opts]
  * @returns {object} snapshot — the shape server/tools/planning.js consumes.
  */
-function profileFromMmm(data, settings) {
+function profileFromMmm(data, settings, { today = new Date() } = {}) {
   const p = settings?.profile || {};
-  const accounts = data?.accounts || [];
-  const recurring = data?.recurring || [];
+  const base = inBaseCurrency(data, settings);
 
   let checking = 0;
   let savings = 0;
   let retirement = 0;
+  let investments = 0;
   let currentNetWorth = 0;
-  for (const a of accounts) {
-    const balance = Number(a.balance) || 0;
+  for (const a of base.accounts) {
+    // Liabilities count as -|balance| whatever sign they were entered with.
+    const balance = signedBalance(a);
     currentNetWorth += balance;
-    if (LIQUID_CHECKING.has(a.type)) checking += balance;
-    else if (LIQUID_SAVINGS.has(a.type)) savings += balance;
+    if (CHECKING.has(a.type)) checking += balance;
+    else if (SAVINGS.has(a.type)) savings += balance;
     else if (RETIREMENT.has(a.type)) retirement += balance;
+    else if (INVESTMENTS.has(a.type)) investments += balance;
   }
 
-  const totalMonthly = recurring
+  // Monthly expenses = max(actual burn, declared bills), the same rule as the
+  // Goals tab. Actual burn uses runway's spend definition (liquid-account
+  // outflows over the trailing 90 days, transfers excluded, a card purchase
+  // counted once via its payment). Declared bills alone left the Plan tab at
+  // $0/month — FIRE number $0 — for anyone who hadn't typed their bills in.
+  const declaredMonthly = base.recurring
     .filter((r) => r.kind === 'bill')
     .reduce((sum, r) => sum + perMonth(r.amount, r.cadence), 0);
+  const runway = computeRunway({
+    accounts: base.accounts,
+    transactions: base.transactions,
+    recurring: base.recurring,
+    categories: data?.categories || [],
+    today,
+  });
+  const actualMonthly = runway.actualMonthly || 0;
+  const totalMonthly = Math.max(actualMonthly, declaredMonthly);
+  const expensesSource = totalMonthly === 0 ? 'none'
+    : actualMonthly >= declaredMonthly ? 'actual' : 'declared';
 
   const grossSalary = Number(p.gross_salary) > 0 ? Number(p.gross_salary) : null;
 
   // Grade reflects how much of the snapshot is real vs. defaulted: A needs
   // both a real account and a declared salary, B needs one, C has neither.
-  const hasAccount = accounts.length > 0;
+  const hasAccount = base.accounts.length > 0;
   const hasSalary = grossSalary !== null;
   const grade = hasAccount && hasSalary ? 'A' : hasAccount || hasSalary ? 'B' : 'C';
 
+  const state = typeof p.state === 'string' && /^[A-Za-z]{2}$/.test(p.state) ? p.state.toUpperCase() : null;
+
   return {
-    assets: { checking, savings, retirement },
-    expenses: { total_monthly: totalMonthly },
+    currency: base.baseCurrency,
+    assets: { checking: round2(checking), savings: round2(savings), retirement: round2(retirement), investments: round2(investments) },
+    expenses: {
+      total_monthly: round2(totalMonthly),
+      actual_monthly: round2(actualMonthly),
+      declared_monthly: round2(declaredMonthly),
+      source: expensesSource,
+      history_days: runway.historyDays,
+    },
     income: { current_gross: grossSalary },
     context: {
-      state: p.state || 'AZ',
+      // No default state: planning reports "no state tax" for an unset state
+      // (flagged) instead of silently taxing everyone as an Arizona resident.
+      state,
+      filing_status: FILING_STATUSES.includes(p.filing_status) ? p.filing_status : 'single',
       gap_period_weeks: 0,
-      current_net_worth: currentNetWorth,
+      current_net_worth: round2(currentNetWorth),
     },
     goals: {
       emergency_fund_target: p.emergency_fund_target,
@@ -146,4 +212,4 @@ function validateProfile(partial) {
   return { ok: errors.length === 0, errors, value };
 }
 
-module.exports = { profileFromMmm, validateProfile, PROFILE_FIELDS, FILING_STATUSES, EMPLOYMENT, RISK };
+module.exports = { profileFromMmm, inBaseCurrency, currencyConfig, validateProfile, PROFILE_FIELDS, FILING_STATUSES, EMPLOYMENT, RISK };
