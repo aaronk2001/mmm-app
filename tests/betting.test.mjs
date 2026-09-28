@@ -119,6 +119,45 @@ describe('providers — feature on, no key stored', () => {
   });
 });
 
+// Kalshi's yes_bid/yes_ask are always integer cents. The old heuristic
+// (`x > 1 ? x / 100 : x`) read a 1c quote as 1.00, so a long shot with no
+// bid and a 1c ask rendered as a 100% YES.
+describe('Kalshi prices are cents, including 1c', () => {
+  async function kalshiRows(markets) {
+    setFeatures({ predictionMarkets: true });
+    // Earlier cases cached the Kalshi board (2-minute TTL); make this one fetch.
+    db().prepare("DELETE FROM http_cache WHERE cache_key LIKE 'kalshi:%'").run();
+    vi.spyOn(global, 'fetch').mockImplementation((url) => Promise.resolve(
+      String(url).includes('api.elections.kalshi.com') ? okResponse({ markets }) : okResponse([]),
+    ));
+    const out = await providers.predictionMarkets({ source: 'kalshi', limit: 50 });
+    return Object.fromEntries(out.markets.map((m) => [m.id, m.probability.yes]));
+  }
+
+  it('reads 0/1c and 1/2c long shots as ~1%, not 100% / 51%', async () => {
+    const yes = await kalshiRows([
+      { ticker: 'LONG-A', title: 'Will X happen?', yes_bid: 0, yes_ask: 1, volume_24h: 5000 },
+      { ticker: 'LONG-B', title: 'Will Y happen?', yes_bid: 1, yes_ask: 2, volume_24h: 900 },
+      { ticker: 'NEAR-SURE', title: 'Will Z happen?', yes_bid: 99, yes_ask: 100, volume_24h: 10 },
+    ]);
+    expect(yes['LONG-A']).toBeCloseTo(0.01, 10);
+    expect(yes['LONG-B']).toBeCloseTo(0.015, 10);
+    expect(yes['NEAR-SURE']).toBeCloseTo(0.99, 10); // 100 = no ask; the bid alone prices it
+  });
+
+  it('drops a market with neither a bid (0) nor an ask (100)', async () => {
+    const yes = await kalshiRows([{ ticker: 'EMPTY', title: 'Nobody here?', yes_bid: 0, yes_ask: 100, volume_24h: 1 }]);
+    expect(yes).toEqual({});
+  });
+
+  it('prefers the *_dollars fields when the API sends them', async () => {
+    const yes = await kalshiRows([
+      { ticker: 'DOLLARS', title: 'Priced in dollars?', yes_bid: 5, yes_ask: 7, yes_bid_dollars: '0.0510', yes_ask_dollars: '0.0530', volume_24h: 50 },
+    ]);
+    expect(yes.DOLLARS).toBeCloseTo(0.052, 10);
+  });
+});
+
 describe('providers — feature on, key stored: the key must not leak', () => {
   beforeEach(() => {
     setFeatures({ sportsOdds: true, predictionMarkets: true });
