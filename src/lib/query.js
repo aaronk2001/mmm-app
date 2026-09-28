@@ -10,7 +10,10 @@ export async function api(path, opts = {}) {
   // Default the JSON Content-Type whenever a string body is sent — Express's
   // json middleware only parses when it's set, so without this a POST/PUT body
   // is silently dropped and validators 400. Callers can't forget it now.
-  const options = { ...opts };
+  // X-MMM-Client marks the request as coming from this app: the server refuses
+  // writes without it, which a cross-site form or beacon can't forge (see
+  // server/request-guard.js).
+  const options = { ...opts, headers: { 'X-MMM-Client': '1', ...opts.headers } };
   if (typeof options.body === 'string') {
     options.headers = { 'Content-Type': 'application/json', ...options.headers };
   }
