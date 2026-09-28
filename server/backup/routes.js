@@ -1,13 +1,13 @@
 'use strict';
 
 const express = require('express');
-const { runBackup, listBackups, restoreBackup, BACKUP_DIR } = require('./scheduler');
+const { runBackup, listBackups, restoreBackup, listSnapshots, restoreSnapshot, BACKUP_DIR } = require('./scheduler');
 
 const router = express.Router();
 
 router.get('/', (req, res) => {
   try {
-    res.json({ backups: listBackups(), dir: BACKUP_DIR });
+    res.json({ backups: listBackups(), snapshots: listSnapshots(), dir: BACKUP_DIR });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -24,7 +24,9 @@ router.post('/run', async (req, res) => {
 
 router.post('/restore', (req, res) => {
   try {
-    res.json(restoreBackup(req.body?.date));
+    // { date } restores a daily backup; { snapshot } a pre-change safety copy.
+    const body = req.body || {};
+    res.json(body.snapshot ? restoreSnapshot(body.snapshot) : restoreBackup(body.date));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
