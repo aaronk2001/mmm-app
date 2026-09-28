@@ -44,3 +44,25 @@ describe('import row validation', () => {
     expect(v.validateImport({ account_id: 'a', rows: [{ date: '2026-07-01', amount: -5 }] }).valid).toBe(true);
   });
 });
+
+describe('validateSettings', () => {
+  const opts = { currencies: ['USD', 'EUR', 'JPY'] };
+  it('accepts the shapes the app writes', () => {
+    for (const body of [
+      { appearance: { theme: 'dark' } }, { baseCurrency: 'EUR' }, { fxRates: { EUR: 1.08, JPY: 0.0064 } },
+      { customFields: [{ id: 'f1', entity: 'transaction', name: 'Trip', type: 'select', options: ['a'] }] },
+      { coach: { lastDigestWeek: '2026-W39' } }, { dashboards: {} }, { insightsSeeded: true }, { somethingNew: 1 },
+    ]) {
+      expect(v.validateSettings(body, opts).valid).toBe(true);
+    }
+  });
+
+  it('refuses shapes that broke other routes', () => {
+    for (const body of [
+      { customFields: 5 }, { customFields: [1] }, { fxRates: { EUR: 'x' } }, { fxRates: { EUR: -1 } },
+      { fxRates: [] }, { baseCurrency: 'XYZ' }, { appearance: 'dark' }, { insightsSeeded: 'yes' }, [], null,
+    ]) {
+      expect(v.validateSettings(body, opts).valid).toBe(false);
+    }
+  });
+});
