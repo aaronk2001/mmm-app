@@ -31,6 +31,9 @@ function defaultCategories() {
     { id: 'ent', name: 'Entertainment', group: 'expenses', color: '#06b6d4', icon: 'film' },
     { id: 'hea', name: 'Health', group: 'expenses', color: '#06b6d4', icon: 'heart' },
     { id: 'sav', name: 'Savings', group: 'transfers', color: '#14b8a6', icon: 'piggy-bank' },
+    // Moving money between your own accounts, including paying a card from
+    // checking: neither income nor spending (see calc.transferCategoryIds).
+    { id: 'xfr', name: 'Transfer', group: 'transfers', color: '#64748b', icon: 'repeat' },
     { id: 'sub', name: 'Subscriptions', group: 'expenses', color: '#a78bfa', icon: 'layers' },
     { id: 'oth', name: 'Other', group: 'expenses', color: '#6b7280', icon: 'circle' },
   ];

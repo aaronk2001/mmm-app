@@ -195,6 +195,16 @@ describe('detectRecurring', () => {
   });
 });
 
+describe('autoCategorize — transfers', () => {
+  it('files moves between your own accounts and card payments as transfers, not income or spending', () => {
+    expect(store.autoCategorize('Transfer from Checking', 2500)).toBe('xfr');
+    expect(store.autoCategorize('Payment - Thank You', 1000)).toBe('xfr');
+    expect(store.autoCategorize('CHASE CREDIT CARD PAYMENT', -1000)).toBe('xfr');
+    expect(store.autoCategorize('Transfer to Savings', -500)).toBe('sav');
+    expect(store.autoCategorize('Payroll ACME', 3000)).toBe('inc');
+  });
+});
+
 describe('detectRecurring — schedules and staleness', () => {
   it('clamps month math instead of skipping a month (Jan 31 -> Feb 28, not Mar 3)', () => {
     const txns = [

@@ -168,6 +168,10 @@ function applyAdditiveMigrations(d) {
   d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_external ON transactions(account_id, external_id) WHERE external_id IS NOT NULL');
   // /payees groups by payee+category over every transaction.
   d.exec('CREATE INDEX IF NOT EXISTS idx_txn_payee ON transactions(payee, category_id)');
+  // Existing ledgers get the Transfer category that new ones start with, so a
+  // card payment or a move to savings has somewhere to go that isn't spending.
+  d.prepare(`INSERT OR IGNORE INTO categories (id, name, "group", color, icon)
+    VALUES ('xfr', 'Transfer', 'transfers', '#64748b', 'repeat')`).run();
 }
 
 // First run only: import the legacy data.json (and back it up), else seed empty.
