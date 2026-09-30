@@ -46,7 +46,7 @@ describe('profile round-trip', () => {
   it('persists a valid profile and reports complete', async () => {
     const put = await fetch(`${base}/profile`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Aaron', state: 'AZ', gross_salary: 65000, age: 24 }),
+      body: JSON.stringify({ name: 'Alex', state: 'AZ', gross_salary: 65000, age: 24 }),
     });
     expect(put.status).toBe(200);
     const res = await fetch(`${base}/profile`);

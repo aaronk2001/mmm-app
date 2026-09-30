@@ -233,8 +233,8 @@ CREATE TABLE IF NOT EXISTS watchlist (
   added_at  TEXT
 );
 
--- Idempotency ledger for scripts/import-nexus.mjs — re-running the import
--- must be a no-op keyed on (source, source_id).
+-- Idempotency ledger for one-time data imports — re-running an import must be
+-- a no-op keyed on (source, source_id). Retained for existing databases.
 CREATE TABLE IF NOT EXISTS import_log (
   source      TEXT NOT NULL,
   source_id   TEXT NOT NULL,

@@ -1,7 +1,7 @@
 'use strict';
 
-// Backtest engine. Clean-room from docs/superpowers/plans/2026-09-18-sprintB-backtester.md
-// §Track 1 — see docs/references.md for provenance. Pure; no I/O, no
+// Backtest engine. Clean-room implementation of docs/design/quant.md
+// — see docs/references.md for provenance. Pure; no I/O, no
 // Math.random, no wall-clock reads: same config in, same result out.
 //
 // Money is integer cents throughout. Bars arrive as dollar floats (the

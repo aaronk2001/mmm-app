@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Monitor, Sun, Moon, Check, ShieldCheck, RotateCcw, Database, Download, Upload, Globe, History, MonitorSmartphone, Import } from 'lucide-react';
+import { Monitor, Sun, Moon, Check, ShieldCheck, RotateCcw, Database, Download, Upload, Globe, History, MonitorSmartphone } from 'lucide-react';
 import {
   applyTheme, applyDensity, applyAccent, getTheme, getDensity, getAccent,
 } from '../../../lib/theme';
@@ -293,30 +293,6 @@ export default function Settings() {
     }
   }
 
-  const [nexusBusy, setNexusBusy] = useState(false);
-  const [nexusMsg, setNexusMsg] = useState(null);
-
-  async function importNexus() {
-    setNexusBusy(true);
-    try {
-      const out = await api('trading/import-nexus', { method: 'POST', body: JSON.stringify({}) });
-      if (out.sourceMissing) { setNexusMsg({ ok: false, text: out.message }); toast.error('NEXUS store not found.'); return; }
-      const c = out.counts;
-      const imported = c.paper_trades.imported + c.watchlist.imported + c.decisions.imported + c.closes.imported + c.profile.imported;
-      setNexusMsg({
-        ok: true,
-        text: imported > 0
-          ? `Imported ${c.paper_trades.imported} trade(s), ${c.watchlist.imported} watchlist symbol(s), ${c.decisions.imported} decision(s), ${c.closes.imported} close(s)${c.profile.imported ? ', and your profile' : ''}.`
-          : 'Nothing new to import — already up to date.',
-      });
-      toast.success('NEXUS import complete.');
-      queryClient.invalidateQueries();
-    } catch (e) {
-      setNexusMsg({ ok: false, text: `Import failed: ${e.message}` });
-      toast.error(`NEXUS import failed: ${e.message}`);
-    } finally { setNexusBusy(false); }
-  }
-
   async function onImportFile(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -528,23 +504,6 @@ export default function Settings() {
             {backupMsg && (
               <div style={{ fontSize: 12, marginTop: 10, color: backupMsg.ok ? 'var(--m-green)' : 'var(--m-red)' }}>
                 {backupMsg.text}
-              </div>
-            )}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 0 4px', borderTop: '1px solid var(--m-border)', marginTop: 8 }}>
-          <Import size={20} style={{ color: 'var(--m-muted)', flexShrink: 0, marginTop: 1 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, color: 'var(--m-ink-2)', lineHeight: 1.55, marginBottom: 12 }}>
-              Pull paper trades, watchlist symbols, and reflection notes over from NEXUS. Safe to run more than
-              once — already-imported records are skipped.
-            </div>
-            <button className="m-btn m-btn-secondary m-btn-sm" onClick={importNexus} disabled={nexusBusy}>
-              <Import size={14} style={{ marginRight: 6 }} /> {nexusBusy ? 'Importing…' : 'Import NEXUS data'}
-            </button>
-            {nexusMsg && (
-              <div style={{ fontSize: 12, marginTop: 10, color: nexusMsg.ok ? 'var(--m-green)' : 'var(--m-red)' }}>
-                {nexusMsg.text}
               </div>
             )}
           </div>

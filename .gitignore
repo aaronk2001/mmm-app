@@ -30,3 +30,7 @@ mmm.db.pre-restore-*
 # belongs in git.
 secrets.dev.json
 keys.enc
+
+# Local agent/tooling state
+.superpowers/
+.claude/

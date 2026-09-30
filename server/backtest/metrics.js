@@ -5,9 +5,7 @@
 // ARE the feature: a wrong Sharpe ratio produces a wrong conclusion about
 // the user's own money and nothing downstream will contradict it.
 //
-// INPUT CONTRACT (per docs/superpowers/plans/2026-09-18-sprintB-backtester.md
-// Track 2, agreed before Track 1 landed — adapt here + note in the report if
-// Track 1's real engine.js output differs):
+// INPUT CONTRACT (see docs/design/quant.md):
 //   metrics(equityCurve, trades, benchmark, splitDate)
 //     equityCurve: [{ date: 'YYYY-MM-DD', equity_cents: number }], sorted
 //       ascending by date, equity_cents is total marked equity (cash +

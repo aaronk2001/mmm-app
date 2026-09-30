@@ -77,7 +77,7 @@ describe('profileFromMmm', () => {
 describe('validateProfile', () => {
   it('accepts a full valid profile', () => {
     const r = validateProfile({
-      name: 'Aaron', age: 24, state: 'AZ', filing_status: 'single', gross_salary: 65000,
+      name: 'Alex', age: 24, state: 'AZ', filing_status: 'single', gross_salary: 65000,
       employment_status: 'employed', income_end_date: null, retirement_age: 65, risk_tolerance: 'moderate',
     });
     expect(r.ok).toBe(true);
@@ -95,7 +95,7 @@ describe('validateProfile', () => {
   });
 
   it('drops unknown keys instead of persisting them', () => {
-    const r = validateProfile({ name: 'Aaron', ssn: '000-00-0000' });
+    const r = validateProfile({ name: 'Alex', ssn: '000-00-0000' });
     expect(r.value.ssn).toBeUndefined();
     expect(Object.keys(r.value)).toEqual(['name']);
   });

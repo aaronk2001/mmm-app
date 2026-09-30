@@ -3,7 +3,7 @@
 // server/db/connection.js used to fall back to the in-repo dev database
 // (server/store/money/mmm.db) whenever MMM_DATA_DIR wasn't set. Any ad-hoc
 // `node -e` or stray script that required the store hit this silently — it
-// wiped the real dev DB once (see scripts/restore-dev-db.sh) and has been
+// wiped the real dev DB once and has been
 // carried as known debt through five sprints. This test proves the fallback
 // is gone: requiring connection.js with neither MMM_DATA_DIR nor the new
 // explicit MMM_ALLOW_DEV_DB opt-in set must fail loudly, and must not touch

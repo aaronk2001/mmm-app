@@ -8,8 +8,7 @@
 // arithmetic that must reconcile to the cent is done in integer cents.
 //
 // Deliberate deviations from the NEXUS source this was ported from
-// (server/routes/paper_trading.js) — see track-3-report.md for the full
-// writeup:
+// (server/routes/paper_trading.js):
 //   1. pnl on close is now computed as proceeds_cents - cost_cents (both
 //      sides rebuilt from stored integer cents), instead of NEXUS's
 //      `(fillPrice - entry) * shares - 1`, which only ever subtracted ONE of

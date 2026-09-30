@@ -1,7 +1,7 @@
-# References — Sprint B, Track 1 (backtest engine core)
+# Provenance — backtest engine core
 
-Clean-room implementation from `docs/superpowers/plans/2026-09-18-sprintB-backtester.md` §Track 1.
-**`AI-Trader` was never opened, read, or referenced.** No code from it exists anywhere in this diff.
+The backtester (`server/backtest/`) is a clean-room implementation written from an internal spec.
+**`AI-Trader` was never opened, read, or referenced.** No code from it exists in this repository.
 
 ## What was actually used
 

@@ -75,7 +75,7 @@ if (!fs.existsSync(path.join(APP, 'content', 'learn', 'sources.yaml'))) {
 // Never ship a database, legacy blob, or backups inside the app folder — user
 // data lives in %APPDATA%\mmm and a fresh install must start empty. Match
 // mmm.db* by prefix: dev-DB copies like mmm.db.pre-restore-* and
-// mmm.db.corrupted-backup-* (scripts/restore-dev-db.sh) are real user data too.
+// mmm.db.corrupted-backup-* are real user data too.
 const STORE = path.join(APP, 'server', 'store', 'money');
 for (const name of fs.readdirSync(STORE)) {
   if (name.startsWith('mmm.db') || ['data.json', 'data.json.migrated.bak', 'backups'].includes(name)) {

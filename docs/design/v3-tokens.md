@@ -1,9 +1,8 @@
 # MMM v3 identity — tokens (Phase D)
 
 **Direction:** "Precision instrument". Dark by default, light available. Teal/mint accent kept.
-**Approved:** Sep 17 2026 by Aaron, in writing, from the identity canvas (three directions on
-one board; chosen mix = Variant A's density and cool surfaces + Variant B's type, 12px card
-radius kept, hero numbers raised to 44px). Canvas: https://claude.ai/code/artifact/c205f462-d1d9-44bc-af7d-c9cf267b741a
+**Approved:** Sep 17 2026, from an identity canvas of three directions (chosen mix = Variant A's
+density and cool surfaces + Variant B's type, 12px card radius kept, hero numbers raised to 44px).
 
 This phase encodes **tokens only** (`src/styles/theme.css`). Every legacy `--m-*` name in
 `money-theme.css` is preserved and still bridges to these tokens, so the palette propagates

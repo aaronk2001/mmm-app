@@ -9,7 +9,6 @@ const repo = require('../db/repo');
 const { db } = require('../db/connection');
 const paperStore = require('./paper-store');
 const { gateDecision } = require('./strategy-gate');
-const { runNexusImport } = require('./import-nexus');
 
 const router = express.Router();
 
@@ -49,7 +48,7 @@ router.get('/summary', (req, res) => {
 
 // ────────────────────────────────────────────────────────────────────────────
 // Gate check — dry-run the strategy gate without opening anything. Lets the
-// UI show violations/sizing before Aaron commits to a paper BUY.
+// UI show violations/sizing before the user commits to a paper BUY.
 // ────────────────────────────────────────────────────────────────────────────
 
 router.post('/gate-check', (req, res) => {
@@ -85,7 +84,7 @@ router.post('/open', (req, res) => {
 // for a close on an already-closed position to surface as 409 Conflict (the
 // position existed but its state no longer allows this action), so this
 // route maps the store's 404 to a 409 here rather than passing it through
-// verbatim. See track-3-report.md for the full writeup.
+// verbatim.
 router.post('/close/:id', (req, res) => {
   try {
     const exitPrice = num(req.body.exitPrice);
@@ -124,17 +123,6 @@ router.post('/journal', (req, res) => {
       tag: req.body.tag || null,
     });
     res.json(entry);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ────────────────────────────────────────────────────────────────────────────
-// NEXUS import — one-time-per-record pull from nexus-app's flat-file store.
-// Idempotent (import_log keyed on source+source_id); safe to click again.
-// ────────────────────────────────────────────────────────────────────────────
-
-router.post('/import-nexus', (req, res) => {
-  try {
-    res.json(runNexusImport({ dryRun: !!req.body?.dryRun }));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
