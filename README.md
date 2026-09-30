@@ -10,7 +10,7 @@ coach that is never allowed to invent a number. All on your machine.
 
 [![CI](https://github.com/aaronk2001/mmm-app/actions/workflows/ci.yml/badge.svg)](https://github.com/aaronk2001/mmm-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-teal.svg)](LICENSE)
-![Tests](https://img.shields.io/badge/tests-702%20passing-2dd4bf)
+![Tests](https://img.shields.io/badge/tests-704%20passing-2dd4bf)
 ![Platform](https://img.shields.io/badge/platform-Windows-555)
 
 [**Download**](https://github.com/aaronk2001/mmm-app/releases/latest) ·
@@ -22,11 +22,13 @@ coach that is never allowed to invent a number. All on your machine.
 
 ![Overview dashboard](docs/screenshots/overview.png)
 
-| Budget | Debt payoff | Plan |
+| Transactions | Budget | Cash flow |
 |---|---|---|
-| ![Budget](docs/screenshots/budget.png) | ![Debt payoff](docs/screenshots/debt.png) | ![Plan](docs/screenshots/plan.png) |
+| ![Transactions](docs/screenshots/transactions.png) | ![Budget](docs/screenshots/budget.png) | ![Cash flow](docs/screenshots/cashflow.png) |
+| **Debt payoff** | **Reports** | **Learn** |
+| ![Debt payoff](docs/screenshots/debt.png) | ![Reports](docs/screenshots/reports.png) | ![Learn](docs/screenshots/learn.png) |
 
-<sub>All screenshots use the built-in sample data.</sub>
+<sub>All screenshots use the built-in sample data and are regenerated with `npm run screenshots`.</sub>
 
 ---
 
@@ -108,11 +110,12 @@ npm run dev                 # Vite (5173) + Electron, hot reload
 
 | Command | What it does |
 |---|---|
-| `npm test` | 702 unit and route tests (vitest) |
+| `npm test` | 704 unit and route tests (vitest) |
 | `npm run check:contrast` | WCAG contrast gate over both themes |
 | `npm run check:learn-content` | Validates every lesson's front matter, answers, and sources |
 | `npm run build` | Builds the SPA into `src/dist` |
 | `npm run build:portable` | Assembles `build/MMM-portable/MMM.exe` and smoke-tests it |
+| `npm run screenshots` | Regenerates `docs/screenshots/` from sample data (after `build`) |
 
 Run `build` and `build:portable` one at a time (both write `src/dist`), and
 close any running `MMM.exe` first.
@@ -180,8 +183,9 @@ with a qualified professional.
 v1.0 is the first public release. Windows is the packaged target; the code
 is cross-platform, but macOS and Linux builds are untested. Planned next:
 import staging with de-duplication, transfer matching and splits, a bill
-calendar, and signed builds. Settings still shows toggles for `youtube`,
-`telegram`, and `cloudLlm`. They are reserved and currently do nothing.
+calendar, and signed builds. The feature keys `youtube`, `telegram`, and
+`cloudLlm` are reserved in `server/online/features.js` but have no consumer
+yet, so Settings does not show them.
 
 ## License
 

@@ -29,7 +29,8 @@
     "build:portable": "node scripts/build-portable.mjs",
     "package": "npm run build && electron-builder",
     "check:contrast": "node scripts/check-contrast.mjs",
-    "check:learn-content": "node scripts/build-learn-index.mjs"
+    "check:learn-content": "node scripts/build-learn-index.mjs",
+    "screenshots": "electron scripts/screenshots.cjs"
   },
   "build": {
     "appId": "com.mmm.money",
