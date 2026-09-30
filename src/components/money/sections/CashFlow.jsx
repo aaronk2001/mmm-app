@@ -499,7 +499,7 @@ export default function CashFlow() {
                       fontVariantNumeric: 'tabular-nums',
                     }}
                   >
-                    <Money value={finalBalance} prefix={finalBalance >= 0 ? '$' : '-$'} decimals={0} />
+                    <Money value={finalBalance} decimals={0} />
                   </div>
                 </div>
 

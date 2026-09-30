@@ -298,7 +298,7 @@ export default function Budget() {
               if (isOver) {
                 statusIcon = <AlertCircle size={16} />;
                 statusColor = 'var(--m-red)';
-                statusLabel = `Over by $${(budget.spent - budget.limit).toFixed(2)}`;
+                statusLabel = `Over by $${(budget.spent - budget.limit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
               } else if (isNear) {
                 statusIcon = <AlertCircle size={16} />;
                 statusColor = 'var(--m-amber)';

@@ -16,7 +16,7 @@ import { evalFormula } from '../../../lib/formula';
 import { parseYmd } from '../../../lib/localDate';
 
 // ── formatting ───────────────────────────────────────────────────────────────
-const f$ = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
+const f$ = (n) => (Number(n) < 0 ? '-$' : '$') + Math.abs(Math.round(Number(n) || 0)).toLocaleString();
 const fSigned = (n) => (Number(n) >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(Number(n) || 0)).toLocaleString();
 
 // ── shared bits ──────────────────────────────────────────────────────────────

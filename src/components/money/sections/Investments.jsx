@@ -8,7 +8,7 @@ import { useApi, api, queryClient } from '../../../lib/query';
 import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
 
-const f$ = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
+const f$ = (n) => (Number(n) < 0 ? '-$' : '$') + Math.abs(Math.round(Number(n) || 0)).toLocaleString();
 const fSigned = (n) => (Number(n) >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(Number(n) || 0)).toLocaleString();
 const num = { fontVariantNumeric: 'tabular-nums' };
 const PALETTE = ['var(--m-chart-1)', 'var(--m-chart-2)', 'var(--m-chart-3)', 'var(--m-chart-4)', 'var(--m-chart-5)', 'var(--m-chart-6)', 'var(--m-chart-7)', 'var(--m-chart-8)'];

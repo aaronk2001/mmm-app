@@ -7,7 +7,6 @@ import {
   DollarSign,
   AlertCircle,
   Plus,
-  Percent,
   Calendar,
 } from 'lucide-react';
 import {
@@ -276,9 +275,8 @@ export default function Debt() {
             >
               <Card>
                 <BigStat
-                  label="Total Interest"
+                  label="Total Interest Paid"
                   value={<Money value={payoffResult.totalInterest} />}
-                  suffix=" (paid)"
                 />
               </Card>
             </motion.div>
@@ -328,7 +326,7 @@ export default function Debt() {
                         {debt.name}
                       </div>
                       <div style={{ fontSize: '13px', color: 'var(--m-ink-2)', marginTop: '2px' }}>
-                        {debt.type === 'credit' ? 'Credit Card' : 'Loan'} at <Percent size={12} style={{ display: 'inline' }} /> {(debt.apr * 100).toFixed(1)}% APR
+                        {debt.type === 'credit' ? 'Credit Card' : 'Loan'} · {(debt.apr * 100).toFixed(1)}% APR
                       </div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
