@@ -51,6 +51,15 @@ describe('localGuard — cross-site writes', () => {
     expect(await send('POST')).toBe(200);
   });
 
+  it('allows same-origin writes on a port outside the allowlist', async () => {
+    expect(await send('POST', { origin: `http://127.0.0.1:${port}` })).toBe(200);
+    expect(await send('POST', { origin: `http://localhost:${port}`, host: `localhost:${port}` })).toBe(200);
+  });
+
+  it('does not treat a same-host origin on another port as same-origin', async () => {
+    expect(await send('POST', { origin: 'http://127.0.0.1:3000' })).toBe(403);
+  });
+
   it('rejects a no-body POST from a foreign origin (the /reset attack)', async () => {
     expect(await send('POST', { origin: 'https://evil.example' })).toBe(403);
     expect(await send('DELETE', { origin: 'null' })).toBe(403);

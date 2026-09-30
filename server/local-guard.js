@@ -26,7 +26,10 @@ function localGuard(allowedOrigins) {
     }
     if (SAFE_METHODS.has(req.method)) return next();
     const origin = req.headers.origin;
-    if (req.headers['sec-fetch-site'] === 'cross-site' || (origin && !origins.has(origin))) {
+    // Same-origin is always fine: Host was verified as loopback above, so a page
+    // whose Origin matches it was served by this server (e.g. a non-default PORT).
+    const sameOrigin = origin === `http://${req.headers.host}`;
+    if (req.headers['sec-fetch-site'] === 'cross-site' || (origin && !sameOrigin && !origins.has(origin))) {
       return res.status(403).json({ error: 'Forbidden origin' });
     }
     next();
