@@ -15,12 +15,28 @@ First public release.
   and cross-site writes, so a web page can no longer blind-fire a no-body `POST` such as
   `/api/money/reset` at the local server.
 
+- `npm run screenshots`: regenerates the README images from sample data via Electron offscreen rendering.
+- Monthly Dependabot updates for npm and GitHub Actions.
+
 ### Removed
 - One-time importer for a private predecessor app (route, Settings button, CLI, tests).
 - Internal planning notes and machine-specific helper scripts.
+- Unused `electron-builder` dev dependency (packaging uses `scripts/build-portable.mjs`);
+  clears a critical `tar` advisory.
+- Settings toggles for `youtube`, `telegram`, `cloudLlm`: reserved keys with no consumer.
 
 ### Fixed
+- Section headers: the icon wrapper matched a `flex: 1` rule, splitting the row 50/50 and
+  stranding the icon mid-page on six sections.
+- Negative amounts render as `-$38.50`, not `$-38.50`; thousands separator in budget overage.
+- Portable build: dependencies of nested packages are now followed, so `safer-buffer` is no
+  longer dropped from the payload (the packaged server failed to boot after a lockfile change).
+- Semver-compatible security updates (express, body-parser, qs, react-router, postcss, nanoid).
 - Test timeout raised to 30 s; the esbuild parse check flaked at the 5 s default under load.
+
+### Known issues
+- Ships Electron 30.5.1, which is end-of-life. An upgrade to Electron 42 is prepared and
+  pending an in-app check.
 
 ## Pre-release milestones
 
