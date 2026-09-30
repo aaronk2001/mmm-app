@@ -182,7 +182,8 @@ with a qualified professional.
 
 v1.0 is the first public release. Windows is the packaged target; the code
 is cross-platform, but macOS and Linux builds are untested. Planned next:
-import staging with de-duplication, transfer matching and splits, a bill
+an upgrade from Electron 30 (end-of-life) to a supported major, import
+staging with de-duplication, transfer matching and splits, a bill
 calendar, and signed builds. The feature keys `youtube`, `telegram`, and
 `cloudLlm` are reserved in `server/online/features.js` but have no consumer
 yet, so Settings does not show them.

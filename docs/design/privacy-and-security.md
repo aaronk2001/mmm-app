@@ -186,6 +186,7 @@ The build verifies every `require()` in the packaged server resolves from includ
 
 ## 10. Known Limitations & Residual Risks
 
+1. **End-of-life Electron:** v1.0.0 ships Electron 30.5.1, which no longer receives Chromium security patches. Exposure is limited because the renderer only loads the app's own loopback origin (CSP, navigation lock, `setWindowOpenHandler`), but an upgrade to a supported major is the top security item on the roadmap.
 1. **Unsigned Portable Exe:** `MMM.exe` is unsigned; external verification (SHA-256 hash) is required.
 2. **Source Readable on Disk:** the portable build ships the app unpacked under `resources/app` (no asar archive, no integrity fuse); anyone with write access to that folder can modify the app. Accepted, as no tamper resistance is claimed.
 3. **Unauthenticated loopback API:** any local process running as any user can call the API (no token handshake between the Electron shell and the server). Browser-originated attacks are handled by the local guard; local processes are out of scope.
