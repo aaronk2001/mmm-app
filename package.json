@@ -68,7 +68,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",
     "concurrently": "^8.2.0",
-    "electron": "^30.0.0",
+    "electron": "^42.11.10",
     "png-to-ico": "^3.0.1",
     "rcedit": "^5.0.2",
     "vite": "^5.0.0",
