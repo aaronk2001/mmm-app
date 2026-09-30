@@ -84,21 +84,43 @@ for (const name of fs.readdirSync(STORE)) {
 }
 
 // ── 4. Server dependency closure ──────────────────────────────────────────────
+// Resolve a dependency the way Node does: walk up from the requiring package's
+// own directory through each node_modules. A package nested under another
+// (raw-body/node_modules/iconv-lite) is copied along with its parent, but its
+// OWN dependencies must still be followed — otherwise a hoisted-only transitive
+// dep (safer-buffer) silently drops out of the payload.
+function resolveDep(name, fromDir) {
+  // fromDir is a package dir; step up package by package: .../node_modules/[@scope/]pkg
+  let dir = fromDir;
+  while (dir.startsWith(NM + path.sep)) {
+    const candidate = path.join(dir, 'node_modules', name);
+    if (fs.existsSync(path.join(candidate, 'package.json'))) return candidate;
+    dir = path.dirname(dir);
+    if (path.basename(dir).startsWith('@')) dir = path.dirname(dir);
+    if (path.basename(dir) === 'node_modules') dir = path.dirname(dir);
+  }
+  const top = path.join(NM, name);
+  return fs.existsSync(path.join(top, 'package.json')) ? top : null; // null: optional dep never installed
+}
+
 function closure(roots) {
-  const seen = new Set();
-  const stack = [...roots];
+  const visited = new Set();   // resolved package dirs already walked
+  const topLevel = new Set();  // names under NM to copy (nested ones ride along)
+  const stack = roots.map((name) => ({ name, fromDir: ROOT }));
   while (stack.length) {
-    const name = stack.pop();
-    if (seen.has(name)) continue;
-    const dir = path.join(NM, name);
-    if (!fs.existsSync(dir)) continue; // optional dep that never installed
-    seen.add(name);
+    const { name, fromDir } = stack.pop();
+    const dir = resolveDep(name, fromDir);
+    if (!dir || visited.has(dir)) continue;
+    visited.add(dir);
+    const rel = path.relative(NM, dir).split(path.sep);
+    const topName = rel[0].startsWith('@') ? `${rel[0]}/${rel[1]}` : rel[0];
+    topLevel.add(topName);
     const pj = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
     for (const dep of [...Object.keys(pj.dependencies || {}), ...Object.keys(pj.optionalDependencies || {})]) {
-      stack.push(dep);
+      stack.push({ name: dep, fromDir: dir });
     }
   }
-  return [...seen].sort();
+  return [...topLevel].sort();
 }
 
 const pkgs = closure(SERVER_DEPS);
