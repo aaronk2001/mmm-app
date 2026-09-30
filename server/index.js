@@ -4,6 +4,7 @@ const cors        = require('cors');
 const helmet      = require('helmet');
 const rateLimit   = require('express-rate-limit');
 const { skipApiLimiter } = require('./api-limiter');
+const { localGuard } = require('./local-guard');
 const compression = require('compression');
 const path        = require('path');
 
@@ -34,6 +35,8 @@ app.use(helmet({ frameguard: false, contentSecurityPolicy: false }));
 // Scoped to the Vite dev server and the Electron origin only.
 const ORIGINS = (process.env.MMM_CORS_ORIGINS || 'http://localhost:5006,http://localhost:5173,http://127.0.0.1:5006,file://').split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({ origin: ORIGINS }));
+// Loopback Host + allowed-Origin-on-writes (DNS rebinding and cross-site POSTs).
+app.use(localGuard(ORIGINS));
 
 // ─── Compression ─────────────────────────────────────────────────────────────
 app.use(compression());
