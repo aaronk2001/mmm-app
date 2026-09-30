@@ -2,17 +2,14 @@ import { useEffect, useState } from 'react';
 import { Wifi, KeyRound, CheckCircle2, XCircle } from 'lucide-react';
 import { api, useApi, queryClient } from '../../../../../lib/query';
 
-// Sprint A, Track 1 — the online seam ships no providers yet, so every
-// feature here is a real toggle with nowhere (in this sprint) for the data
-// to go. Track 2 wires the Markets section on top of `online.fetch`.
+// Only features with a consumer are shown. server/online/features.js also
+// reserves youtube/telegram/cloudLlm so previously stored settings and keys
+// stay valid, but nothing reads them yet — a toggle for them would be a lie.
 const FEATURES = [
-  { key: 'market', label: 'Market data', hint: 'Quotes, indices, and charts (Markets section, Sprint B).' },
-  { key: 'news', label: 'News', hint: 'Headlines tied to your watchlist and holdings.' },
-  { key: 'youtube', label: 'YouTube', hint: 'Video commentary for tickers you follow.' },
-  { key: 'predictionMarkets', label: 'Prediction markets', hint: 'Odds-style signals from prediction-market data.' },
-  { key: 'sportsOdds', label: 'Sports odds', hint: 'Sports betting odds feeds.' },
-  { key: 'telegram', label: 'Telegram', hint: 'Alerts delivered to a Telegram bot or channel.' },
-  { key: 'cloudLlm', label: 'Cloud LLM', hint: 'An optional cloud model instead of local Ollama for the coach.' },
+  { key: 'market', label: 'Market data', hint: 'Quotes, charts, crypto, FX, and macro series (Markets section). FRED key optional.' },
+  { key: 'news', label: 'News', hint: 'Market and per-ticker headlines from Marketaux (Intelligence section). Needs a key.' },
+  { key: 'predictionMarkets', label: 'Prediction markets', hint: 'Polymarket, Kalshi, and Manifold prices (Betting section). No key needed.' },
+  { key: 'sportsOdds', label: 'Sports odds', hint: 'Sportsbook lines from The Odds API (Betting section). Needs a free key.' },
 ];
 
 function Toggle({ on, onChange, disabled }) {
