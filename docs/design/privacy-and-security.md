@@ -187,7 +187,7 @@ The build verifies every `require()` in the packaged server resolves from includ
 ## 10. Known Limitations & Residual Risks
 
 1. **Unsigned Portable Exe:** `MMM.exe` is unsigned; external verification (SHA-256 hash) is required.
-2. **Source Readable on Disk:** `asar: false` means code is unpacked; accepted as no obfuscation is claimed.
+2. **Source Readable on Disk:** the portable build ships the app unpacked under `resources/app` (no asar archive, no integrity fuse); anyone with write access to that folder can modify the app. Accepted, as no tamper resistance is claimed.
 3. **Unauthenticated loopback API:** any local process running as any user can call the API (no token handshake between the Electron shell and the server). Browser-originated attacks are handled by the local guard; local processes are out of scope.
 4. **Windows DPAPI:** OS user account compromise recovers keys; out of scope.
 5. **Provider Compromise:** Enabled online features may leak query content (though keys are stripped). Opt-in + caching mitigates.

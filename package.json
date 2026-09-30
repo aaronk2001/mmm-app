@@ -13,7 +13,15 @@
   "bugs": {
     "url": "https://github.com/aaronk2001/mmm-app/issues"
   },
-  "keywords": ["personal-finance", "budgeting", "local-first", "electron", "sqlite", "backtesting", "react"],
+  "keywords": [
+    "personal-finance",
+    "budgeting",
+    "local-first",
+    "electron",
+    "sqlite",
+    "backtesting",
+    "react"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -27,36 +35,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:portable": "node scripts/build-portable.mjs",
-    "package": "npm run build && electron-builder",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:learn-content": "node scripts/build-learn-index.mjs",
     "screenshots": "electron scripts/screenshots.cjs"
-  },
-  "build": {
-    "appId": "com.mmm.money",
-    "productName": "MMM",
-    "directories": {
-      "output": "build"
-    },
-    "asar": false,
-    "win": {
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "runAfterFinish": true
-    },
-    "files": [
-      "src/dist/**/*",
-      "server/**/*",
-      "electron.js",
-      "preload.js",
-      "package.json",
-      "node_modules/**/*"
-    ]
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -88,7 +69,6 @@
     "@vitejs/plugin-react": "^4.0.0",
     "concurrently": "^8.2.0",
     "electron": "^30.0.0",
-    "electron-builder": "^24.0.0",
     "png-to-ico": "^3.0.1",
     "rcedit": "^5.0.2",
     "vite": "^5.0.0",
