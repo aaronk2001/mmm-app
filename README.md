@@ -1,137 +1,190 @@
+<div align="center">
+
+<img src="assets/icon-256.png" width="88" alt="MMM logo" />
+
 # MMM — Making Money Moves
 
-A standalone, **local-first** personal-finance desktop app. Electron shell → a
-local Express server on `:5006` → a React SPA, with all data in a local SQLite
-database. No cloud, no accounts, no telemetry by default — every online
-feature is an explicit opt-in (see below).
+**A local-first personal-finance workstation.**
+Ledger, budgets, debt payoff, planning, markets, a look-ahead-safe backtester, and a
+coach that is never allowed to invent a number. All on your machine.
 
-![Overview](docs/screenshots/overview.png)
+[![CI](https://github.com/aaronk2001/mmm-app/actions/workflows/ci.yml/badge.svg)](https://github.com/aaronk2001/mmm-app/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-teal.svg)](LICENSE)
+![Tests](https://img.shields.io/badge/tests-702%20passing-2dd4bf)
+![Platform](https://img.shields.io/badge/platform-Windows-555)
 
-| Budget | Debt Payoff | Plan |
+[**Download**](https://github.com/aaronk2001/mmm-app/releases/latest) ·
+[Design docs](docs/design/) ·
+[Architecture](#architecture) ·
+[Contributing](CONTRIBUTING.md)
+
+</div>
+
+![Overview dashboard](docs/screenshots/overview.png)
+
+| Budget | Debt payoff | Plan |
 |---|---|---|
-| ![Budget](docs/screenshots/budget.png) | ![Debt Payoff](docs/screenshots/debt.png) | ![Plan](docs/screenshots/plan.png) |
+| ![Budget](docs/screenshots/budget.png) | ![Debt payoff](docs/screenshots/debt.png) | ![Plan](docs/screenshots/plan.png) |
 
-_Screenshots use the built-in sample data._
+<sub>All screenshots use the built-in sample data.</sub>
 
-## Run it
+---
+
+## Why this exists
+
+Most budgeting apps want your bank password, sync your transactions to their
+servers, and use a language model to tell you things about your money that
+nobody checked. MMM takes the opposite position on each point:
+
+| | Typical finance app | MMM |
+|---|---|---|
+| **Where data lives** | Vendor cloud | One SQLite file in `%APPDATA%\mmm` |
+| **Account required** | Yes | No |
+| **Network** | Always on | Off. Every online feature is opt-in, default off, and tested to open zero sockets when disabled |
+| **Money math** | Floats | Integer cents; balances *derived*, never stored |
+| **AI advice** | Model generates the numbers | Rules compute every number; a *local* model may only rephrase them |
+| **Evidence** | Implied certainty | Figures carry an evidence grade (A/B/C) based on how much history backs them |
+
+## What's inside
+
+**Money:** accounts and net worth, transactions (CSV / OFX / QIF import, rules,
+bulk edit, custom fields), envelope-style budgets with rollover, cash-flow
+forecast with recurring detection, goals with pace projection, debt payoff
+(avalanche / snowball, interest-saved delta), investments, and reports with CSV export.
+
+**Plan:** take-home pay, *model an offer* (Δ take-home, Δ runway, Δ 18-month
+net worth), raises, Roth / FIRE, what-if. Tax tables are labeled with their year.
+
+**Invest:** markets (quotes, charts, sectors, futures, crypto, FX, macro,
+screener), paper trading behind a strategy gate, a deterministic backtester
+with 15 performance metrics, market news, and a read-only prediction-market
+and sportsbook board with correct de-vigging and arbitrage math.
+
+**Grow:** 15 lessons across three modules, personalized with *your* numbers
+and scheduled with FSRS spaced repetition.
+
+**Coach:** a deterministic engine of 10 rules produces ranked findings
+(emergency fund, runway, savings rate, overspend, high-APR debt, goal pace …).
+If [Ollama](https://ollama.com) is running locally, a small model can phrase
+them conversationally from a facts block. It cites only numbers the rules
+supplied, and the app works identically without it.
+
+## Engineering highlights
+
+Each of these is written up with invariants, code citations, and the tests
+that pin it, in [`docs/design/`](docs/design/):
+
+- **[Ledger](docs/design/ledger.md):** integer cents, derived balances,
+  idempotent schema migrations, a data-dir guard that refuses to open the
+  wrong database, and a strict local-calendar date rule (tests run under
+  `TZ=America/Phoenix` to catch UTC-midnight shifts).
+- **[Quant](docs/design/quant.md):** strategies see bars through a `Proxy`
+  that traps every path to the future (including `ownKeys` and property
+  descriptors); runs are hashed for determinism; splits are applied before
+  marking so equity is split-invariant. Odds math uses return-on-stake
+  `1/Σp − 1` and refuses to score three-way markets as two-way.
+- **[Decision support](docs/design/decision-support.md):** runway burn is
+  measured over *observed* days on liquid accounts with transfers excluded;
+  the LLM grounding contract; evidence grades; FSRS-scheduled lessons.
+- **[Privacy & security](docs/design/privacy-and-security.md):** threat
+  model, a complete outbound-host inventory, `safeStorage`-encrypted keys the
+  renderer can never read, a sandboxed and context-isolated renderer, and a
+  loopback guard against DNS rebinding and cross-site writes.
+
+## Quick start
+
+**Use it:** download `MMM-portable-win-x64.zip` from the
+[latest release](https://github.com/aaronk2001/mmm-app/releases/latest), unzip, run `MMM.exe`.
+No installer. Click **Load Sample Data** to explore, or start empty and add your own.
+
+**Build it** (Node 20+):
 
 ```bash
+git clone https://github.com/aaronk2001/mmm-app.git
+cd mmm-app
 npm install
-npm run dev              # Vite (5173) + Electron, hot reload
-npm start                 # run the Electron shell directly (electron .)
-npm test                  # money-math unit tests (vitest)
-npm run build              # build the SPA to src/dist
-npm run build:portable     # hand-assemble build/MMM-portable/MMM.exe
-npm run check:contrast      # WCAG contrast gate over src/styles/theme.css
-npm run check:learn-content # validates content/learn/**/*.md (front matter, check answers, sources)
+npm run dev                 # Vite (5173) + Electron, hot reload
 ```
 
-**Never run `build` and `build:portable` at the same time.** `build:portable`
-runs `vite build` itself as its first step, and both write to `src/dist` — the
-loser of the race dies with `EPERM`. Run them one at a time.
+| Command | What it does |
+|---|---|
+| `npm test` | 702 unit and route tests (vitest) |
+| `npm run check:contrast` | WCAG contrast gate over both themes |
+| `npm run check:learn-content` | Validates every lesson's front matter, answers, and sources |
+| `npm run build` | Builds the SPA into `src/dist` |
+| `npm run build:portable` | Assembles `build/MMM-portable/MMM.exe` and smoke-tests it |
 
-**Close any running `MMM.exe` before `npm run build:portable`.** The script
-deletes and recreates `build/MMM-portable` (`fs.rmSync` + `fs.mkdirSync` in
-`scripts/build-portable.mjs`) — if the portable exe is still running from that
-path, Windows holds the file open and the build fails.
-
-`build:portable` ends with its own smoke test (boots the packaged server
-against a throwaway data dir and polls `/api/health` + `/api/money/overview`)
-and prints `SMOKE PASS — portable ready: build/MMM-portable/MMM.exe`. See also
-`docs/SMOKE-CHECKLIST.md` for a manual pass over the packaged exe.
-
-## Where data lives
-
-- **Packaged app:** `%APPDATA%\mmm`. `electron.js` forks the server with
-  `MMM_DATA_DIR` set to that path whenever `app.isPackaged` is true, so
-  rebuilding or replacing the exe never touches user data.
-- **Dev:** the in-repo database at `server/store/money/mmm.db`. `electron.js`
-  sets `MMM_ALLOW_DEV_DB=1` itself when launching the server unpackaged (`npm
-  run dev` / `npm start`), which is what lets the dev DB load at all.
-- **`server/db/connection.js` throws at require-time** unless `MMM_DATA_DIR`
-  or `MMM_ALLOW_DEV_DB=1` is set — it no longer falls back to the in-repo dev
-  DB silently (that footgun once wiped it via a stray one-off script). For a
-  one-off script or ad-hoc `node` invocation against the server code, set a
-  throwaway data dir instead of the dev DB opt-in:
-  ```bash
-  MMM_DATA_DIR=$(mktemp -d) node some-script.js
-  ```
-- **Backups:** `server/backup/scheduler.js` writes daily JSON + live SQLite
-  snapshots to `<DATA_DIR>/backups` (once on startup, then every 24h), keeping
-  the newest **30 days** (`RETENTION_DAYS`). Restore on demand from Settings →
-  Privacy & Data.
-
-## Online features are opt-in
-
-`server/online/features.js` defines the only feature keys the app knows:
-`market`, `news`, `youtube`, `predictionMarkets`, `sportsOdds`, `telegram`,
-`cloudLlm`. **All are off by default** — Settings → Online & Keys shows one
-toggle + one key field per feature, each starts off, and with zero API keys
-configured every money feature (accounts, transactions, budget, cash flow,
-goals, debt, investments, reports) still works fully offline.
-
-Keys are stored via Electron's `safeStorage` (encrypted `keys.enc` next to
-`desktop-prefs.json` in `%APPDATA%\mmm`, decrypted only in the main process
-and pushed to the forked server over IPC — see `server/online/keys.js`).
-They're never written to SQLite, `.env`, or localStorage, and the renderer can
-only ever read back a presence boolean, never a key value.
-
-Trading (the **Trades** section) is **paper-only** — practice positions
-against a strategy gate with zero real money or brokerage connection.
-
-## Deliberately cut
-
-Compared to its sibling project NEXUS, MMM does **not** include: AI/Desk (new
-LLM-agent work — the existing local Ollama coach at `/api/money/coach`
-remains), Betting/prediction-market trading, Media (news/YouTube feeds beyond
-the opt-in toggles), Telegram delivery, and Learn content beyond modules
-M0–M2 (`content/learn/m0-orientation`, `m1-runway-survival`,
-`m2-cash-flow-steer`). See `docs/NEXUS-PARITY.md` for the full NEXUS-to-MMM
-feature mapping.
-
-## Sections
-
-The 14 nav sections (`SECTIONS` in `src/components/money/MoneyHub.jsx`):
-Overview, Accounts & Net Worth, Transactions, Budget, Cash Flow, Goals, Debt
-Payoff, Investments, Reports, Plan, Markets, Trades, Learn, Settings & Privacy.
+Run `build` and `build:portable` one at a time (both write `src/dist`), and
+close any running `MMM.exe` first.
 
 ## Architecture
 
-- **Frontend:** React 18 + Vite 5, React Router (HashRouter), React Query,
-  Tailwind v4 with a semantic token system (`src/styles/theme.css` drives the
-  teal-on-charcoal identity; every component reads `--m-*` tokens).
-- **Backend:** Express on `127.0.0.1:5006`, helmet + CORS-to-localhost + rate
-  limits. Per-row SQLite via `better-sqlite3`; **money is stored as integer
-  cents** and account balances are **derived** (opening balance + Σ
-  transactions), so there is no float drift and no balance-mutation bugs.
-  Hand-rolled request validators guard every write.
-- **Shell:** Electron 30 — hardened (`contextIsolation`, `sandbox`, tight CSP),
-  forks the server, shows an instant splash, and offers a tray + launch-on-boot.
-- **Money math** lives in `server/money/calc.js` (pure, unit-tested); file
-  parsing in `server/money/parsers.js` (papaparse CSV, OFX, QIF).
+```mermaid
+flowchart LR
+  subgraph Electron["Electron 30 (main process)"]
+    M[Window, tray, safeStorage keys]
+  end
+  subgraph Renderer["Renderer (sandboxed)"]
+    UI[React 18 SPA<br/>HashRouter · React Query · Tailwind v4]
+  end
+  subgraph Server["Forked Express server · 127.0.0.1:5006"]
+    G[helmet · CORS · local guard · rate limit · validators]
+    R[money · plan · market · trading · backtest · betting · learn]
+    DB[(SQLite<br/>integer cents)]
+    O[online seam<br/>opt-in, cached]
+  end
+  M -- preload bridge<br/>presence-only secrets --> UI
+  M -- IPC: decrypted keys --> O
+  UI -- HTTP loopback --> G --> R --> DB
+  R --> O -. only if enabled .-> NET((Internet))
+  R -. optional .-> OL[Ollama<br/>127.0.0.1:11434]
+```
 
-## Packaging
+```
+electron.js, preload.js   shell, hardening, tray, key storage bridge
+server/
+  db/                     schema, migrations, per-row repository (cents ⇄ dollars)
+  money/                  calc, parsers, advice rules, runway, coach
+  tools/                  loans, take-home, planning
+  backtest/               engine, metrics, strategies, worker
+  trading/                paper store + strategy gate
+  market/ news/ betting/  providers behind server/online/
+  online/                 fetch envelope, feature flags, key handling, cache
+  learn/                  lessons, variables, FSRS scheduler
+src/                      React SPA (sections, widgets, shared primitives)
+content/learn/            lesson Markdown + source licences
+tests/                    vitest suites
+```
 
-`electron-builder` is blocked on this machine (winCodeSign symlink), so
-`scripts/build-portable.mjs` hand-assembles the portable app:
+## Data and privacy
 
-1. `vite build`
-2. copy the Electron runtime, rename `electron.exe` → `MMM.exe`
-3. inject the app + a **dependency-closure** copy of only the server's runtime
-   packages (a full `node_modules` copy times out on the AV-scanned path)
-4. swap in the **Electron-ABI** `better-sqlite3` binary via `prebuild-install`
-5. stamp the exe icon (`rcedit`, best-effort) and smoke-test the packaged server
+- **Packaged app:** everything lives in `%APPDATA%\mmm`: the database, daily
+  backups (JSON + live SQLite copy, 30-day retention), preferences, and
+  `keys.enc`. Rebuilding or replacing the exe never touches it.
+- **Dev:** `server/store/money/mmm.db`. The server refuses to start without
+  `MMM_DATA_DIR` or `MMM_ALLOW_DEV_DB=1`. `npm run dev` sets the latter. For
+  one-off scripts use a throwaway dir: `MMM_DATA_DIR=$(mktemp -d) node script.js`.
+- **Online features:** market, news, prediction markets, and sports odds, each
+  toggled in Settings → Online & Keys. With every toggle off, all money
+  features work fully offline.
 
-The result is `build/MMM-portable/MMM.exe` — no installer required.
+## Disclaimer
 
-## Tech notes
+MMM is educational software, not financial, tax, or investment advice. Tax
+tables are for 2024 and labeled as such. Trading is **paper only**; the betting
+board is **informational only** and places no wagers. Verify anything important
+with a qualified professional.
 
-- Bun is not used here — this app is npm + JS/JSX by design.
-- Dates are compared as `YYYY-MM-DD` strings on the local calendar throughout
-  (never `new Date(isoDate)`, which parses as UTC midnight and can shift the
-  displayed day) — see `src/lib/localDate.js` and `server/money/calc.js`'s
-  local-date helpers.
+## Status and roadmap
 
-## Third-party notices
+v1.0 is the first public release. Windows is the packaged target; the code
+is cross-platform, but macOS and Linux builds are untested. Planned next:
+import staging with de-duplication, transfer matching and splits, a bill
+calendar, and signed builds. Settings still shows toggles for `youtube`,
+`telegram`, and `cloudLlm`. They are reserved and currently do nothing.
 
-See `THIRD_PARTY_NOTICES.md` for third-party license attributions.
+## License
+
+[MIT](LICENSE) © 2026 Aaron Karsten. Third-party licences are listed in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md); lesson sources and their
+licences are in [`content/learn/sources.yaml`](content/learn/sources.yaml).

@@ -1,0 +1,52 @@
+name: Bug report
+description: Something is wrong or broken.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Never paste real financial data** — reproduce with the built-in sample data (**Load Sample Data** on the welcome screen) where possible.
+        Security issues go through [private reporting](https://github.com/aaronk2001/mmm-app/security/advisories/new), not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Budget
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag or commit SHA.
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running MMM?
+      options:
+        - Portable release (MMM.exe)
+        - From source (npm run dev / npm start)
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: Windows 11 23H2
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: DevTools console output (Ctrl+Shift+I) or the server log, with any personal data removed.
+      render: shell

@@ -1,7 +1,22 @@
 {
   "name": "mmm-app",
   "version": "1.0.0",
-  "description": "MMM — Making Money Moves: standalone personal finance hub (Electron + Express + React)",
+  "private": true,
+  "description": "MMM — Making Money Moves: a local-first personal-finance desktop app (Electron + Express + React + SQLite)",
+  "author": "Aaron Karsten (https://github.com/aaronk2001)",
+  "license": "MIT",
+  "homepage": "https://github.com/aaronk2001/mmm-app#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aaronk2001/mmm-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aaronk2001/mmm-app/issues"
+  },
+  "keywords": ["personal-finance", "budgeting", "local-first", "electron", "sqlite", "backtesting", "react"],
+  "engines": {
+    "node": ">=20"
+  },
   "main": "electron.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
