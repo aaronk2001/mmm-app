@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Microscope, Send, ChevronDown, AlertTriangle, WifiOff } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
 import { api, useApi } from '../../../lib/query';
+import { pickerOptions, citationParts, failureCopy } from './parts/research/logic';
 
 // Linda, the research agent (server/research/). Every figure in an answer is
 // cited as [n] → a chip naming the tool result it came from; the server's
@@ -19,7 +20,6 @@ const card = { marginTop: 12 };
 const muted = { color: 'var(--m-muted)', fontSize: 13 };
 
 function Chip({ call }) {
-  if (!call) return null;
   return (
     <span
       title={`${call.tool} ${JSON.stringify(call.args)}${call.cached_at ? ` · ${call.cached_at}` : ''}`}
@@ -33,11 +33,15 @@ function Chip({ call }) {
   );
 }
 
+// A citation that points at no tool call stays visible, in the warning colour.
 function Answer({ text, calls }) {
-  const parts = text.split(/\[(\d+)\]/g);
   return (
     <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--m-ink)', whiteSpace: 'pre-wrap', margin: 0 }}>
-      {parts.map((p, i) => (i % 2 ? <Chip key={i} call={calls.find((c) => c.n === Number(p))} /> : p))}
+      {citationParts(text, calls).map((p, i) => {
+        if (p.call) return <Chip key={i} call={p.call} />;
+        if (p.missing) return <span key={i} title="Cites a result that does not exist" style={{ color: 'var(--m-amber)' }}>[{p.missing}?]</span>;
+        return p.text;
+      })}
     </p>
   );
 }
@@ -78,8 +82,12 @@ export default function Research() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
 
-  const usable = (status?.backends || []).filter((b) => b.available);
+  const options = pickerOptions(status?.backends);
   const toolsOff = !!status && !status.tools.length;
+  // If the picked cloud backend is turned off, fall back to the explicit default.
+  useEffect(() => {
+    if (backend !== 'ollama' && !options.some((o) => o.id === backend && !o.disabled)) setBackend('ollama');
+  }, [options, backend]);
 
   async function submit(e) {
     e.preventDefault();
@@ -117,9 +125,13 @@ export default function Research() {
           className="m-input" placeholder="e.g. Is MSFT's free cash flow growing?" aria-label="Question" value={question} maxLength={500}
           onChange={(e) => setQuestion(e.target.value)} style={{ flex: 1, minWidth: 220 }}
         />
-        {usable.length > 1 && (
-          <select className="m-input" aria-label="Model" value={backend} onChange={(e) => setBackend(e.target.value)} style={{ width: 220 }}>
-            {usable.map((b) => <option key={b.id} value={b.id}>{b.label}{b.model ? ` — ${b.model}` : ''}</option>)}
+        {options.length > 0 && (
+          <select className="m-input" aria-label="Model" value={backend} onChange={(e) => setBackend(e.target.value)} style={{ width: 240 }}>
+            {options.map((b) => (
+              <option key={b.id} value={b.id} disabled={b.disabled}>
+                {b.label}{b.model ? ` — ${b.model}` : ''}{b.disabled ? ' (not running)' : ''}
+              </option>
+            ))}
           </select>
         )}
         <button className="m-btn m-btn-primary" type="submit" disabled={busy || !question.trim() || toolsOff}>
@@ -141,9 +153,11 @@ export default function Research() {
 
       {result && result.available && (
         <div className="m-card m-card-no-hover" style={{ ...card, display: 'grid', gap: 12 }}>
-          {result.answer
-            ? <Answer text={result.answer} calls={result.toolCalls} />
-            : <p style={{ ...muted, margin: 0 }}>Ran out of time before an answer. Try a narrower question.</p>}
+          {result.answer && <Answer text={result.answer} calls={result.toolCalls} />}
+          {!result.answer && result.stopped === 'error' && <Warning>{failureCopy(result)}</Warning>}
+          {!result.answer && result.stopped !== 'error' && (
+            <p style={{ ...muted, margin: 0 }}>Ran out of time before an answer. Try a narrower question.</p>
+          )}
           {result.noData && result.answer && (
             <Warning>No data was fetched for this answer, so nothing in it is verified.</Warning>
           )}
