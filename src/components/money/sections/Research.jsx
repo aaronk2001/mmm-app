@@ -103,12 +103,12 @@ export default function Research() {
       <SectionHeader icon={Microscope} title="Research" subtitle="Ask about a company. Every figure links to the data it came from." />
 
       {toolsOff && (
-        <div className="m-card m-card-no-hover" style={{ display: 'flex', gap: 10, alignItems: 'center', ...muted }}>
+        <div className="m-card m-card-no-hover" style={{ flexDirection: 'row', gap: 10, alignItems: 'center', ...muted }}>
           <WifiOff size={16} style={{ flexShrink: 0 }} /> {OFFLINE_COPY['tools-off']}
         </div>
       )}
 
-      <form className="m-card m-card-no-hover" onSubmit={submit} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', ...card }}>
+      <form className="m-card m-card-no-hover" onSubmit={submit} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', ...card }}>
         <input
           className="m-input" placeholder="Ticker (optional)" aria-label="Ticker" value={ticker} maxLength={10}
           onChange={(e) => setTicker(e.target.value.toUpperCase())} style={{ width: 130 }}
