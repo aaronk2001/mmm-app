@@ -173,7 +173,9 @@ function validateCategory(body) {
   return result(e);
 }
 
-const MAX_IMPORT_CHARS = 2 * 1024 * 1024;
+// A multi-year bank export runs to a few MB; the body limit for these routes
+// is 16 MB (server/index.js).
+const MAX_IMPORT_CHARS = 10 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 20000;
 
 const IMPORT_DATE_FORMATS = ['auto', 'MDY', 'DMY', 'YMD'];
@@ -193,7 +195,7 @@ function validateImport(body) {
   if (body.format !== undefined && !IMPORT_FILE_FORMATS.includes(String(body.format).toLowerCase())) e.push(`format must be one of: ${IMPORT_FILE_FORMATS.join(', ')}`);
   if (body.mapping !== undefined && body.mapping !== null && (typeof body.mapping !== 'object' || Array.isArray(body.mapping))) e.push('mapping must be an object');
   const text = body.csv ?? body.content;
-  if (text !== undefined && (typeof text !== 'string' || text.length > MAX_IMPORT_CHARS)) e.push('file content too large (max 2 MB)');
+  if (text !== undefined && (typeof text !== 'string' || text.length > MAX_IMPORT_CHARS)) e.push('file content too large (max 10 MB)');
   return result(e);
 }
 

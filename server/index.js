@@ -48,6 +48,8 @@ app.use(compression());
 // years of transactions is well past 2 MB and used to fail with a 413. (It
 // must be mounted first — express.json skips a body that's already parsed.)
 app.use('/api/money/import', express.json({ limit: '100mb' }));
+// Bank-statement imports: up to 20,000 rows (validateImport) or a 10 MB file.
+app.use(['/api/money/transactions/import', '/api/money/transactions/import-file'], express.json({ limit: '16mb' }));
 app.use(express.json({ limit: '2mb' }));
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
