@@ -11,10 +11,18 @@ const FIGURE_RE = /(\$)?(-|−)?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\s*(%|percen
 const SKIP_KEY = /(^|_)(id|url|accn|cik|t|time)$|filing/i;
 const DATE_RE = /^(\d{4})-\d{2}-\d{2}/;
 
+// A date (or date-time) counts as its year only, on both sides of the check.
+const DATE_IN_TEXT_RE = /\b(\d{4})-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?/g;
+
 function figures(text) {
   const out = [];
-  for (const m of String(text || '').replace(/\[\d+\]/g, ' ').matchAll(FIGURE_RE)) {
+  const clean = String(text || '').replace(/\[\d+\]/g, ' ').replace(DATE_IN_TEXT_RE, '$1');
+  for (const m of clean.matchAll(FIGURE_RE)) {
     const [raw, dollar, neg, int, frac = '', unitRaw] = m;
+    const end = m.index + raw.length;
+    // Part of a word, not a figure: "12-month", "52-week", "COVID-19".
+    if (/^-[A-Za-z]/.test(clean.slice(end, end + 2))) continue;
+    if (neg && /[A-Za-z]/.test(clean[m.index - 1] || '')) continue;
     const unit = unitRaw ? unitRaw.toLowerCase() : '';
     const scale = !unit || unit === '%' || unit === 'percent' ? 1 : UNITS[unit];
     const base = Number(`${int.replace(/,/g, '')}${frac ? `.${frac}` : ''}`);
