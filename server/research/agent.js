@@ -16,19 +16,29 @@ async function runResearch({ question, step, tools, maxCalls = 6, budgetMs = 600
   const toolCalls = [];
   const results = [];
   const specs = tools.map(({ name, description, parameters }) => ({ name, description, parameters }));
-  const finish = (answer, stopped) => ({
-    answer,
-    toolCalls,
-    stopped,
-    ...(answer === null ? { grounded: null, ungrounded: [] } : checkGrounding(answer, results, question)),
-  });
+  // An answer with no fetched data behind it has nothing to be grounded in —
+  // even when it states no figures — so it's flagged noData, never grounded.
+  const finish = (answer, stopped) => {
+    if (answer === null) return { answer, toolCalls, stopped, grounded: null, ungrounded: [], noData: !results.length };
+    if (!results.length) return { answer, toolCalls, stopped, grounded: false, ungrounded: [], noData: true };
+    return { answer, toolCalls, stopped, ...checkGrounding(answer, results, question), noData: false };
+  };
+  let nudged = false;
 
   while (toolCalls.length < maxCalls) {
     const left = deadline - now();
     if (left <= 0) return finish(null, 'budget');
     // eslint-disable-next-line no-await-in-loop
     const turn = await step(transcript, specs, { timeoutMs: left });
-    if (!turn.calls.length) return finish(turn.content.trim(), 'answer');
+    if (!turn.calls.length) {
+      // Small local models often answer from memory. Push back once.
+      if (!results.length && !nudged) {
+        nudged = true;
+        transcript.push({ role: 'user', content: 'Before answering, call one of the tools to fetch the data.' });
+        continue;
+      }
+      return finish(turn.content.trim(), 'answer');
+    }
     transcript.push({ role: 'assistant', content: turn.content, calls: turn.calls, raw: turn.raw });
     for (const c of turn.calls) {
       if (toolCalls.length >= maxCalls) break;

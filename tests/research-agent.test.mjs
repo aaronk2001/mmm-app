@@ -55,13 +55,26 @@ describe('runResearch', () => {
     );
     const out = await runResearch({ question: 'q', tools: [fin], step: async (t, s, o) => { seen.push(t.at(-1)); return inner(t, s, o); } });
     expect(out.toolCalls.map((c) => c.error)).toEqual(['ticker must be a symbol like MSFT', 'unknown tool buy_stock']);
-    expect(seen.at(-1).content).toMatch(/unknown tool/);
+    expect(seen[2].content).toMatch(/unknown tool/);
   });
 
   it('stops at the budget without throwing', async () => {
     let t = 0;
     const out = await runResearch({ question: 'q', tools: [fin], budgetMs: 1000, now: () => (t += 600), step: async () => call({ ticker: 'MSFT' }) });
     expect(out).toMatchObject({ stopped: 'budget', answer: null });
+  });
+
+  it('an answer before any tool data gets one nudge to call a tool', async () => {
+    const seen = [];
+    const inner = script({ content: 'Yes, it is growing.', calls: [] }, call({ ticker: 'MSFT' }), { content: 'FCF grew 12.5% [1].', calls: [] });
+    const out = await runResearch({ question: 'q', tools: [fin], step: async (t, s, o) => { seen.push(t.at(-1)); return inner(t, s, o); } });
+    expect(seen[1].content).toMatch(/call one of the tools/i);
+    expect(out).toMatchObject({ stopped: 'answer', answer: 'FCF grew 12.5% [1].', grounded: true, noData: false });
+  });
+
+  it('still no tool after the nudge → answer flagged noData, never grounded', async () => {
+    const out = await runResearch({ question: 'q', tools: [fin], step: script({ content: 'Yes, it is growing.', calls: [] }) });
+    expect(out).toMatchObject({ answer: 'Yes, it is growing.', grounded: false, noData: true });
   });
 
   it('keeps the adapter raw turn on the transcript (Claude thinking blocks must be echoed)', async () => {

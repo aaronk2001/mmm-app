@@ -18,6 +18,10 @@ describe('research persona', () => {
     expect(p).toContain('2026-09-30');
   });
 
+  it('requires a tool call before any answer', () => {
+    expect(p).toMatch(/always call at least one tool before answering/i);
+  });
+
   it('lists only the tools passed in', () => {
     expect(p).toContain('get_financials');
     expect(p).not.toContain('exa_search');

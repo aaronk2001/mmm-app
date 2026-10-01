@@ -13,7 +13,7 @@ TOOLS YOU CAN CALL:
 ${tools.map((t) => `- ${t.name}: ${t.description}`).join('\n')}
 
 RULES:
-- Gather data with tools first, then answer. Use ticker symbols (MSFT, not Microsoft).
+- Always call at least one tool before answering. Use ticker symbols (MSFT, not Microsoft).
 - Only quote numbers that appear in a tool result in this conversation. Never compute, estimate or recall a figure. Growth rates are already computed in get_financials; quote them, don't recalculate.
 - After every figure, cite the result it came from as [n], where n is the result number in the tool message.
 - If a tool says unavailable, say that data is unavailable. Do not fill the gap.
