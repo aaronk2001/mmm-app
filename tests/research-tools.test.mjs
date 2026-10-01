@@ -89,6 +89,25 @@ describe('fallback', () => {
     expect(out.data.years[0].free_cash_flow).toBe(7);
   });
 
+  it('a source that throws falls through to the next one', async () => {
+    const tool = {
+      sources: [
+        { label: 'A', ready: () => true, run: async () => { throw new TypeError('bad payload'); } },
+        { label: 'B', ready: () => true, run: async () => ({ data: { ok: 1 }, cached_at: null, offline: false }) },
+      ],
+    };
+    expect(await tools.runTool(tool, {})).toMatchObject({ data: { ok: 1 }, source: 'B' });
+  });
+
+  it('FD with a malformed payload falls through to Yahoo instead of failing the tool', async () => {
+    repo.setSettings(db(), { online: { market: true, financialDatasets: true } });
+    keys.setKeys({ financialDatasets: 'k' });
+    vi.spyOn(global, 'fetch').mockImplementation(async () => ok({ income_statements: 'not-an-array', cash_flow_statements: [{ revenue: 1 }] }));
+    providers._setYahooForTests({ fundamentalsTimeSeries: async () => [{ date: new Date('2024-06-30T00:00:00Z'), freeCashFlow: 7 }] });
+    const out = await tools.runTool(tools.getTool('get_financials'), { ticker: 'FDBAD' });
+    expect(out.source).toBe('Yahoo Finance fundamentals');
+  });
+
   it('all sources offline → data null, offline true', async () => {
     repo.setSettings(db(), { online: { market: true } });
     providers._setYahooForTests({ fundamentalsTimeSeries: async () => { throw new Error('down'); } });

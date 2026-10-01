@@ -132,7 +132,10 @@ const TOOLS = [
 async function runTool(tool, args) {
   let last = { data: null, cached_at: null, offline: true, source: null };
   for (const s of tool.sources.filter((x) => x.ready())) {
-    const out = await s.run(args);
+    let out;
+    // A source that throws (bad payload, provider change) is treated like an
+    // offline one: try the next source rather than failing the tool.
+    try { out = await s.run(args); } catch { continue; }
     last = { ...out, source: s.label };
     if (out.data != null) return last;
   }

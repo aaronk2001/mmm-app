@@ -29,8 +29,9 @@ async function annual(ticker) {
     get('/financials/income-statements/', params, `fd:income:${ticker}`),
     get('/financials/cash-flow-statements/', params, `fd:cashflow:${ticker}`),
   ]);
-  const incRows = (inc.data && inc.data.income_statements) || [];
-  const cfRows = (cf.data && cf.data.cash_flow_statements) || [];
+  const rows = (e, key) => (e.data && Array.isArray(e.data[key]) ? e.data[key] : []).filter((r) => r && typeof r.report_period === 'string');
+  const incRows = rows(inc, 'income_statements');
+  const cfRows = rows(cf, 'cash_flow_statements');
   const cached_at = inc.cached_at || cf.cached_at;
   if (!incRows.length && !cfRows.length) return { data: null, cached_at, offline: !!(inc.offline && cf.offline) };
   const byEnd = new Map();
