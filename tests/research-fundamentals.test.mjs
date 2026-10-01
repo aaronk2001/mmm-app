@@ -12,16 +12,26 @@ const providers = require('../server/market/providers.js');
 
 const y = (end, o) => ({ fiscal_year_end: end, revenue: null, net_income: null, operating_cash_flow: null, capex: null, free_cash_flow: null, ...o });
 
+// Growth sits on each year's own row (not in parallel arrays) and each row is
+// labelled FYyyyy: a live run on a 1.5B model mis-aligned parallel arrays and
+// shifted every year label by one.
 describe('withGrowth', () => {
-  it('sorts oldest first and computes YoY in code', () => {
+  it('sorts oldest first, labels fiscal years, and puts YoY on each row', () => {
     const out = withGrowth([
       y('2025-06-30', { revenue: 300, free_cash_flow: 90 }),
       y('2023-06-30', { revenue: 200, free_cash_flow: 100 }),
       y('2024-06-30', { revenue: 250, free_cash_flow: 120 }),
     ]);
-    expect(out.years.map((r) => r.fiscal_year_end)).toEqual(['2023-06-30', '2024-06-30', '2025-06-30']);
-    expect(out.growth.free_cash_flow_yoy_pct).toEqual([null, 20, -25]);
-    expect(out.growth.revenue_yoy_pct).toEqual([null, 25, 20]);
+    expect(out.years.map((r) => r.fiscal_year)).toEqual(['FY2023', 'FY2024', 'FY2025']);
+    expect(out.years.map((r) => r.free_cash_flow_yoy_pct)).toEqual([null, 20, -25]);
+    expect(out.years.map((r) => r.revenue_yoy_pct)).toEqual([null, 25, 20]);
+    expect(out.growth).toBeUndefined();
+  });
+
+  it('drops years with no figures before computing growth', () => {
+    const out = withGrowth([y('2022-06-30', {}), y('2023-06-30', { free_cash_flow: 100 }), y('2024-06-30', { free_cash_flow: 110 })]);
+    expect(out.years.map((r) => r.fiscal_year)).toEqual(['FY2023', 'FY2024']);
+    expect(out.years.map((r) => r.free_cash_flow_yoy_pct)).toEqual([null, 10]);
   });
 
   it('derives FCF from OCF + capex when missing', () => {
@@ -30,7 +40,7 @@ describe('withGrowth', () => {
 
   it('never divides by zero', () => {
     const out = withGrowth([y('2023-01-01', { net_income: 0 }), y('2024-01-01', { net_income: 5 })]);
-    expect(out.growth.net_income_yoy_pct).toEqual([null, null]);
+    expect(out.years.map((r) => r.net_income_yoy_pct)).toEqual([null, null]);
   });
 });
 

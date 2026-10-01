@@ -14,20 +14,30 @@ function yoy(series) {
   });
 }
 
+const FIGURES = ['revenue', 'net_income', 'operating_cash_flow', 'capex', 'free_cash_flow'];
+
+// Growth goes on each year's own row, labelled FYyyyy, and empty years are
+// dropped: a 1.5B model mis-aligned parallel growth arrays with the year list
+// and shifted every year label by one (live MSFT run, 2026-09-30).
 function withGrowth(years) {
   const ys = [...years]
-    .sort((a, b) => (a.fiscal_year_end < b.fiscal_year_end ? -1 : 1))
     .map((r) => ({
       ...r,
       free_cash_flow: r.free_cash_flow ?? (r.operating_cash_flow != null && r.capex != null ? r.operating_cash_flow + r.capex : null),
-    }));
+    }))
+    .filter((r) => FIGURES.some((k) => r[k] != null))
+    .sort((a, b) => (a.fiscal_year_end < b.fiscal_year_end ? -1 : 1));
+  const rev = yoy(ys.map((r) => r.revenue));
+  const ni = yoy(ys.map((r) => r.net_income));
+  const fcf = yoy(ys.map((r) => r.free_cash_flow));
   return {
-    years: ys,
-    growth: {
-      revenue_yoy_pct: yoy(ys.map((r) => r.revenue)),
-      net_income_yoy_pct: yoy(ys.map((r) => r.net_income)),
-      free_cash_flow_yoy_pct: yoy(ys.map((r) => r.free_cash_flow)),
-    },
+    years: ys.map((r, i) => ({
+      fiscal_year: `FY${r.fiscal_year_end.slice(0, 4)}`,
+      ...r,
+      revenue_yoy_pct: rev[i],
+      net_income_yoy_pct: ni[i],
+      free_cash_flow_yoy_pct: fcf[i],
+    })),
   };
 }
 

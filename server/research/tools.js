@@ -66,7 +66,7 @@ const TOOLS = [
   },
   {
     name: 'get_financials',
-    description: 'Up to 5 fiscal years of revenue, net income, operating cash flow, capex and free cash flow, with year-over-year growth already computed.',
+    description: 'Up to 5 fiscal years (labelled FYyyyy) of revenue, net income, operating cash flow, capex and free cash flow; each year carries its own year-over-year growth, already computed.',
     parameters: tickerOnly,
     validate: byTicker,
     sources: [
