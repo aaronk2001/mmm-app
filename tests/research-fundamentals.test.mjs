@@ -35,11 +35,13 @@ describe('withGrowth', () => {
 });
 
 describe('fromYahoo', () => {
+  // Field names as yahoo-finance2 4.0.2 actually returns them (live probe,
+  // 2026-09-30) — unprefixed, unlike the `annual…` names in its docstring.
   it('maps fundamentalsTimeSeries rows', () => {
     expect(fromYahoo([{
-      date: new Date('2024-06-30T00:00:00Z'),
-      annualTotalRevenue: 1, annualNetIncome: 2, annualOperatingCashFlow: 3, annualCapitalExpenditure: -1, annualFreeCashFlow: 2,
-    }])).toEqual([{ fiscal_year_end: '2024-06-30', revenue: 1, net_income: 2, operating_cash_flow: 3, capex: -1, free_cash_flow: 2 }]);
+      date: new Date('2026-06-30T00:00:00Z'), periodType: '12M', TYPE: 'ALL',
+      totalRevenue: 331_839_000_000, netIncome: 2, operatingCashFlow: 3, capitalExpenditure: -1, freeCashFlow: 66_987_000_000,
+    }])).toEqual([{ fiscal_year_end: '2026-06-30', revenue: 331_839_000_000, net_income: 2, operating_cash_flow: 3, capex: -1, free_cash_flow: 66_987_000_000 }]);
   });
 });
 
@@ -58,7 +60,7 @@ describe('providers.yahoo.fundamentals', () => {
 
   it('on → fundamentalsTimeSeries(annual, all) → withGrowth', async () => {
     repo.setSettings(db(), { online: { market: true } });
-    const fts = vi.fn().mockResolvedValue([{ date: new Date('2024-06-30T00:00:00Z'), annualFreeCashFlow: 7 }]);
+    const fts = vi.fn().mockResolvedValue([{ date: new Date('2024-06-30T00:00:00Z'), freeCashFlow: 7 }]);
     providers._setYahooForTests({ fundamentalsTimeSeries: fts });
     const out = await providers.yahoo.fundamentals('msft');
     expect(fts.mock.calls[0][0]).toBe('MSFT');

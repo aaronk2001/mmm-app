@@ -83,7 +83,7 @@ describe('fallback', () => {
 
   it('get_financials: FD off → Yahoo fundamentals', async () => {
     repo.setSettings(db(), { online: { market: true } });
-    providers._setYahooForTests({ fundamentalsTimeSeries: async () => [{ date: new Date('2024-06-30T00:00:00Z'), annualFreeCashFlow: 7 }] });
+    providers._setYahooForTests({ fundamentalsTimeSeries: async () => [{ date: new Date('2024-06-30T00:00:00Z'), freeCashFlow: 7 }] });
     const out = await tools.runTool(tools.getTool('get_financials'), { ticker: 'MSFT' });
     expect(out.source).toBe('Yahoo Finance fundamentals');
     expect(out.data.years[0].free_cash_flow).toBe(7);

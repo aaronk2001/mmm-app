@@ -32,14 +32,16 @@ function withGrowth(years) {
 }
 
 // Yahoo stamps fiscal period ends at UTC midnight, so the UTC date IS the day.
+// yahoo-finance2 4.x returns unprefixed field names (totalRevenue, …), not the
+// `annual…` names its own docstring shows — checked against a live response.
 function fromYahoo(rows) {
   return (rows || []).filter((r) => r && r.date).map((r) => ({
     fiscal_year_end: new Date(r.date).toISOString().slice(0, 10),
-    revenue: num(r.annualTotalRevenue),
-    net_income: num(r.annualNetIncome),
-    operating_cash_flow: num(r.annualOperatingCashFlow),
-    capex: num(r.annualCapitalExpenditure),
-    free_cash_flow: num(r.annualFreeCashFlow),
+    revenue: num(r.totalRevenue),
+    net_income: num(r.netIncome),
+    operating_cash_flow: num(r.operatingCashFlow),
+    capex: num(r.capitalExpenditure),
+    free_cash_flow: num(r.freeCashFlow),
   }));
 }
 

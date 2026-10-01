@@ -53,7 +53,7 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); providers._setYahooForTests(null); });
 
 const ask = (b) => fetch(`${base}/ask`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
-const yahooFcf = () => providers._setYahooForTests({ fundamentalsTimeSeries: async () => [{ date: new Date('2024-06-30T00:00:00Z'), annualFreeCashFlow: 70 }] });
+const yahooFcf = () => providers._setYahooForTests({ fundamentalsTimeSeries: async () => [{ date: new Date('2024-06-30T00:00:00Z'), freeCashFlow: 70 }] });
 
 describe('/api/research', () => {
   it('features off → tools-off, zero outbound', async () => {
