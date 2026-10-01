@@ -114,6 +114,21 @@ describe('/api/research', () => {
     expect(body).toMatchObject({ grounded: false, ungrounded: ['$99B'], noData: false });
   });
 
+  it('a failing cloud call is reported as that backend failing, with the trace kept', async () => {
+    repo.setSettings(db(), { online: { market: true, cloudLlm: true } });
+    keys.setKeys({ cloudLlm: 'bad-key' });
+    global.fetch.mockImplementation(async (url, init) => {
+      const u = String(url);
+      if (u.startsWith(base)) return realFetch(url, init);
+      outbound.push(u);
+      return new Response('{"error":"invalid x-api-key"}', { status: 401 });
+    });
+    const body = await (await ask({ question: 'q?', backend: 'claude' })).json();
+    expect(body).toMatchObject({ available: true, backend: 'claude', stopped: 'error', error: 'cloud model unavailable', answer: null, toolCalls: [] });
+    expect(JSON.stringify(body)).not.toContain('bad-key');
+    expect(outbound).toEqual(['https://api.anthropic.com/v1/messages']);
+  });
+
   it('status lists tools and backends honestly', async () => {
     repo.setSettings(db(), { online: { market: true } });
     const s = await (await fetch(`${base}/status`)).json();

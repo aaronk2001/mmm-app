@@ -38,12 +38,49 @@ describe('runResearch', () => {
     expect(out).toMatchObject({ grounded: false, ungrounded: ['40%'] });
   });
 
-  it('caps at maxCalls then forces a final answer', async () => {
+  it('caps at maxCalls then forces a final answer — with the tool specs still sent and final:true', async () => {
     let n = 0;
-    const step = async (_t, specs) => (specs.length ? call({ ticker: 'MSFT', i: n++ }) : { content: 'Done.', calls: [] });
+    let finalArgs = null;
+    const step = async (_t, specs, opts) => {
+      if (opts.final) { finalArgs = { specs, opts }; return { content: 'Done.', calls: [] }; }
+      return call({ ticker: 'MSFT', i: n++ });
+    };
     const out = await runResearch({ question: 'q', tools: [fin], step, maxCalls: 6 });
     expect(out.toolCalls).toHaveLength(6);
     expect(out).toMatchObject({ stopped: 'cap', answer: 'Done.' });
+    // Cloud APIs reject a transcript holding tool_use/tool_result blocks without tool definitions.
+    expect(finalArgs.specs.map((s) => s.name)).toEqual(['get_financials']);
+  });
+
+  it('every call id in a turn gets a tool message, even past the cap', async () => {
+    let last = null;
+    const three = { content: '', calls: ['a', 'b', 'c'].map((id, i) => ({ id, name: 'get_financials', args: { ticker: 'MSFT', i } })) };
+    const step = async (t, _s, opts) => {
+      if (opts.final) { last = t; return { content: 'Done.', calls: [] }; }
+      return three;
+    };
+    const out = await runResearch({ question: 'q', tools: [fin], step, maxCalls: 2 });
+    expect(out.toolCalls).toHaveLength(2);
+    const toolMsgs = last.filter((m) => m.role === 'tool');
+    expect(toolMsgs.map((m) => m.id)).toEqual(['a', 'b', 'c']);
+    expect(toolMsgs[2].content).toMatch(/tool limit reached/);
+  });
+
+  it('a step that throws keeps the trace and reports the error', async () => {
+    let i = 0;
+    const step = async () => { if (i++ === 0) return call({ ticker: 'MSFT' }); throw new Error('cloud model unavailable'); };
+    const out = await runResearch({ question: 'q', tools: [fin], step });
+    expect(out).toMatchObject({ stopped: 'error', answer: null, error: 'cloud model unavailable' });
+    expect(out.toolCalls).toHaveLength(1);
+  });
+
+  it('skips the forced final step when too little budget is left for it', async () => {
+    let t = 0;
+    let finalCalled = false;
+    const step = async (_t, _s, opts) => { if (opts.final) finalCalled = true; t += 9000; return call({ ticker: 'MSFT', i: t }); };
+    const out = await runResearch({ question: 'q', tools: [fin], step, maxCalls: 6, budgetMs: 58000, now: () => t });
+    expect(finalCalled).toBe(false);
+    expect(out.stopped).toBe('budget');
   });
 
   it('rejects invalid args and unknown tools, feeds errors back, counts toward cap', async () => {
@@ -156,6 +193,33 @@ describe('llm adapters', () => {
     expect(messages[2].content.map((b) => b.tool_use_id)).toEqual(['a', 'b']);
     expect(messages).toHaveLength(3);
     expect(r).toMatchObject({ content: 'done', calls: [] });
+  });
+
+  it('final step: claude keeps tools but sets tool_choice none; openai likewise', async () => {
+    repo.setSettings(db(), { online: { cloudLlm: true, openaiCompat: true } });
+    keys.setKeys({ cloudLlm: 'k', openaiCompat: 'k' });
+    const f = vi.spyOn(global, 'fetch').mockImplementation(async (url) => (String(url).includes('anthropic')
+      ? ok({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'done' }] })
+      : ok({ choices: [{ message: { content: 'done' } }] })));
+    await llm.claudeStep('m', 's')(u, specs, { timeoutMs: 1000, final: true });
+    await llm.openaiStep({ baseUrl: 'https://api.example.com/v1', model: 'm' }, 's')(u, specs, { timeoutMs: 1000, final: true });
+    const claudeBody = JSON.parse(f.mock.calls[0][1].body);
+    const openaiBody = JSON.parse(f.mock.calls[1][1].body);
+    expect(claudeBody.tools).toHaveLength(1);
+    expect(claudeBody.tool_choice).toEqual({ type: 'none' });
+    expect(openaiBody.tools).toHaveLength(1);
+    expect(openaiBody.tool_choice).toBe('none');
+  });
+
+  it('final step: ollama native sends no tools; ollama json asks for the answer only', async () => {
+    const f = vi.spyOn(global, 'fetch').mockImplementation(async () => ok({ message: { content: '{"answer":"done"}' } }));
+    await llm.ollamaNativeStep('m', 's')(u, specs, { timeoutMs: 1000, final: true });
+    const r = await llm.ollamaJsonStep('m', 's')(u, specs, { timeoutMs: 1000, final: true });
+    expect(JSON.parse(f.mock.calls[0][1].body).tools).toBeUndefined();
+    const jsonSys = JSON.parse(f.mock.calls[1][1].body).messages[0].content;
+    expect(jsonSys).toMatch(/answer.*only/i);
+    expect(jsonSys).not.toContain('{"tool":');
+    expect(r.content).toBe('done');
   });
 
   it('claude refusal → throws instead of answering', async () => {

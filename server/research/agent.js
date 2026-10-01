@@ -9,6 +9,8 @@ const { checkGrounding } = require('./grounding');
 const { runTool } = require('./tools');
 
 const MAX_RESULT_CHARS = 4000;
+// Below this, the forced final answer would only time out — stop instead.
+const FINAL_STEP_MIN_MS = 5000;
 
 async function runResearch({ question, step, tools, maxCalls = 6, budgetMs = 60000, now = Date.now }) {
   const deadline = now() + budgetMs;
@@ -18,18 +20,24 @@ async function runResearch({ question, step, tools, maxCalls = 6, budgetMs = 600
   const specs = tools.map(({ name, description, parameters }) => ({ name, description, parameters }));
   // An answer with no fetched data behind it has nothing to be grounded in —
   // even when it states no figures — so it's flagged noData, never grounded.
-  const finish = (answer, stopped) => {
-    if (answer === null) return { answer, toolCalls, stopped, grounded: null, ungrounded: [], noData: !results.length };
+  const finish = (answer, stopped, error) => {
+    if (answer === null) return { answer, toolCalls, stopped, grounded: null, ungrounded: [], noData: !results.length, ...(error ? { error } : {}) };
     if (!results.length) return { answer, toolCalls, stopped, grounded: false, ungrounded: [], noData: true };
     return { answer, toolCalls, stopped, ...checkGrounding(answer, results, question), noData: false };
   };
   let nudged = false;
+  // A failed model call (timeout, bad key, refusal) ends the run but keeps the
+  // tool results already fetched, so the user still sees the trace.
+  const callStep = async (specsForStep, opts) => {
+    try { return { turn: await step(transcript, specsForStep, opts) }; } catch (e) { return { failed: finish(null, 'error', e.message) }; }
+  };
 
   while (toolCalls.length < maxCalls) {
     const left = deadline - now();
     if (left <= 0) return finish(null, 'budget');
     // eslint-disable-next-line no-await-in-loop
-    const turn = await step(transcript, specs, { timeoutMs: left });
+    const { turn, failed } = await callStep(specs, { timeoutMs: left });
+    if (failed) return failed;
     if (!turn.calls.length) {
       // Small local models often answer from memory. Push back once.
       if (!results.length && !nudged) {
@@ -41,7 +49,11 @@ async function runResearch({ question, step, tools, maxCalls = 6, budgetMs = 600
     }
     transcript.push({ role: 'assistant', content: turn.content, calls: turn.calls, raw: turn.raw });
     for (const c of turn.calls) {
-      if (toolCalls.length >= maxCalls) break;
+      // Cloud APIs require an answer for every call id in the turn.
+      if (toolCalls.length >= maxCalls) {
+        transcript.push({ role: 'tool', id: c.id, name: c.name, n: null, content: 'Result: {"error":"tool limit reached"}' });
+        continue;
+      }
       const n = toolCalls.length + 1;
       const tool = tools.find((t) => t.name === c.name);
       let record;
@@ -65,10 +77,13 @@ async function runResearch({ question, step, tools, maxCalls = 6, budgetMs = 600
     }
   }
 
-  if (deadline - now() <= 0) return finish(null, 'budget');
+  if (deadline - now() < FINAL_STEP_MIN_MS) return finish(null, 'budget');
   transcript.push({ role: 'user', content: 'Tool limit reached. Answer now using only the results above.' });
-  const last = await step(transcript, [], { timeoutMs: deadline - now() });
-  return finish(last.content.trim() || null, 'cap');
+  // Specs still go along: cloud APIs reject tool_use/tool_result history
+  // without tool definitions. final:true tells each adapter not to call tools.
+  const { turn, failed } = await callStep(specs, { timeoutMs: deadline - now(), final: true });
+  if (failed) return failed;
+  return finish(turn.content.trim() || null, 'cap');
 }
 
 module.exports = { runResearch };

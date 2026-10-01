@@ -1,6 +1,8 @@
 'use strict';
 
-// Step adapters: (transcript, toolSpecs, { timeoutMs }) -> { content, calls, raw? }.
+// Step adapters: (transcript, toolSpecs, { timeoutMs, final? }) -> { content, calls, raw? }.
+// final:true is the forced last answer: tools must not be called, but cloud
+// APIs still need the tool definitions to accept the tool history.
 // Local Ollama is the primary backend. Claude and OpenAI-compatible endpoints
 // are opt-in cloud backends the user picks per question — never a silent
 // fallback. Cloud calls go through online.fetch with store:false (replies never
@@ -34,12 +36,12 @@ const toOllama = (system, transcript) => [
 ];
 
 function ollamaNativeStep(model, system) {
-  return async (transcript, specs, { timeoutMs }) => {
+  return async (transcript, specs, { timeoutMs, final }) => {
     const msg = await ollama.chatMessage({
       model,
       messages: toOllama(system, transcript),
       timeoutMs: Math.min(timeoutMs, CALL_TIMEOUT),
-      tools: specs.map((s) => ({ type: 'function', function: s })),
+      tools: final ? [] : specs.map((s) => ({ type: 'function', function: s })),
     });
     return {
       content: msg.content,
@@ -51,8 +53,8 @@ function ollamaNativeStep(model, system) {
 // ReAct-style fallback for small models that can't emit native tool_calls
 // reliably: one JSON object per turn, either a tool call or the answer.
 function ollamaJsonStep(model, system) {
-  return async (transcript, specs, { timeoutMs }) => {
-    const sys = specs.length ? `${system}\n\n${jsonProtocolPrompt(specs)}` : `${system}\n\nReply with {"answer": "..."} only.`;
+  return async (transcript, specs, { timeoutMs, final }) => {
+    const sys = final ? `${system}\n\nReply with {"answer": "..."} only.` : `${system}\n\n${jsonProtocolPrompt(specs)}`;
     const flat = transcript.map((m) => {
       if (m.role === 'assistant') return { role: 'assistant', content: JSON.stringify({ tool: m.calls[0].name, args: m.calls[0].args }) };
       if (m.role === 'tool') return { role: 'user', content: m.content };
@@ -89,7 +91,7 @@ async function cloudPost(feature, url, headers, body, timeoutMs) {
 // through online.fetch (feature gate, cooldowns, no-cache), and the app adds
 // no runtime dependencies for optional features.
 function claudeStep(model, system) {
-  return async (transcript, specs, { timeoutMs }) => {
+  return async (transcript, specs, { timeoutMs, final }) => {
     const messages = [];
     for (const m of transcript) {
       if (m.role === 'assistant') {
@@ -113,6 +115,7 @@ function claudeStep(model, system) {
     }
     const body = { model, max_tokens: 16000, system, messages, fallbacks: 'default' };
     if (specs.length) body.tools = specs.map((s) => ({ name: s.name, description: s.description, input_schema: s.parameters }));
+    if (final) body.tool_choice = { type: 'none' };
     const data = await cloudPost('cloudLlm', 'https://api.anthropic.com/v1/messages', {
       'x-api-key': keys.getKey('cloudLlm') || '',
       'anthropic-version': '2023-06-01',
@@ -131,7 +134,7 @@ function claudeStep(model, system) {
 // One adapter for OpenAI, Groq, OpenRouter, Gemini's compatible endpoint, LM
 // Studio… anything speaking /chat/completions with function tools.
 function openaiStep({ baseUrl, model }, system) {
-  return async (transcript, specs, { timeoutMs }) => {
+  return async (transcript, specs, { timeoutMs, final }) => {
     const messages = [{ role: 'system', content: system }, ...transcript.map((m) => {
       if (m.role === 'assistant') {
         return {
@@ -145,6 +148,7 @@ function openaiStep({ baseUrl, model }, system) {
     })];
     const body = { model, messages };
     if (specs.length) body.tools = specs.map((s) => ({ type: 'function', function: s }));
+    if (final) body.tool_choice = 'none';
     const key = keys.getKey('openaiCompat');
     const data = await cloudPost('openaiCompat', `${baseUrl.replace(/\/+$/, '')}/chat/completions`, key ? { Authorization: `Bearer ${key}` } : {}, body, timeoutMs);
     const msg = (data.choices && data.choices[0] && data.choices[0].message) || {};
