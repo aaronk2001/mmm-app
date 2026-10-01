@@ -310,3 +310,20 @@ describe('fred cache key', () => {
     vi.restoreAllMocks();
   });
 });
+
+describe('providers.yahoo SDK paths with market on', () => {
+  afterEach(() => providers._setYahooForTests(null));
+  it('earnings() calls quoteSummary on an SDK instance and caches the result', async () => {
+    setMarket(true);
+    const quoteSummary = vi.fn().mockResolvedValue({ earnings: { x: 1 } });
+    providers._setYahooForTests({ quoteSummary });
+    const out = await providers.yahoo.earnings('msft');
+    expect(quoteSummary).toHaveBeenCalledWith('MSFT', { modules: ['calendarEvents', 'earnings'] });
+    expect(out.offline).toBe(false);
+    expect(out.data).toEqual({ earnings: { x: 1 } });
+  });
+  it('the real default export is a class that must be instantiated (v4)', () => {
+    const YF = require('yahoo-finance2').default;
+    expect(() => YF.quoteSummary('MSFT', { modules: ['earnings'] })).toThrow(/new YahooFinance/);
+  });
+});

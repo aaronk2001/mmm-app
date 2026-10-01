@@ -140,13 +140,18 @@ function withTimeout(promise, ms) {
   });
 }
 
-// Lazily required — keeps module load cheap and makes it trivial to
-// `vi.mock('yahoo-finance2')` in tests without ever touching the network.
+// Lazily required — keeps module load cheap. Tests swap in a fake through
+// _setYahooForTests so they never touch the network.
 let _yf = null;
 function yf() {
-  if (!_yf) _yf = require('yahoo-finance2').default;
+  if (!_yf) {
+    // yahoo-finance2 v4: the default export is a class; static calls throw.
+    const YahooFinance = require('yahoo-finance2').default;
+    _yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+  }
   return _yf;
 }
+function _setYahooForTests(instance) { _yf = instance; }
 
 async function earnings(symbol, { ttl = SLOW_TTL } = {}) {
   const key = String(symbol).toUpperCase();
@@ -214,4 +219,5 @@ module.exports = {
   fred: { series },
   coingecko: { simplePrice },
   frankfurter: { latest },
+  _setYahooForTests,
 };
