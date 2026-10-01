@@ -8,6 +8,7 @@ import RulesManager from './RulesManager';
 import CustomFieldsManager from './CustomFieldsManager';
 import ProfilePanel, { PROFILE_STEPS, PROFILE_DEFAULTS, ALL_PROFILE_FIELDS, buildProfilePayload } from './parts/settings/ProfilePanel';
 import OnlinePanel from './parts/settings/OnlinePanel';
+import { OPENAI_URL_HINT } from './parts/settings/onlineFeatures';
 import ErrorState from '../shared/ErrorState';
 import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
@@ -199,6 +200,17 @@ export default function Settings() {
     const next = { ...(coach || {}), ...patch };
     setCoach(next);
     saveSettings({ coach: next }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
+  }
+
+  // Research cloud-model settings. Settings deep-merge on the server, so a
+  // cleared field is saved as '' (an undefined key would keep the old value).
+  const [research, setResearch] = useState(null);
+  useEffect(() => { if (allSettings && research === null) setResearch(allSettings.research || {}); }, [allSettings, research]);
+  const rs = research || {};
+  function saveResearch(patch) {
+    const next = { ...(research || {}), ...patch };
+    setResearch(next);
+    saveSettings({ research: next }).then((s) => queryClient.setQueryData(['settings'], s)).catch(() => {});
   }
 
   const fileRef = useRef(null);
@@ -421,12 +433,47 @@ export default function Settings() {
             {coachStatus?.available ? 'Connected' : 'Not detected'}
           </span>
         </Row>
-        <Row label="Model" hint="Ollama model the chat coach uses.">
+        <Row label="Model" hint="Ollama model the chat coach and Research use.">
           <input
             className="m-input"
             key={c.model || 'qwen2.5:1.5b-instruct'}
             defaultValue={c.model || 'qwen2.5:1.5b-instruct'}
             onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== (c.model || 'qwen2.5:1.5b-instruct')) saveCoach({ model: v }); }}
+            style={{ width: 220, fontSize: 13 }}
+          />
+        </Row>
+      </Section>
+
+      <Section
+        title="Research"
+        subtitle="Linda runs on your local Ollama model (set under Coach). Cloud models are optional, need their toggle in Online & Keys, and are only used when you pick them on the Research page."
+      >
+        <Row label="Claude model" hint="Used only when you choose Claude for a question.">
+          <input
+            className="m-input"
+            key={`cm-${rs.claudeModel || ''}`}
+            defaultValue={rs.claudeModel || ''}
+            placeholder="claude-opus-5-5"
+            onBlur={(e) => { const v = e.target.value.trim(); if (v !== (rs.claudeModel || '')) saveResearch({ claudeModel: v }); }}
+            style={{ width: 220, fontSize: 13 }}
+          />
+        </Row>
+        <Row label="OpenAI-compatible URL" hint={OPENAI_URL_HINT}>
+          <input
+            className="m-input"
+            key={`ou-${rs.openaiBaseUrl || ''}`}
+            defaultValue={rs.openaiBaseUrl || ''}
+            placeholder="https://…/v1"
+            onBlur={(e) => { const v = e.target.value.trim(); if (v !== (rs.openaiBaseUrl || '')) saveResearch({ openaiBaseUrl: v }); }}
+            style={{ width: 260, fontSize: 13 }}
+          />
+        </Row>
+        <Row label="OpenAI-compatible model" hint="The model name your provider expects.">
+          <input
+            className="m-input"
+            key={`om-${rs.openaiModel || ''}`}
+            defaultValue={rs.openaiModel || ''}
+            onBlur={(e) => { const v = e.target.value.trim(); if (v !== (rs.openaiModel || '')) saveResearch({ openaiModel: v }); }}
             style={{ width: 220, fontSize: 13 }}
           />
         </Row>

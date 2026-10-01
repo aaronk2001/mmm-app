@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Wifi, KeyRound, CheckCircle2, XCircle } from 'lucide-react';
+import { Wifi, KeyRound, CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
 import { api, useApi, queryClient } from '../../../../../lib/query';
+import { FEATURES } from './onlineFeatures';
 
-// Only features with a consumer are shown. server/online/features.js also
-// reserves youtube/telegram/cloudLlm so previously stored settings and keys
-// stay valid, but nothing reads them yet — a toggle for them would be a lie.
-const FEATURES = [
-  { key: 'market', label: 'Market data', hint: 'Quotes, charts, crypto, FX, and macro series (Markets section). FRED key optional.' },
-  { key: 'news', label: 'News', hint: 'Market and per-ticker headlines from Marketaux (Intelligence section). Needs a key.' },
-  { key: 'predictionMarkets', label: 'Prediction markets', hint: 'Polymarket, Kalshi, and Manifold prices (Betting section). No key needed.' },
-  { key: 'sportsOdds', label: 'Sports odds', hint: 'Sportsbook lines from The Odds API (Betting section). Needs a free key.' },
-];
+// Free-option tip under each row. Links open in the OS browser (Electron's
+// window-open handler), never inside the app.
+function FreeTip({ free }) {
+  if (!free) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6, fontSize: 12, color: 'var(--m-ink-2)' }}>
+      <span><span style={{ color: 'var(--m-green)', fontWeight: 600 }}>Free option:</span> {free.text}</span>
+      {free.links.map((l) => (
+        <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--m-accent)', fontSize: 12 }}>
+          {l.label} <ExternalLink size={11} />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 function Toggle({ on, onChange, disabled }) {
   return (
@@ -41,6 +48,7 @@ function FeatureRow({ feature, enabled, onToggle, hasKey, onSaveKey, onTest, tes
         <div>
           <div style={{ fontSize: 14, color: 'var(--m-ink)', fontWeight: 500 }}>{feature.label}</div>
           <div style={{ fontSize: 12, color: 'var(--m-muted)', marginTop: 2 }}>{feature.hint}</div>
+          <FreeTip free={feature.free} />
         </div>
         <Toggle on={enabled} onChange={onToggle} disabled={busy} />
       </div>
