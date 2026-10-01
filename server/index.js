@@ -19,6 +19,7 @@ const newsRoutes = require('./news/routes');
 const bettingRoutes = require('./betting/routes');
 const backtestRoutes = require('./backtest/routes');
 const learnRoutes = require('./learn/routes');
+const researchRoutes = require('./research/routes');
 const { startBackupScheduler } = require('./backup/scheduler');
 const { startMarketSnapshotJob } = require('./jobs');
 const { checkpoint } = require('./db/connection');
@@ -67,9 +68,12 @@ app.use('/api', apiLimiter);
 //    attempts with backoff ~= 25s) — refresh/refresh-holdings do this
 //    sequentially per watchlist/holding symbol, so more than one symbol can
 //    exceed 30s even with every call individually well-behaved.
+//  - /api/research/ask: bounded tool loop with its own 60s budget
+//    (server/research/agent.js).
 const REQUEST_TIMEOUT_MS = 30_000;
 const TIMEOUT_EXEMPT = [
   /^\/api\/money\/coach/,
+  /^\/api\/research\/ask/,
   /^\/api\/backtest\/run/,
   /^\/api\/backtest\/bars\/sync/,
   /^\/api\/market\/refresh(-holdings)?/,
@@ -100,6 +104,7 @@ app.use('/api/news', newsRoutes);
 app.use('/api/betting', bettingRoutes);
 app.use('/api/backtest', backtestRoutes);
 app.use('/api/learn', learnRoutes);
+app.use('/api/research', researchRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
