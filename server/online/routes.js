@@ -8,7 +8,7 @@ const keys = require('./keys');
 
 const router = express.Router();
 
-// GET /api/online/settings -> the seven feature toggles, defaults filled in.
+// GET /api/online/settings -> every feature toggle, defaults filled in.
 router.get('/settings', (_req, res) => {
   try { res.json({ online: online.getOnlineSettings(db()) }); }
   catch (err) { res.status(500).json({ error: err.message }); }

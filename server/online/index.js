@@ -2,9 +2,9 @@
 
 // The online seam — Track 1 of Sprint A. Ships no providers; Track 2 builds
 // market/news/etc. fetchers on top of `fetch()` below. Everything here is
-// opt-in and off by default: `settings.online = { market, news, youtube,
-// predictionMarkets, sportsOdds, telegram, cloudLlm }`, all false unless the
-// user turns a feature on in Settings → Online & Keys.
+// opt-in and off by default: `settings.online.<feature>` for every name in
+// ./features.js, all false unless the user turns a feature on in
+// Settings → Online & Keys.
 //
 // `fetch(url, opts)` never throws for an expected failure. A disabled
 // feature, a timeout, a non-2xx, a 429, or an active cooldown all resolve to
@@ -20,7 +20,7 @@ function defaultOnlineSettings() {
   return Object.fromEntries(FEATURES.map((f) => [f, false]));
 }
 
-// Always returns the full shape (all seven keys) so the Settings panel and
+// Always returns the full shape (every feature key) so the Settings panel and
 // `enabled()` never have to guess about a feature the user hasn't touched yet.
 function getOnlineSettings(d = db()) {
   const settings = repo.getSettings(d);
@@ -140,7 +140,10 @@ async function fetchOnline(url, opts = {}) {
   if (st.rateLimitUntil && now < st.rateLimitUntil) return envelopeFromCache(cacheKey, cfg.ttl, true);
   if (st.errorUntil && now < st.errorUntil) return envelopeFromCache(cacheKey, cfg.ttl, true);
 
-  const cached = readCache(cacheKey);
+  // store:false — never read or write http_cache. For responses that must not
+  // land in exports/backups (LLM replies) or are too bulky to keep.
+  const store = opts.store !== false;
+  const cached = store ? readCache(cacheKey) : null;
   if (cached && now - new Date(cached.cached_at).getTime() < cfg.ttl) {
     return { data: cached.data, cached_at: cached.cached_at, stale: false, offline: false };
   }
@@ -153,7 +156,7 @@ async function fetchOnline(url, opts = {}) {
       body: opts.body,
     }, cacheKey, cfg);
     if (result.ok) {
-      writeCache(cacheKey, result.data, feature, url);
+      if (store) writeCache(cacheKey, result.data, feature, url);
       return { data: result.data, cached_at: new Date().toISOString(), stale: false, offline: false };
     }
     return envelopeFromCache(cacheKey, cfg.ttl, true);
