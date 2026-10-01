@@ -5,7 +5,8 @@
 //
 // `free` is shown in the app under every row so the user can see the free
 // option before turning anything on. Each claim was checked against the
-// provider's own pricing/docs page on 2026-09-30; re-check before changing.
+// provider's own pricing/docs page on 2026-09-30 (FRED and LM Studio pages
+// did not state it outright); re-check before changing a number.
 export const FEATURES = [
   {
     key: 'market',
@@ -17,7 +18,7 @@ export const FEATURES = [
     key: 'news',
     label: 'News',
     hint: 'Market and per-ticker headlines from Marketaux (Intelligence section). Needs a key.',
-    free: { text: 'Marketaux has a free plan with a daily request limit.', links: [{ label: 'Marketaux', url: 'https://www.marketaux.com/pricing' }] },
+    free: { text: 'Marketaux free plan: 100 requests/day.', links: [{ label: 'Marketaux', url: 'https://www.marketaux.com/pricing' }] },
   },
   {
     key: 'predictionMarkets',
@@ -29,25 +30,25 @@ export const FEATURES = [
     key: 'sportsOdds',
     label: 'Sports odds',
     hint: 'Sportsbook lines from The Odds API (Betting section). Needs a key.',
-    free: { text: 'The Odds API has a free monthly plan.', links: [{ label: 'The Odds API', url: 'https://the-odds-api.com' }] },
+    free: { text: 'The Odds API free plan: 500 credits/month.', links: [{ label: 'The Odds API', url: 'https://the-odds-api.com' }] },
   },
   {
     key: 'finnhub',
     label: 'Research: live quotes, metrics & news',
     hint: 'Real-time quotes, valuation ratios and company headlines from finnhub.io (Research section). Needs a key.',
-    free: { text: 'Finnhub has a free plan with a per-minute call limit.', links: [{ label: 'Get a Finnhub key', url: 'https://finnhub.io/register' }] },
+    free: { text: 'Finnhub free plan: 60 calls/minute.', links: [{ label: 'Get a Finnhub key', url: 'https://finnhub.io/register' }] },
   },
   {
     key: 'exa',
     label: 'Research: web search',
     hint: 'Exa web search for business context, not numbers. Sends your search query to api.exa.ai. Needs a key.',
-    free: { text: 'Exa gives free credits when you sign up, then charges per search.', links: [{ label: 'Exa', url: 'https://dashboard.exa.ai' }] },
+    free: { text: 'Exa gives $10 in free credit at sign-up, then charges per search.', links: [{ label: 'Exa', url: 'https://dashboard.exa.ai' }] },
   },
   {
     key: 'financialDatasets',
     label: 'Research: Financial Datasets (optional)',
     hint: 'Statements and ratios from financialdatasets.ai, tried before Yahoo for financials and after Finnhub for metrics. Needs a key.',
-    free: { text: 'Paid. Free alternative: leave this off; Market data covers financials and Finnhub covers metrics.', links: [] },
+    free: { text: 'Paid (from $20 for 1,000 requests). Free alternative: leave this off; Market data covers financials and Finnhub covers metrics.', links: [] },
   },
   {
     key: 'cloudLlm',
@@ -60,9 +61,8 @@ export const FEATURES = [
     label: 'Research: OpenAI-compatible (cloud AI, opt-in)',
     hint: 'Any /chat/completions endpoint. Set the URL and model in Settings → Research. Never used automatically. Key optional for local servers.',
     free: {
-      text: 'Free options: Groq and Google Gemini free tiers, OpenRouter free models, or LM Studio on this PC (no key).',
+      text: 'Free options: Google Gemini free tier, OpenRouter free models, or LM Studio on this PC (no key).',
       links: [
-        { label: 'Groq', url: 'https://console.groq.com' },
         { label: 'Gemini', url: 'https://aistudio.google.com' },
         { label: 'OpenRouter', url: 'https://openrouter.ai' },
         { label: 'LM Studio', url: 'https://lmstudio.ai' },
