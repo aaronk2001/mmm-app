@@ -9,8 +9,8 @@ const keys = require('../online/keys');
 
 const BASE = 'https://finnhub.io/api/v1';
 
-// Our name → Finnhub's /stock/metric field. Margins/returns/growth are
-// already percentages in Finnhub's payload.
+// Our name → Finnhub's /stock/metric field (all names confirmed against a live
+// MSFT response, 2026-10-01). Margins/returns/growth are already percentages.
 const METRICS = {
   pe_ttm: 'peTTM',
   pb: 'pbAnnual',
