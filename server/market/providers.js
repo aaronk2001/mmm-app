@@ -22,6 +22,7 @@ const { db } = require('../db/connection');
 const repo = require('../db/repo');
 const online = require('../online');
 const keys = require('../online/keys');
+const { withGrowth, fromYahoo } = require('../research/fundamentals');
 
 const YF_HOST = 'https://query1.finance.yahoo.com';
 const DEFAULT_TTL = 5 * 60 * 1000;   // quotes/chart — 5 min
@@ -140,13 +141,18 @@ function withTimeout(promise, ms) {
   });
 }
 
-// Lazily required — keeps module load cheap and makes it trivial to
-// `vi.mock('yahoo-finance2')` in tests without ever touching the network.
+// Lazily required — keeps module load cheap. Tests swap in a fake through
+// _setYahooForTests so they never touch the network.
 let _yf = null;
 function yf() {
-  if (!_yf) _yf = require('yahoo-finance2').default;
+  if (!_yf) {
+    // yahoo-finance2 v4: the default export is a class; static calls throw.
+    const YahooFinance = require('yahoo-finance2').default;
+    _yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+  }
   return _yf;
 }
+function _setYahooForTests(instance) { _yf = instance; }
 
 async function earnings(symbol, { ttl = SLOW_TTL } = {}) {
   const key = String(symbol).toUpperCase();
@@ -160,6 +166,22 @@ async function earnings(symbol, { ttl = SLOW_TTL } = {}) {
   }
   // eslint-disable-next-line no-unreachable
   void ttl; // ttl kept for interface symmetry with the other providers
+}
+
+// Annual statements for Research (server/research/). Same gate and offline
+// fallback as earnings(); the summary (not the raw SDK rows) is cached.
+async function fundamentals(symbol) {
+  const key = String(symbol).toUpperCase();
+  if (!online.enabled('market')) return offlineFromPriceCache('fundamentals', key);
+  try {
+    const period1 = `${new Date().getFullYear() - 5}-01-01`;
+    const rows = await withTimeout(yf().fundamentalsTimeSeries(key, { period1, type: 'annual', module: 'all' }), 10000);
+    const data = withGrowth(fromYahoo(rows));
+    repo.upsertPriceCache(db(), { id: `fundamentals:${key}`, kind: 'fundamentals', symbol: key, data, source: 'yahoo', fetched_at: new Date().toISOString() });
+    return { data, cached_at: new Date().toISOString(), stale: false, offline: false };
+  } catch {
+    return offlineFromPriceCache('fundamentals', key);
+  }
 }
 
 async function screener(screenId, { count = 25 } = {}) {
@@ -210,8 +232,9 @@ module.exports = {
   FUTURES_SYMBOLS,
   SECTOR_SYMBOLS,
   SCREENS,
-  yahoo: { quote, chart, indices, futures, sectors, earnings, screener },
+  yahoo: { quote, chart, indices, futures, sectors, earnings, screener, fundamentals },
   fred: { series },
   coingecko: { simplePrice },
   frankfurter: { latest },
+  _setYahooForTests,
 };

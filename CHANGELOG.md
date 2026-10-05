@@ -3,6 +3,23 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/). Pre-1.0 milestones are summarized from the commit history.
 
+## [Unreleased]
+
+### Added
+- Research section (INVEST): Linda, a grounded research agent. Five tools (quote, annual
+  financials, key metrics, company news, web search) over Yahoo, Finnhub, Exa and optional
+  Financial Datasets; at most 6 tool calls in 60 s; every figure cited to its tool result;
+  a deterministic check flags figures no tool returned. Local Ollama by default; Claude and
+  OpenAI-compatible endpoints are opt-in, picked per question, never an automatic fallback.
+- Online feature keys `finnhub`, `exa`, `financialDatasets`, `openaiCompat` (all off by
+  default); `cloudLlm` now has a consumer. Settings → Online & Keys shows a free option for
+  every key.
+- `online.fetch(..., { store: false })` for responses that must never reach `http_cache`.
+
+### Fixed
+- Markets earnings and screener always served cache: yahoo-finance2 v4 must be instantiated,
+  and the static call threw.
+
 ## [1.0.0] — 2026-09-30
 
 First public release.

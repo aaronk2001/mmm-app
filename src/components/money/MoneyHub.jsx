@@ -19,6 +19,7 @@ import {
   Newspaper,
   Dices,
   ChevronDown,
+  Microscope,
 } from 'lucide-react';
 import '../../styles/money-theme.css';
 import Card from './shared/Card';
@@ -63,6 +64,7 @@ const IMPORTERS = {
   trades:       () => import('./sections/Trades'),
   intelligence: () => import('./sections/Intelligence'),
   betting:      () => import('./sections/Betting'),
+  research:     () => import('./sections/Research'),
   learn:        () => import('./sections/Learn'),
   settings:     () => import('./sections/Settings'),
 };
@@ -90,6 +92,7 @@ const SECTIONS = [
   { id: 'trades',       label: 'Trades',               icon: CandlestickChart, group: 'invest' },
   { id: 'intelligence', label: 'Intelligence',         icon: Newspaper,       group: 'invest' },
   { id: 'betting',      label: 'Betting',              icon: Dices,           group: 'invest' },
+  { id: 'research',     label: 'Research',             icon: Microscope,      group: 'invest' },
   { id: 'learn',        label: 'Learn',                icon: GraduationCap,   group: 'grow' },
   { id: 'settings',     label: 'Settings & Privacy',   icon: Settings },      // ungrouped, pinned to the bottom
 ];

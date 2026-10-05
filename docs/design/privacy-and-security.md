@@ -4,7 +4,7 @@
 
 ## Abstract
 
-MMM (Making Money Moves) is a local-first personal finance desktop application built on Electron 30 with an Express backend and SQLite datastore. This document specifies the threat model, verifies the local-first privacy claim against outbound network activity, details key storage mechanisms, and enumerates security controls across Electron hardening, server configuration, and packaging. The app ships no telemetry; all seven online features are opt-in and off by default; API keys are encrypted on disk via Electron's safeStorage and decrypted only in the main process; and user data remains in `%APPDATA%\mmm` local to the machine.
+MMM (Making Money Moves) is a local-first personal finance desktop application built on Electron 30 with an Express backend and SQLite datastore. This document specifies the threat model, verifies the local-first privacy claim against outbound network activity, details key storage mechanisms, and enumerates security controls across Electron hardening, server configuration, and packaging. The app ships no telemetry; every online feature is opt-in and off by default; API keys are encrypted on disk via Electron's safeStorage and decrypted only in the main process; and user data remains in `%APPDATA%\mmm` local to the machine.
 
 ---
 
@@ -55,9 +55,10 @@ The app requires no login, registration, or account creation. All data is privat
 ## 3. Online Features & Network Gating
 
 ### Feature Inventory
-Seven optional online features, all **off by default** (server/online/features.js:9):
+Eleven optional online features, all **off by default** (`server/online/features.js`):
 ```javascript
-['market', 'news', 'youtube', 'predictionMarkets', 'sportsOdds', 'telegram', 'cloudLlm']
+['market', 'news', 'youtube', 'predictionMarkets', 'sportsOdds', 'telegram', 'cloudLlm',
+ 'exa', 'financialDatasets', 'finnhub', 'openaiCompat']
 ```
 
 ### Feature Lifecycle
@@ -68,7 +69,7 @@ Seven optional online features, all **off by default** (server/online/features.j
 
 ### Outbound Network Inventory
 
-This is every remote host the server code contacts (`server/market/providers.js`, `server/news/providers.js`, `server/betting/providers.js`, `server/money/ollama.js`).
+This is every remote host the server code contacts (`server/market/providers.js`, `server/news/providers.js`, `server/betting/providers.js`, `server/research/`, `server/money/ollama.js`).
 
 | Host | Feature key | Default | Purpose |
 |------|-------------|---------|---------|
@@ -79,11 +80,17 @@ This is every remote host the server code contacts (`server/market/providers.js`
 | `api.marketaux.com` | `news` (+ key) | off | Market and per-ticker news |
 | `gamma-api.polymarket.com`, `api.elections.kalshi.com`, `api.manifold.markets` | `predictionMarkets` | off | Prediction-market prices (keyless) |
 | `api.the-odds-api.com` | `sportsOdds` (+ key) | off | Sportsbook lines |
-| `127.0.0.1:11434` (override: `OLLAMA_HOST`) | none — loopback only | best-effort | Local LLM for the coach; absent Ollama degrades to rules-only |
+| Yahoo `fundamentalsTimeSeries` (via `yahoo-finance2`) | `market` | off | Research: annual financials |
+| `finnhub.io` | `finnhub` (+ key) | off | Research: quotes, key metrics, company news |
+| `api.financialdatasets.ai` | `financialDatasets` (+ key) | off | Research: optional statements and ratios |
+| `api.exa.ai` | `exa` (+ key) | off | Research: web search (the query text is sent) |
+| `api.anthropic.com` | `cloudLlm` (+ key) | off | Research: Claude, only when picked for a question; the question and fetched tool data are sent; replies are never cached |
+| user-configured `/chat/completions` host (https, or http on loopback only) | `openaiCompat` (+ optional key) | off | Research: OpenAI-compatible model, only when picked for a question; replies are never cached |
+| `127.0.0.1:11434` (override: `OLLAMA_HOST`) | none — loopback only | best-effort | Local LLM for the coach and Research; absent Ollama degrades to rules-only (coach) or an offline state (Research) |
 
-The `youtube`, `telegram`, and `cloudLlm` keys exist in `server/online/features.js` but have **no consumer**: nothing in the server contacts YouTube, Telegram, or a cloud LLM. `polymarket.com`, `kalshi.com`, and `manifold.markets` appear only as outbound links the user can click.
+The `youtube` and `telegram` keys exist in `server/online/features.js` but have **no consumer**: nothing in the server contacts YouTube or Telegram. Cloud LLMs are reached only from Research, only when the user enables one and picks it for a question; Research never falls back to the cloud on its own. `polymarket.com`, `kalshi.com`, and `manifold.markets` appear only as outbound links the user can click.
 
-**Caching:** responses are stored in `http_cache` with the query string stripped before the URL is saved, so keys passed as query parameters (FRED) never reach exports or backups (`server/online/index.js:66-74`).
+**Caching:** responses are stored in `http_cache` with the query string stripped before the URL is saved, so keys passed as query parameters (FRED) never reach exports or backups (`server/online/index.js`). Research providers send their keys as headers, never in the URL. LLM calls use `online.fetch(..., { store: false })`, so model replies are never written to `http_cache` (and so never to an export or backup).
 
 **Backpressure:** at most 3 in-flight requests; HTTP 429 and error responses set independent per-cache-key cooldowns (`server/online/index.js:34-58`).
 
@@ -141,7 +148,7 @@ Prevents multiple windows; second launch focuses existing window. Guards against
 
 **Body Cap (line 42):** 2 MB limit on JSON uploads.
 
-**Request Timeout (line 68–82):** 30s default; exempts `/api/money/coach` (40s), `/api/backtest/run`, `/api/backtest/bars/sync`, `/api/market/refresh*`.
+**Request Timeout:** 30s default; exempts `/api/money/coach` (40s), `/api/research/ask` (its own 60s budget), `/api/backtest/run`, `/api/backtest/bars/sync`, `/api/market/refresh*`.
 
 **Input Validation:** Write routes validate input (transaction amounts as finite, account types from enum, dates as YYYY-MM-DD, select clauses enum-gated).
 

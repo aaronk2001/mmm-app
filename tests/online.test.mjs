@@ -47,6 +47,21 @@ function setFeature(feature, on) {
 }
 
 describe('online.fetch envelope', () => {
+  it('store:false never reads or writes http_cache', async () => {
+    setFeature('market', true);
+    await online.fetch(upstreamBase, { feature: 'market', cacheKey: 'nostore', store: false, ttl: 60_000 });
+    await online.fetch(upstreamBase, { feature: 'market', cacheKey: 'nostore', store: false, ttl: 60_000 });
+    expect(hitCount).toBe(2);
+    expect(repo.getHttpCacheEntry(db(), 'nostore')).toBeFalsy();
+  });
+
+  it.each(['exa', 'financialDatasets', 'finnhub', 'openaiCompat'])('%s is a known feature, off by default, no socket', async (f) => {
+    expect(online.FEATURES).toContain(f);
+    const out = await online.fetch(upstreamBase, { feature: f, cacheKey: `off-${f}` });
+    expect(hitCount).toBe(0);
+    expect(out.offline).toBe(true);
+  });
+
   it('never opens a socket when the feature is off', async () => {
     const out = await online.fetch(upstreamBase, { feature: 'market', cacheKey: 'off-test' });
     expect(hitCount).toBe(0);
@@ -193,7 +208,7 @@ describe('routes: /api/online', () => {
   afterAll(() => new Promise((resolve) => server.close(resolve)));
   beforeEach(() => keys.setKeys({}));
 
-  it('GET /settings returns all seven features defaulted false', async () => {
+  it('GET /settings returns every feature defaulted false', async () => {
     const res = await fetch(`${base}/settings`);
     const body = await res.json();
     expect(res.status).toBe(200);

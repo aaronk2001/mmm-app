@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'docs', 'screenshots');
 const PORT = 5099;
 const BASE = `http://127.0.0.1:${PORT}`;
-const SHOTS = ['overview', 'transactions', 'budget', 'cashflow', 'debt', 'plan', 'reports', 'learn'];
+const SHOTS = ['overview', 'transactions', 'budget', 'cashflow', 'debt', 'plan', 'reports', 'learn', 'research'];
 // Recharts animates on mount; capture only after it settles.
 const SETTLE_MS = 4000;
 

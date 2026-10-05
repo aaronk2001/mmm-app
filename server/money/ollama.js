@@ -59,4 +59,26 @@ async function chat({ model, messages, temperature = 0.4, timeoutMs = 40000 }) {
   }
 }
 
-module.exports = { HOST, DEFAULT_MODEL, listModels, status, chat };
+// Full assistant message, with optional native tools or JSON mode. Used by
+// Research (server/research/llm.js); chat() above stays text-only for the coach.
+async function chatMessage({ model, messages, tools, format, temperature = 0.2, timeoutMs = 40000 }) {
+  const t = withTimeout(timeoutMs);
+  try {
+    const body = { model, messages, stream: false, options: { temperature } };
+    if (tools && tools.length) body.tools = tools;
+    if (format) body.format = format;
+    const res = await fetch(`${HOST}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: t.signal,
+    });
+    if (!res.ok) throw new Error(`ollama ${res.status}`);
+    const j = await res.json();
+    return { content: (j.message && j.message.content) || '', tool_calls: (j.message && j.message.tool_calls) || [] };
+  } finally {
+    t.done();
+  }
+}
+
+module.exports = { HOST, DEFAULT_MODEL, listModels, status, chat, chatMessage };

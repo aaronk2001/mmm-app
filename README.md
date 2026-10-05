@@ -62,6 +62,14 @@ screener), paper trading behind a strategy gate, a deterministic backtester
 with 15 performance metrics, market news, and a read-only prediction-market
 and sportsbook board with correct de-vigging and arbitrage math.
 
+**Research:** Linda, a Buffett/Munger-minded research agent. Ask about a
+ticker and she calls up to six tools (quote, five years of financials, key
+metrics, company news, web search) and answers with every figure cited back to
+the tool result it came from. Year-over-year growth is computed in code, and a
+deterministic check flags any figure in the answer that no tool returned. Runs
+on local Ollama by default; Claude or any OpenAI-compatible endpoint can be
+picked per question once you enable it.
+
 **Grow:** 15 lessons across three modules, personalized with *your* numbers
 and scheduled with FSRS spaced repetition.
 
@@ -167,8 +175,10 @@ tests/                    vitest suites
 - **Dev:** `server/store/money/mmm.db`. The server refuses to start without
   `MMM_DATA_DIR` or `MMM_ALLOW_DEV_DB=1`. `npm run dev` sets the latter. For
   one-off scripts use a throwaway dir: `MMM_DATA_DIR=$(mktemp -d) node script.js`.
-- **Online features:** market, news, prediction markets, and sports odds, each
-  toggled in Settings → Online & Keys. With every toggle off, all money
+- **Online features:** market, news, prediction markets, sports odds, and the
+  Research providers (Finnhub, Exa, Financial Datasets) and opt-in cloud models
+  (Claude, OpenAI-compatible), each toggled in Settings → Online & Keys, which
+  also lists a free option for every key. With every toggle off, all money
   features work fully offline.
 
 ## Disclaimer
@@ -184,9 +194,9 @@ v1.0 is the first public release. Windows is the packaged target; the code
 is cross-platform, but macOS and Linux builds are untested. Planned next:
 an upgrade from Electron 30 (end-of-life) to a supported major, import
 staging with de-duplication, transfer matching and splits, a bill
-calendar, and signed builds. The feature keys `youtube`, `telegram`, and
-`cloudLlm` are reserved in `server/online/features.js` but have no consumer
-yet, so Settings does not show them.
+calendar, and signed builds. The feature keys `youtube` and `telegram` are
+reserved in `server/online/features.js` but have no consumer yet, so
+Settings does not show them.
 
 ## License
 
