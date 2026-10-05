@@ -8,7 +8,6 @@
 // fallback. Cloud calls go through online.fetch with store:false (replies never
 // reach http_cache, so never an export/backup) and retries:0 (no double billing).
 
-const crypto = require('crypto');
 const ollama = require('../money/ollama');
 const online = require('../online');
 const keys = require('../online/keys');
@@ -45,7 +44,9 @@ function ollamaNativeStep(model, system) {
     });
     return {
       content: msg.content,
-      calls: msg.tool_calls.map((c, i) => ({ id: `o${transcript.length}-${i}`, name: c.function.name, args: parseArgs(c.function.arguments) })),
+      calls: msg.tool_calls
+        .filter((c) => c && c.function && typeof c.function.name === 'string')
+        .map((c, i) => ({ id: `o${transcript.length}-${i}`, name: c.function.name, args: parseArgs(c.function.arguments) })),
     };
   };
 }
@@ -78,7 +79,9 @@ async function cloudPost(feature, url, headers, body, timeoutMs) {
     method: 'POST',
     store: false,
     retries: 0,
-    cacheKey: `${feature}:${crypto.randomUUID()}`,
+    // Stable per endpoint so 429/error cooldowns carry over between calls;
+    // store:false keeps replies out of http_cache regardless.
+    cacheKey: `${feature}:${url}`,
     timeout: Math.min(timeoutMs, 45000),
     headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),

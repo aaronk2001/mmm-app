@@ -1,6 +1,6 @@
 // Research page logic that decides what the user can see and pick.
 import { describe, it, expect } from 'vitest';
-import { pickerOptions, citationParts, failureCopy } from '../src/components/money/sections/parts/research/logic.js';
+import { pickerOptions, citationParts, failureCopy, offlineCopy } from '../src/components/money/sections/parts/research/logic.js';
 
 const b = (id, available) => ({ id, label: id, available, model: available ? 'm' : null });
 
@@ -36,5 +36,16 @@ describe('failureCopy', () => {
 
   it('local failures point at Ollama', () => {
     expect(failureCopy({ backend: 'ollama', error: 'This operation was aborted' })).toMatch(/Ollama/);
+  });
+});
+
+describe('offlineCopy', () => {
+  const copy = { 'no-model': 'start ollama', error: 'generic failure' };
+  it("shows the server's error message instead of the generic copy", () => {
+    expect(offlineCopy({ reason: 'error', error: 'ticker must be a symbol like MSFT' }, copy)).toBe('ticker must be a symbol like MSFT');
+  });
+  it('falls back to the copy for the reason, then the generic copy', () => {
+    expect(offlineCopy({ reason: 'no-model' }, copy)).toBe('start ollama');
+    expect(offlineCopy({ reason: 'error' }, copy)).toBe('generic failure');
   });
 });

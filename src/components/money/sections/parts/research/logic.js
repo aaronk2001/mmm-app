@@ -22,6 +22,13 @@ export function citationParts(text, calls) {
   }).filter((p) => !('text' in p) || p.text !== '');
 }
 
+// A failed request (e.g. a 400 for a bad ticker) carries the server's own
+// message, which says more than the generic copy.
+export function offlineCopy({ reason, error }, copy) {
+  if (reason === 'error' && error) return error;
+  return copy[reason] || copy.error;
+}
+
 export function failureCopy({ backend, error }) {
   const detail = error ? ` (${error})` : '';
   if (backend === 'claude') return `The Claude call failed${detail}. Check the key in Settings → Online & Keys and the model name in Settings → Research.`;

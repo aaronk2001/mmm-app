@@ -12,6 +12,8 @@ const llm = require('../server/research/llm.js');
 const { TOOLS } = require('../server/research/tools.js');
 const { researchSystemPrompt } = require('../server/research/persona.js');
 
+const localToday = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 const QUESTIONS = [
   'Is MSFT free cash flow growing?', 'What is AAPL trading at?', 'How profitable is NVDA?', 'Is KO revenue growing?',
   'Any news on GOOGL this week?', 'What is the price of TSLA?', 'Has AMZN capex gone up?', 'What is the P/E of JNJ?',
@@ -24,7 +26,7 @@ if (!st.available) {
   process.exit(0);
 }
 const specs = TOOLS.map(({ name, description, parameters }) => ({ name, description, parameters }));
-const system = researchSystemPrompt({ tools: TOOLS, today: new Date().toISOString().slice(0, 10) });
+const system = researchSystemPrompt({ tools: TOOLS, today: localToday() });
 
 for (const [mode, make] of [['native', llm.ollamaNativeStep], ['json', llm.ollamaJsonStep]]) {
   const step = make(st.model, system);

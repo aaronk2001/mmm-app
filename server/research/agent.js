@@ -12,6 +12,32 @@ const MAX_RESULT_CHARS = 4000;
 // Below this, the forced final answer would only time out — stop instead.
 const FINAL_STEP_MIN_MS = 5000;
 
+// The parts of `v` whose JSON falls inside the first `limit` chars, walked in
+// JSON.stringify order — what the model saw after truncation. A value cut off
+// mid-way is dropped, so it can't ground a figure.
+function visible(v, limit) {
+  let used = 0;
+  const walk = (x) => {
+    if (x === null || typeof x !== 'object') {
+      used += JSON.stringify(x).length;
+      return used <= limit ? x : undefined;
+    }
+    const arr = Array.isArray(x);
+    const out = arr ? [] : {};
+    used += 1;
+    const entries = arr ? x.map((y, i) => [i, y === undefined ? null : y]) : Object.entries(x).filter(([, y]) => y !== undefined && typeof y !== 'function');
+    entries.forEach(([k, y], i) => {
+      if (used > limit) return;
+      used += (i ? 1 : 0) + (arr ? 0 : JSON.stringify(k).length + 1);
+      const w = walk(y);
+      if (w !== undefined) { if (arr) out.push(w); else out[k] = w; }
+    });
+    used += 1;
+    return out;
+  };
+  return walk(v);
+}
+
 async function runResearch({ question, step, tools, maxCalls = 6, budgetMs = 60000, now = Date.now }) {
   const deadline = now() + budgetMs;
   const transcript = [{ role: 'user', content: question }];
@@ -67,7 +93,7 @@ async function runResearch({ question, step, tools, maxCalls = 6, budgetMs = 600
         const out = await runTool(tool, args);
         record = { n, tool: tool.name, args, source: out.source, cached_at: out.cached_at, offline: out.offline };
         payload = out.data == null ? { error: 'unavailable (offline or no data)' } : out.data;
-        if (out.data != null) results.push(out.data);
+        if (out.data != null) results.push(visible(out.data, MAX_RESULT_CHARS));
       } catch (e) {
         record = { n, tool: c.name, args: c.args, source: null, cached_at: null, offline: false, error: e.message };
         payload = { error: e.message };

@@ -4,12 +4,14 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { db } from '../server/db/connection.js';
 import repo from '../server/db/repo.js';
-import online from '../server/online/index.js';
 
 const require = createRequire(import.meta.url);
 const { runResearch } = require('../server/research/agent.js');
 const llm = require('../server/research/llm.js');
 const keys = require('../server/online/keys.js');
+// The same instance llm.js requires — an ESM import would get its own copy,
+// whose cooldowns _resetForTests() would clear instead.
+const online = require('../server/online/index.js');
 
 const fin = {
   name: 'get_financials',
@@ -121,6 +123,12 @@ describe('runResearch', () => {
     await runResearch({ question: 'q', tools: [fin], step: async (t, s, o) => { seen.push([...t]); return inner(t, s, o); } });
     expect(seen[1].find((m) => m.role === 'assistant').raw).toEqual(raw);
   });
+
+  it('grounds only against the part of a result the model saw', async () => {
+    const big = { ...fin, sources: [{ label: 'Big', ready: () => true, run: async () => ({ data: { pad: 'x'.repeat(5000), late: 777.5 }, cached_at: null, offline: false }) }] };
+    const out = await runResearch({ question: 'q', tools: [big], step: script(call({ ticker: 'MSFT' }), { content: 'It is 777.5 [1].', calls: [] }) });
+    expect(out).toMatchObject({ grounded: false, ungrounded: ['777.5'] });
+  });
 });
 
 const ok = (b) => new Response(JSON.stringify(b), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -134,6 +142,21 @@ describe('llm adapters', () => {
   it('ollama native maps tool_calls (string args too)', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(ok({ message: { content: '', tool_calls: [{ function: { name: 'get_financials', arguments: '{"ticker":"MSFT"}' } }] } }));
     expect((await llm.ollamaNativeStep('m', 's')(u, specs, { timeoutMs: 1000 })).calls[0]).toMatchObject({ name: 'get_financials', args: { ticker: 'MSFT' } });
+  });
+
+  it('ollama native drops malformed tool_calls entries', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(ok({ message: { content: '', tool_calls: [null, {}, { function: { arguments: '{}' } }, { function: { name: 'get_financials', arguments: '{}' } }] } }));
+    expect((await llm.ollamaNativeStep('m', 's')(u, specs, { timeoutMs: 1000 })).calls.map((c) => c.name)).toEqual(['get_financials']);
+  });
+
+  it('cloud calls share one cooldown key: a 429 holds off the next call', async () => {
+    repo.setSettings(db(), { online: { cloudLlm: true } });
+    keys.setKeys({ cloudLlm: 'k' });
+    const f = vi.spyOn(global, 'fetch').mockResolvedValue(new Response('{}', { status: 429 }));
+    const step = llm.claudeStep('m', 's');
+    await expect(step(u, specs, { timeoutMs: 1000 })).rejects.toThrow(/unavailable/);
+    await expect(step(u, specs, { timeoutMs: 1000 })).rejects.toThrow(/unavailable/);
+    expect(f).toHaveBeenCalledTimes(1);
   });
 
   it('ollama json: tool, answer, junk', async () => {

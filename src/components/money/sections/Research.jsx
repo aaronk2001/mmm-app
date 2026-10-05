@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Microscope, Send, ChevronDown, AlertTriangle, WifiOff } from 'lucide-react';
 import SectionHeader from '../shared/SectionHeader';
 import { api, useApi } from '../../../lib/query';
-import { pickerOptions, citationParts, failureCopy } from './parts/research/logic';
+import { pickerOptions, citationParts, failureCopy, offlineCopy } from './parts/research/logic';
 
 // Linda, the research agent (server/research/). Every figure in an answer is
 // cited as [n] → a chip naming the tool result it came from; the server's
@@ -147,7 +147,7 @@ export default function Research() {
 
       {result && !result.available && (
         <div className="m-card m-card-no-hover" style={{ ...card, ...muted }}>
-          {OFFLINE_COPY[result.reason] || OFFLINE_COPY.error}
+          {offlineCopy(result, OFFLINE_COPY)}
         </div>
       )}
 
