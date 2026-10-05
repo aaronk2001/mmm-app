@@ -135,7 +135,8 @@ function claudeStep(model, system) {
 }
 
 // One adapter for OpenAI, Groq, OpenRouter, Gemini's compatible endpoint, LM
-// Studio… anything speaking /chat/completions with function tools.
+// Studio… anything speaking /chat/completions with function tools. Checked
+// live against Ollama's own /v1 endpoint (qwen2.5:1.5b-instruct), 2026-10-05.
 function openaiStep({ baseUrl, model }, system) {
   return async (transcript, specs, { timeoutMs, final }) => {
     const messages = [{ role: 'system', content: system }, ...transcript.map((m) => {
