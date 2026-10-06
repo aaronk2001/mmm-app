@@ -3,7 +3,9 @@
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/). Pre-1.0 milestones are summarized from the commit history.
 
-## [Unreleased]
+## [1.0.0] — 2026-10-06
+
+First public release.
 
 ### Added
 - Research section (INVEST): Linda, a grounded research agent. Five tools (quote, annual
@@ -16,15 +18,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
   every key.
 - `online.fetch(..., { store: false })` for responses that must never reach `http_cache`.
 
-### Fixed
-- Markets earnings and screener always served cache: yahoo-finance2 v4 must be instantiated,
-  and the static call threw.
-
-## [1.0.0] — 2026-09-30
-
-First public release.
-
-### Added
 - MIT licence, contributing guide, security policy, code of conduct, issue and PR templates.
 - GitHub Actions CI on Ubuntu and Windows: tests, contrast gate, lesson validation, SPA build.
 - Technical design docs in `docs/design/`: ledger, quant, decision support, privacy & security.
@@ -43,6 +36,8 @@ First public release.
 - Settings toggles for `youtube`, `telegram`, `cloudLlm`: reserved keys with no consumer.
 
 ### Fixed
+- Markets earnings and screener always served cache: yahoo-finance2 v4 must be instantiated,
+  and the static call threw.
 - Section headers: the icon wrapper matched a `flex: 1` rule, splitting the row 50/50 and
   stranding the icon mid-page on six sections.
 - Negative amounts render as `-$38.50`, not `$-38.50`; thousands separator in budget overage.
