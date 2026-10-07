@@ -132,7 +132,7 @@ close any running `MMM.exe` first.
 
 ```mermaid
 flowchart LR
-  subgraph Electron["Electron 30 (main process)"]
+  subgraph Electron["Electron 42 (main process)"]
     M[Window, tray, safeStorage keys]
   end
   subgraph Renderer["Renderer (sandboxed)"]
@@ -191,8 +191,7 @@ with a qualified professional.
 ## Status and roadmap
 
 v1.0 is the first public release. Windows is the packaged target; the code
-is cross-platform, but macOS and Linux builds are untested. Planned next:
-an upgrade from Electron 30 (end-of-life) to a supported major, import
+is cross-platform, but macOS and Linux builds are untested. Planned next: import
 staging with de-duplication, transfer matching and splits, a bill
 calendar, and signed builds. The feature keys `youtube` and `telegram` are
 reserved in `server/online/features.js` but have no consumer yet, so

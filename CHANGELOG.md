@@ -28,6 +28,9 @@ First public release.
 - `npm run screenshots`: regenerates the README images from sample data via Electron offscreen rendering.
 - Monthly Dependabot updates for npm and GitHub Actions.
 
+### Changed
+- Electron 30.5.1 (end-of-life) → 42.11.11; better-sqlite3 uses the Electron 42 prebuild.
+
 ### Removed
 - One-time importer for a private predecessor app (route, Settings button, CLI, tests).
 - Internal planning notes and machine-specific helper scripts.
@@ -45,10 +48,6 @@ First public release.
   longer dropped from the payload (the packaged server failed to boot after a lockfile change).
 - Semver-compatible security updates (express, body-parser, qs, react-router, postcss, nanoid).
 - Test timeout raised to 30 s; the esbuild parse check flaked at the 5 s default under load.
-
-### Known issues
-- Ships Electron 30.5.1, which is end-of-life. An upgrade to Electron 42 is prepared and
-  pending an in-app check.
 
 ## Pre-release milestones
 

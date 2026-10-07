@@ -4,7 +4,7 @@
 
 ## Abstract
 
-MMM (Making Money Moves) is a local-first personal finance desktop application built on Electron 30 with an Express backend and SQLite datastore. This document specifies the threat model, verifies the local-first privacy claim against outbound network activity, details key storage mechanisms, and enumerates security controls across Electron hardening, server configuration, and packaging. The app ships no telemetry; every online feature is opt-in and off by default; API keys are encrypted on disk via Electron's safeStorage and decrypted only in the main process; and user data remains in `%APPDATA%\mmm` local to the machine.
+MMM (Making Money Moves) is a local-first personal finance desktop application built on Electron 42 with an Express backend and SQLite datastore. This document specifies the threat model, verifies the local-first privacy claim against outbound network activity, details key storage mechanisms, and enumerates security controls across Electron hardening, server configuration, and packaging. The app ships no telemetry; every online feature is opt-in and off by default; API keys are encrypted on disk via Electron's safeStorage and decrypted only in the main process; and user data remains in `%APPDATA%\mmm` local to the machine.
 
 ---
 
@@ -193,7 +193,6 @@ The build verifies every `require()` in the packaged server resolves from includ
 
 ## 10. Known Limitations & Residual Risks
 
-1. **End-of-life Electron:** v1.0.0 ships Electron 30.5.1, which no longer receives Chromium security patches. Exposure is limited because the renderer only loads the app's own loopback origin (CSP, navigation lock, `setWindowOpenHandler`), but an upgrade to a supported major is the top security item on the roadmap.
 1. **Unsigned Portable Exe:** `MMM.exe` is unsigned; external verification (SHA-256 hash) is required.
 2. **Source Readable on Disk:** the portable build ships the app unpacked under `resources/app` (no asar archive, no integrity fuse); anyone with write access to that folder can modify the app. Accepted, as no tamper resistance is claimed.
 3. **Unauthenticated loopback API:** any local process running as any user can call the API (no token handshake between the Electron shell and the server). Browser-originated attacks are handled by the local guard; local processes are out of scope.
