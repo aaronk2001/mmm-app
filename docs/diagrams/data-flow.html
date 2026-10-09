@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MMM data flow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;   /* white-smoke */
+      --color-ink:     #2d3142;   /* jet-black */
+      --color-muted:   #4f5d75;   /* blue-slate */
+      --color-accent:  #eb6c36;   /* atomic-tangerine */
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1200px; width: 100%; }
+    /* The SVG holds its readable width (min-width == the viewBox width, so the
+       type ramp is never silently scaled down). This wrapper lets a narrow
+       screen scroll the diagram instead of the whole page. */
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 960px; display: block; }
+    /* Paper has no scrollbar, so the local scroller would clip instead of
+       scroll. Let the diagram scale down to the sheet: smaller but whole
+       beats sharp but cut off. Must come after the svg rule above - a media
+       query adds no specificity, so a later plain rule would win. */
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Data flow · MMM</p>
+    <h1>What stays on your machine, and what can leave</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="data-flow-title data-flow-desc">
+        <title id="data-flow-title">MMM data flow: local versus outbound</title>
+        <desc id="data-flow-desc">Data flow showing the renderer, preload, local Express server and SQLite inside the local machine boundary, with Ollama on loopback and opt-in outbound calls through one gate to market, research and cloud-model hosts.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+
+          <!-- OPTIONAL: dot-pattern background. Uncomment the <pattern> and the second <rect> below if you want the dotted paper look. -->
+          <!--
+          <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
+          </pattern>
+          -->
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <!-- <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/> -->
+
+        <!-- Trust zones (drawn first) -->
+        <rect x="32" y="32" width="576" height="472" rx="8" fill="rgba(45,49,66,0.025)" stroke="rgba(45,49,66,0.35)" stroke-width="1.2"/>
+        <rect x="48" y="26" width="224" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="160.0" y="35" fill="rgba(45,49,66,0.6)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">YOUR MACHINE · NOTHING LEAVES BY DEFAULT</text>
+        <rect x="728" y="32" width="200" height="472" rx="8" fill="rgba(45,49,66,0.025)" stroke="rgba(45,49,66,0.25)" stroke-width="1.2" stroke-dasharray="6,4"/>
+        <rect x="744" y="26" width="148" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="818.0" y="35" fill="rgba(45,49,66,0.6)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">THIRD-PARTY HOSTS · OPT-IN</text>
+        <!-- Arrows first (behind boxes) -->
+        <path d="M 192,120 H 288 Q 296,120 296,128 V 240" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 124,152 V 392" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 192,424 H 288 Q 296,424 296,416 V 304" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 352,240 V 128 Q 352,120 360,120 H 464" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 352,304 V 416 Q 352,424 360,424 H 464" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 392,272 H 464" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 592,256 H 616 Q 624,256 624,248 V 128 Q 624,120 632,120 H 744" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <path d="M 592,288 H 616 Q 624,288 624,296 V 416 Q 624,424 632,424 H 744" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <path d="M 592,272 H 744" fill="none" stroke="#eb6c36" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+        <!-- Arrow labels -->
+        <rect x="200" y="98" width="80" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="240.0" y="107" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTP LOOPBACK</text>
+        <rect x="132" y="266" width="52" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="158.0" y="275" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PRELOAD</text>
+        <rect x="212" y="402" width="64" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="244.0" y="411" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">KEYS · IPC</text>
+        <rect x="640" y="250" width="80" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="680.0" y="259" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PROMPT + DATA</text>
+        <!-- Node: Renderer -->
+        <rect x="56" y="88" width="136" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="56" y="88" width="136" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="64" y="96" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+        <text x="76.0" y="105" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">UI</text>
+        <text x="124.0" y="128" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Renderer</text>
+        <text x="124.0" y="143" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">React · sandboxed</text>
+        <!-- Node: Main + preload -->
+        <rect x="56" y="392" width="136" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="56" y="392" width="136" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="64" y="400" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+        <text x="80.0" y="409" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MAIN</text>
+        <text x="124.0" y="432" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Main + preload</text>
+        <text x="124.0" y="447" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">safeStorage keys</text>
+        <!-- Node: Express server -->
+        <rect x="248" y="240" width="144" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="248" y="240" width="144" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="256" y="248" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+        <text x="270.0" y="257" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+        <text x="320.0" y="280" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Express server</text>
+        <text x="320.0" y="295" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">127.0.0.1:5006</text>
+        <!-- Node: SQLite -->
+        <rect x="464" y="88" width="128" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="464" y="88" width="128" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="472" y="96" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+        <text x="484.0" y="105" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+        <text x="528.0" y="128" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">SQLite</text>
+        <text x="528.0" y="143" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">%APPDATA%\mmm</text>
+        <!-- Node: Online gate -->
+        <rect x="464" y="240" width="128" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="464" y="240" width="128" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="472" y="248" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+        <text x="488.0" y="257" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GATE</text>
+        <text x="528.0" y="280" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Online gate</text>
+        <text x="528.0" y="295" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">online.fetch()</text>
+        <!-- Node: Ollama -->
+        <rect x="464" y="392" width="128" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="464" y="392" width="128" height="64" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="472" y="400" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.3)" stroke-width="0.8"/>
+        <text x="486.0" y="409" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LLM</text>
+        <text x="528.0" y="432" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Ollama</text>
+        <text x="528.0" y="447" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">127.0.0.1:11434</text>
+        <!-- Node: Market &amp; news APIs -->
+        <rect x="744" y="88" width="168" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="744" y="88" width="168" height="64" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.3)" stroke-width="1"/>
+        <rect x="752" y="96" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="774.0" y="105" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OPT-IN</text>
+        <text x="828.0" y="128" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Market &amp; news APIs</text>
+        <text x="828.0" y="143" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Yahoo · FRED · Kalshi +6</text>
+        <!-- Node: Cloud LLM -->
+        <rect x="744" y="240" width="168" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="744" y="240" width="168" height="64" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <rect x="752" y="248" width="44" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text x="774.0" y="257" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OPT-IN</text>
+        <text x="828.0" y="280" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Cloud LLM</text>
+        <text x="828.0" y="295" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Claude · OpenAI-compatible</text>
+        <!-- Node: Research data -->
+        <rect x="744" y="392" width="168" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="744" y="392" width="168" height="64" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.3)" stroke-width="1"/>
+        <rect x="752" y="400" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="774.0" y="409" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OPT-IN</text>
+        <text x="828.0" y="432" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Research data</text>
+        <text x="828.0" y="447" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Finnhub · Exa · FinDatasets</text>
+        <!-- Legend strip -->
+        <line x1="40" y1="540" x2="920" y2="540" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
+        <text x="40" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <rect x="40" y="568" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text x="60" y="576" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Focal · prompt leaves</text>
+        <rect x="172" y="568" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="192" y="576" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Local process</text>
+        <rect x="269" y="568" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text x="289" y="576" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Store</text>
+        <rect x="332" y="568" width="14" height="10" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="352" y="576" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Optional local</text>
+        <rect x="434" y="568" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.3)" stroke-width="1"/>
+        <text x="454" y="576" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Third-party host</text>
+        <line x1="548" y1="573" x2="576" y2="573" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="584" y="576" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Local call</text>
+        <line x1="650" y1="573" x2="678" y2="573" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="686" y="576" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">HTTPS, opt-in</text>
+        <line x1="768" y1="573" x2="796" y2="573" stroke="#eb6c36" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+        <text x="804" y="576" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Question + data</text>
+
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

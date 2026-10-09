@@ -169,6 +169,11 @@ tests/                    vitest suites
 
 ## Data and privacy
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/data-flow-dark.png">
+  <img alt="Data flow: the renderer, preload, local Express server and SQLite sit inside your machine; Ollama stays on loopback, and every online call passes one opt-in gate to market, research or cloud-model hosts." src="docs/diagrams/data-flow-light.png" width="960">
+</picture>
+
 - **Packaged app:** everything lives in `%APPDATA%\mmm`: the database, daily
   backups (JSON + live SQLite copy, 30-day retention), preferences, and
   `keys.enc`. Rebuilding or replacing the exe never touches it.
