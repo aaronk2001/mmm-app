@@ -167,6 +167,69 @@ describe('computeAdvice', () => {
   });
 });
 
+describe('computeAdvice — proposals', () => {
+  const efInput = (goals = []) => ({
+    metrics: { monthly_income: 4000, monthly_expenses: 3000 },
+    goalInsights: { emergencyFund: { adequacy: 'low', monthsCovered: 1, targetAmount: 18000.4, currentSaved: 2999.6, monthlyExpenses: 3000 } },
+    goals,
+  });
+  const behindInput = (over = {}) => {
+    const now = new Date();
+    const future = new Date(now.getFullYear(), now.getMonth() + 4, 1);
+    const target_date = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-01`;
+    return {
+      metrics: { monthly_income: 4000, monthly_expenses: 3000 },
+      goals: [{ id: 'g1', name: 'Vacation', target: 5000, current: 500, monthly_contribution: 200, target_date, ...over }],
+      accounts: [],
+    };
+  };
+
+  it('offers a create_goal proposal on a thin emergency fund with no emergency goal', () => {
+    const f = byId(computeAdvice(efInput()), 'emergency-fund-low');
+    expect(f.proposal).toMatchObject({
+      action: 'create_goal',
+      params: { name: 'Emergency fund', target: 18000, current: 3000 },
+      title: 'Create a goal "Emergency fund" for $18,000',
+      verb: 'Create goal',
+    });
+    expect(f.proposal.fields.map((x) => x.label)).toEqual(['Target', 'Already saved', 'Covers']);
+    expect(f.proposal.fingerprint).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it('offers no proposal when an emergency goal already exists', () => {
+    const f = byId(computeAdvice(efInput([{ id: 'e1', name: 'My Emergency Fund', target: 5000, current: 0 }])), 'emergency-fund-low');
+    expect(f).toBeTruthy();
+    expect(f.proposal).toBeUndefined();
+  });
+
+  it('offers an update_goal_contribution proposal on a goal behind pace', () => {
+    const input = behindInput();
+    const f = byId(computeAdvice(input), 'goal-behind-g1');
+    expect(f.proposal.action).toBe('update_goal_contribution');
+    expect(f.proposal.params).toEqual({ goal_id: 'g1', monthly_contribution: 1125 });
+    expect(f.proposal.title).toBe('Raise "Vacation" to $1,125/mo');
+    expect(f.proposal.fields[0]).toEqual({ label: 'Now', value: '$200/mo' });
+  });
+
+  it('drops a dismissed proposal only when the fingerprint matches, keeping the finding', () => {
+    const input = behindInput();
+    const fp = byId(computeAdvice(input), 'goal-behind-g1').proposal.fingerprint;
+    const hit = byId(computeAdvice(input, { dismissed: { 'goal-behind-g1': fp } }), 'goal-behind-g1');
+    expect(hit).toBeTruthy();
+    expect(hit.proposal).toBeUndefined();
+    const miss = byId(computeAdvice(input, { dismissed: { 'goal-behind-g1': 'deadbeefdeadbeef' } }), 'goal-behind-g1');
+    expect(miss.proposal).toBeTruthy();
+  });
+
+  it('fingerprints are key-order independent and change with the data', () => {
+    const a = byId(computeAdvice(behindInput()), 'goal-behind-g1').proposal.fingerprint;
+    const reordered = behindInput();
+    reordered.goals[0] = Object.fromEntries(Object.entries(reordered.goals[0]).reverse());
+    expect(byId(computeAdvice(reordered), 'goal-behind-g1').proposal.fingerprint).toBe(a);
+    expect(byId(computeAdvice(behindInput({ target: 6000 })), 'goal-behind-g1').proposal.fingerprint).not.toBe(a);
+  });
+});
+
 describe('computeDigest', () => {
   it('leads with a positive headline when the week was net-positive', () => {
     const d = computeDigest({ weekOf: '2026-07-06', savedThisWeek: 420, spendThisWeek: 300, spendLastWeek: 500 });

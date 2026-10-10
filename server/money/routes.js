@@ -1,5 +1,9 @@
 const express = require('express');
 const store = require('./store');
+const repo = require('../db/repo');
+const { db } = require('../db/connection');
+const apply = require('../learn/apply');
+const backup = require('../backup/scheduler');
 const advice = require('./advice');
 const ollama = require('./ollama');
 const { coachSystemPrompt } = require('./coach-persona');
@@ -733,11 +737,64 @@ function adviceContext() {
   return { data, metrics, goalInsights, input };
 }
 
+const dismissedProposals = () => (repo.getSettings(db()).coach || {}).dismissedProposals || {};
+const coachFindings = () => advice.computeAdvice(adviceContext().input, { dismissed: dismissedProposals() });
+const isText = (x) => typeof x === 'string' && x.length > 0;
+const coachCtx = () => ({ repo, d: db(), store, validators: v, backup });
+
 router.get('/advice', (req, res) => {
   try {
-    res.json({ findings: advice.computeAdvice(adviceContext().input) });
+    res.json({ findings: coachFindings() });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/advice/confirm', async (req, res) => {
+  const { finding_id, fingerprint } = req.body || {};
+  if (!isText(finding_id) || !isText(fingerprint)) {
+    return res.status(400).json({ error: 'finding_id and fingerprint are required' });
+  }
+  try {
+    const { proposal } = coachFindings().find((f) => f.id === finding_id) || {};
+    if (!proposal) return res.status(409).json({ error: 'That suggestion no longer applies.' });
+    if (proposal.fingerprint !== fingerprint) {
+      return res.status(409).json({ error: 'Your numbers changed since this was suggested. Refresh to see the current suggestion.' });
+    }
+    const applied = await apply.applyAction({ ...coachCtx(), action: proposal.action, params: proposal.params, source: 'coach' });
+    res.json({
+      applied: {
+        activity_log_id: applied.activity_log_id, action: applied.action,
+        entity_type: applied.entity_type, entity_id: applied.entity_id, title: proposal.title,
+      },
+    });
+  } catch (err) {
+    res.status(err.validationErrors ? 400 : 500).json({ error: err.message });
+  }
+});
+
+router.post('/advice/dismiss', (req, res) => {
+  const { finding_id, fingerprint } = req.body || {};
+  if (!isText(finding_id) || !isText(fingerprint)) {
+    return res.status(400).json({ error: 'finding_id and fingerprint are required' });
+  }
+  try {
+    repo.setSettings(db(), { coach: { dismissedProposals: { [finding_id]: fingerprint } } });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/advice/undo', async (req, res) => {
+  const id = (req.body || {}).activity_log_id;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'activity_log_id must be an integer' });
+  try {
+    await apply.undoActivity({ ...coachCtx(), activityLogId: id });
+    res.json({ ok: true });
+  } catch (err) {
+    const status = err.message === 'Applied action not found' ? 404 : err.message === 'Already undone' ? 409 : 400;
+    res.status(status).json({ error: err.message });
   }
 });
 

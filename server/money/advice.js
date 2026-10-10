@@ -7,11 +7,14 @@
 // rephrases these findings; it never produces the numbers.
 //
 // A Finding:
-//   { id, severity, category, title, detail, impact, action }
+//   { id, severity, category, title, detail, impact, action, proposal? }
 // severity: 'critical' | 'warn' | 'info' | 'good'
 // impact:   0-100 ranking score (higher = surfaced first / nudged)
 // action:   { label, route, params } | null  — deep-link to the fixing screen
+// proposal: { action, params, title, fields, consequence, verb, fingerprint } — a reversible
+//           apply-action the user can confirm; fingerprint pins the numbers it was built on
 
+const { createHash } = require('node:crypto');
 const { localDateFromStr } = require('./calc');
 
 const SEVERITY_FLOOR = { critical: 80, warn: 55, info: 25, good: 5 };
@@ -20,6 +23,14 @@ const money = (n) => {
   const v = Math.round(Number(n) || 0);
   return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US');
 };
+const stableJson = (v) => {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableJson(v[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v) ?? 'null';
+};
+const fingerprint = (obj) => createHash('sha1').update(stableJson(obj)).digest('hex').slice(0, 16);
 const pct = (n) => `${Math.round((Number(n) || 0) * 100)}%`;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
@@ -41,7 +52,7 @@ const scored = (severity, factor) =>
 //   investments    computeInvestmentMetrics(): { marketValue, allocation: [{ symbol, pct }] }
 //   spendThisMonth number  (absolute expense total, current month)
 //   spendLastMonth number  (absolute expense total, previous full month)
-function computeAdvice(input = {}) {
+function computeAdvice(input = {}, { dismissed = {} } = {}) {
   const {
     metrics = {},
     goalInsights = {},
@@ -68,6 +79,24 @@ function computeAdvice(input = {}) {
 
   // ── 1. Emergency fund ──────────────────────────────────────────────────────
   const ef = goalInsights.emergencyFund;
+  const efProposal = () => {
+    if (!(ef.targetAmount > 0) || goals.some((g) => /emergency/i.test(g.name))) return undefined;
+    const target = Math.round(ef.targetAmount);
+    const current = Math.round(ef.currentSaved || 0);
+    return {
+      action: 'create_goal',
+      params: { name: 'Emergency fund', target, current },
+      title: `Create a goal "Emergency fund" for ${money(target)}`,
+      fields: [
+        { label: 'Target', value: money(target) },
+        { label: 'Already saved', value: money(current) },
+        { label: 'Covers', value: `${ef.targetMonths || 6} months of expenses` },
+      ],
+      consequence: 'Adds a goal to track. Nothing moves money.',
+      verb: 'Create goal',
+      fingerprint: fingerprint({ rule: 'emergency-fund', target, current }),
+    };
+  };
   if (ef && ef.monthlyExpenses > 0) {
     if (ef.adequacy === 'low') {
       add({
@@ -78,6 +107,7 @@ function computeAdvice(input = {}) {
         detail: `You've got about ${ef.monthsCovered} month${ef.monthsCovered === 1 ? '' : 's'} of expenses saved. Build to at least 3 — that's ${money(ef.monthlyExpenses * 3)}. This comes before anything else.`,
         impact: scored('critical', 1 - clamp(ef.monthsCovered / 3, 0, 1)),
         action: { label: 'Set an emergency-fund goal', route: '/goals', params: {} },
+        proposal: efProposal(),
       });
     } else if (ef.adequacy === 'ok') {
       add({
@@ -88,6 +118,7 @@ function computeAdvice(input = {}) {
         detail: `${ef.monthsCovered} months banked. Push to a full 6 months (${money(ef.targetAmount)}) and you're bulletproof.`,
         impact: scored('info', 0.6),
         action: { label: 'Review goals', route: '/goals', params: {} },
+        proposal: efProposal(),
       });
     } else if (ef.adequacy === 'good') {
       add({
@@ -227,6 +258,7 @@ function computeAdvice(input = {}) {
     if (monthsLeft <= 0) return;
     const needed = remaining / monthsLeft;
     if (needed > contrib * 1.05) {
+      const raised = Math.ceil(needed);
       add({
         id: `goal-behind-${g.id}`,
         severity: 'info',
@@ -235,6 +267,22 @@ function computeAdvice(input = {}) {
         detail: `To hit ${money(target)} by ${g.target_date} you'd need ${money(needed)}/mo, but you're putting in ${money(contrib)}. Bump it ${money(needed - contrib)} or push the date.`,
         impact: scored('info', clamp((needed - contrib) / (needed || 1), 0, 1)),
         action: { label: 'Adjust the goal', route: '/goals', params: {} },
+        proposal: {
+          action: 'update_goal_contribution',
+          params: { goal_id: g.id, monthly_contribution: raised },
+          title: `Raise "${g.name}" to ${money(raised)}/mo`,
+          fields: [
+            { label: 'Now', value: `${money(contrib)}/mo` },
+            { label: 'Needed', value: `${money(raised)}/mo` },
+            { label: 'By', value: g.target_date },
+          ],
+          consequence: 'Changes the plan only. Nothing moves money.',
+          verb: 'Raise contribution',
+          fingerprint: fingerprint({
+            rule: 'goal-behind', goal_id: g.id, target: g.target, current,
+            monthly_contribution: g.monthly_contribution, target_date: g.target_date,
+          }),
+        },
       });
     }
   });
@@ -293,6 +341,10 @@ function computeAdvice(input = {}) {
       impact: scored('info', clamp(up, 0, 1)),
       action: { label: 'See reports', route: '/reports', params: {} },
     });
+  }
+
+  for (const f of findings) {
+    if (!f.proposal || dismissed[f.id] === f.proposal.fingerprint) delete f.proposal;
   }
 
   return findings.sort((a, b) => b.impact - a.impact);

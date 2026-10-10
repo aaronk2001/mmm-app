@@ -8,11 +8,12 @@
 // learn_applied_actions plus a generic activity_log row (before/after JSON
 // snapshots), so it can be undone later.
 //
-// Exactly six actions ship (the spec's other four — set_target_allocation,
+// Six lesson actions ship (the spec's other four — set_target_allocation,
 // open_paper_trade, log_prediction, schedule_review — are cut for this
 // track, per real lesson content's apply_action values, all within this
 // set): create_goal, set_category_budget, add_recurring, enable_rollover,
-// create_rule, export_backup.
+// create_rule, export_backup. update_goal_contribution is the coach's (source
+// "coach", no lesson), so the coach has no write path the forms lack.
 //
 // Dependency injection: applyAction/undoAction take { repo, d, store,
 // validators, backup } explicitly rather than require()-ing server/db/
@@ -104,6 +105,25 @@ const ACTIONS = {
     },
   },
 
+  update_goal_contribution: {
+    // Coach-only: raises/lowers a goal's monthly contribution. A plan change,
+    // not a money movement.
+    apply(ctx, params) {
+      const goal = findById(ctx.store.getGoals(), params.goal_id);
+      const c = params.monthly_contribution;
+      const errors = [];
+      if (!goal) errors.push(`goal ${params.goal_id} not found`);
+      if (typeof c !== 'number' || !Number.isFinite(c) || c < 0) errors.push('monthly_contribution must be a number >= 0');
+      if (errors.length) fail(errors);
+      const before = { monthly_contribution: goal.monthly_contribution };
+      ctx.store.updateGoal(goal.id, { monthly_contribution: c });
+      return { entity_type: 'goal', entity_id: goal.id, before, after: { monthly_contribution: c } };
+    },
+    undo(ctx, entry) {
+      ctx.store.updateGoal(entry.entity_id, entry.before);
+    },
+  },
+
   export_backup: {
     // One-way: a backup snapshot isn't a mutation of live data, so there's
     // nothing meaningful to revert. undo() rejects explicitly rather than
@@ -120,17 +140,23 @@ const ACTIONS = {
 
 const ACTION_NAMES = Object.keys(ACTIONS);
 
-// Bookkeeping shared by both branches below: one activity_log row plus one
-// learn_applied_actions row for a given apply result, run against `d`.
-function recordApplied(repo, d, lessonId, action, params, result) {
+// Bookkeeping shared by both branches below: one activity_log row, plus one
+// learn_applied_actions row unless another source (the coach) drove the write.
+function recordApplied(repo, d, { lessonId, source }, action, params, result) {
   const activity = repo.createActivityLogEntry(d, {
-    source: 'learn',
+    source,
     action,
     entity_type: result.entity_type,
     entity_id: String(result.entity_id),
     before: result.before,
     after: result.after,
   });
+
+  if (source !== 'learn') {
+    return {
+      action, params, entity_type: result.entity_type, entity_id: String(result.entity_id), activity_log_id: activity.id,
+    };
+  }
 
   return repo.createLearnAppliedAction(d, {
     lesson_id: lessonId,
@@ -142,7 +168,7 @@ function recordApplied(repo, d, lessonId, action, params, result) {
   });
 }
 
-async function applyAction({ repo, d, store, validators, backup, lessonId = null, action, params = {} }) {
+async function applyAction({ repo, d, store, validators, backup, lessonId = null, source = 'learn', action, params = {} }) {
   const def = ACTIONS[action];
   if (!def) throw new Error(`Unknown apply action: ${action}`);
 
@@ -160,33 +186,37 @@ async function applyAction({ repo, d, store, validators, backup, lessonId = null
   // learn_applied_actions record of it — an untracked financial record.
   if (def.apply.constructor.name === 'AsyncFunction') {
     const result = await def.apply(ctx, params);
-    const run = d.transaction(() => recordApplied(repo, d, lessonId, action, params, result));
+    const run = d.transaction(() => recordApplied(repo, d, { lessonId, source }, action, params, result));
     return run();
   }
 
   const run = d.transaction(() => {
     const result = def.apply(ctx, params);
-    return recordApplied(repo, d, lessonId, action, params, result);
+    return recordApplied(repo, d, { lessonId, source }, action, params, result);
   });
   return run();
 }
 
-async function undoAction({ repo, d, store, validators, backup, appliedActionId }) {
+async function undoActivity({ repo, d, store, validators, backup, activityLogId }) {
+  const activity = repo.getActivityLogEntry(d, activityLogId);
+  if (!activity) throw new Error('Applied action not found');
+  if (activity.undone_at) throw new Error('Already undone');
+
+  const def = ACTIONS[activity.action];
+  if (!def) throw new Error(`Unknown apply action: ${activity.action}`);
+
+  await def.undo({ store, validators, backup }, { entity_id: activity.entity_id, before: activity.before });
+  return repo.markActivityLogUndone(d, activity.id, new Date().toISOString());
+}
+
+async function undoAction(ctx) {
+  const { repo, d, appliedActionId } = ctx;
   const applied = repo.getLearnAppliedAction(d, appliedActionId);
   if (!applied) throw new Error('Applied action not found');
   if (applied.undone_at) throw new Error('Applied action already undone');
 
-  const def = ACTIONS[applied.action];
-  if (!def) throw new Error(`Unknown apply action: ${applied.action}`);
-
-  const activity = applied.activity_log_id ? repo.getActivityLogEntry(d, applied.activity_log_id) : null;
-  const ctx = { store, validators, backup };
-  await def.undo(ctx, { entity_id: applied.entity_id, before: activity ? activity.before : null });
-
-  const now = new Date().toISOString();
-  const undone = repo.markLearnAppliedActionUndone(d, applied.id, now);
-  if (activity) repo.markActivityLogUndone(d, activity.id, now);
-  return undone;
+  await undoActivity({ ...ctx, activityLogId: applied.activity_log_id });
+  return repo.markLearnAppliedActionUndone(d, applied.id, new Date().toISOString());
 }
 
-module.exports = { ACTION_NAMES, applyAction, undoAction };
+module.exports = { ACTION_NAMES, applyAction, undoAction, undoActivity };

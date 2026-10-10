@@ -7,7 +7,7 @@ import store from '../server/money/store.js';
 import repo from '../server/db/repo.js';
 import { db as getDb } from '../server/db/connection.js';
 import validators from '../server/middleware/validators.js';
-import { ACTION_NAMES, applyAction, undoAction } from '../server/learn/apply.js';
+import { ACTION_NAMES, applyAction, undoAction, undoActivity } from '../server/learn/apply.js';
 
 let db;
 beforeEach(() => {
@@ -24,9 +24,10 @@ function ctx(extra = {}) {
 }
 
 describe('learn/apply — registry shape', () => {
-  it('ships exactly the 6 non-cut actions', () => {
+  it('ships exactly the 6 non-cut actions plus the coach contribution action', () => {
     expect(ACTION_NAMES.sort()).toEqual([
       'add_recurring', 'create_goal', 'create_rule', 'enable_rollover', 'export_backup', 'set_category_budget',
+      'update_goal_contribution',
     ]);
   });
 
@@ -205,5 +206,72 @@ describe('learn/apply — undoAction edge cases', () => {
     const applied = await applyAction(ctx({ action: 'create_rule', params: { match: 'X', category_id: 'din' } }));
     await undoAction(ctx({ appliedActionId: applied.id }));
     await expect(undoAction(ctx({ appliedActionId: applied.id }))).rejects.toThrow(/already undone/);
+  });
+});
+
+describe('learn/apply — update_goal_contribution', () => {
+  const seedGoal = () => store.createGoal('Trip', 5000, 0, null, '2027-06-01', null, 100);
+
+  it('changes the contribution and undo restores it', async () => {
+    const goal = seedGoal();
+    const applied = await applyAction(ctx({
+      source: 'coach', action: 'update_goal_contribution', params: { goal_id: goal.id, monthly_contribution: 450 },
+    }));
+    expect(applied).toMatchObject({ entity_type: 'goal', entity_id: goal.id });
+    expect(store.getGoals().find((g) => g.id === goal.id).monthly_contribution).toBe(450);
+    const entry = repo.getActivityLogEntry(db, applied.activity_log_id);
+    expect(entry.before).toEqual({ monthly_contribution: 100 });
+    expect(entry.after).toEqual({ monthly_contribution: 450 });
+
+    await undoActivity(ctx({ activityLogId: applied.activity_log_id }));
+    expect(store.getGoals().find((g) => g.id === goal.id).monthly_contribution).toBe(100);
+  });
+
+  it('rejects an unknown goal', async () => {
+    const err = await applyAction(ctx({
+      action: 'update_goal_contribution', params: { goal_id: 'nope', monthly_contribution: 50 },
+    })).catch((e) => e);
+    expect(err.validationErrors).toHaveLength(1);
+  });
+
+  it.each([-1, 'abc', null, Infinity])('rejects monthly_contribution %s without writing', async (bad) => {
+    const goal = seedGoal();
+    const err = await applyAction(ctx({
+      action: 'update_goal_contribution', params: { goal_id: goal.id, monthly_contribution: bad },
+    })).catch((e) => e);
+    expect(err.validationErrors).toHaveLength(1);
+    expect(store.getGoals().find((g) => g.id === goal.id).monthly_contribution).toBe(100);
+    expect(repo.getAllActivityLog(db)).toHaveLength(0);
+  });
+});
+
+describe('learn/apply — coach source without a lesson', () => {
+  it('writes an activity_log row with the given source and no learn_applied_actions row', async () => {
+    const applied = await applyAction(ctx({
+      source: 'coach', action: 'create_goal', params: { name: 'Emergency fund', target: 9000, current: 100 },
+    }));
+    expect(applied.activity_log_id).toBeTruthy();
+    expect(repo.getActivityLogEntry(db, applied.activity_log_id)).toMatchObject({ source: 'coach', action: 'create_goal' });
+    expect(repo.getAllLearnAppliedActions(db)).toHaveLength(0);
+  });
+
+  it('keeps writing source "learn" and a learn_applied_actions row for lesson callers', async () => {
+    const applied = await applyAction(ctx({ lessonId: 'les1', action: 'create_goal', params: { name: 'Trip', target: 1000 } }));
+    expect(repo.getActivityLogEntry(db, applied.activity_log_id).source).toBe('learn');
+    expect(repo.getAllLearnAppliedActions(db)).toHaveLength(1);
+  });
+});
+
+describe('learn/apply — undoActivity', () => {
+  it('undoes once, then refuses', async () => {
+    const applied = await applyAction(ctx({ source: 'coach', action: 'create_goal', params: { name: 'Trip', target: 1000 } }));
+    await undoActivity(ctx({ activityLogId: applied.activity_log_id }));
+    expect(store.getGoals()).toHaveLength(0);
+    expect(repo.getActivityLogEntry(db, applied.activity_log_id).undone_at).toBeTruthy();
+    await expect(undoActivity(ctx({ activityLogId: applied.activity_log_id }))).rejects.toThrow('Already undone');
+  });
+
+  it('throws for a missing entry', async () => {
+    await expect(undoActivity(ctx({ activityLogId: 99999 }))).rejects.toThrow('Applied action not found');
   });
 });
