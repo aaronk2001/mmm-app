@@ -3,7 +3,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import advice from '../server/money/advice.js';
 
-const { computeAdvice, computeDigest } = advice;
+const { computeAdvice, computeDigest, fingerprint } = advice;
 const ids = (fs) => fs.map((f) => f.id);
 const byId = (fs, id) => fs.find((f) => f.id === id);
 
@@ -227,6 +227,29 @@ describe('computeAdvice — proposals', () => {
     reordered.goals[0] = Object.fromEntries(Object.entries(reordered.goals[0]).reverse());
     expect(byId(computeAdvice(reordered), 'goal-behind-g1').proposal.fingerprint).toBe(a);
     expect(byId(computeAdvice(behindInput({ target: 6000 })), 'goal-behind-g1').proposal.fingerprint).not.toBe(a);
+  });
+
+  it('fingerprint hashes nested objects identically regardless of key order', () => {
+    const x = { rule: 'r', nested: { b: 1, a: [{ d: 4, c: 3 }] }, z: null };
+    const y = { z: null, nested: { a: [{ c: 3, d: 4 }], b: 1 }, rule: 'r' };
+    expect(fingerprint(x)).toBe(fingerprint(y));
+    expect(fingerprint(x)).toMatch(/^[0-9a-f]{16}$/);
+    expect(fingerprint({ ...x, z: 0 })).not.toBe(fingerprint(x));
+  });
+
+  it('fingerprint changes when the clock moves the proposed amount across a month boundary', () => {
+    const input = { ...behindInput(), goals: [{ id: 'g1', name: 'Trip', target: 5000, current: 500, monthly_contribution: 200, target_date: '2027-03-01' }] };
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 31, 12, 0));
+      const before = byId(computeAdvice(input), 'goal-behind-g1').proposal;
+      vi.setSystemTime(new Date(2026, 10, 1, 12, 0));
+      const after = byId(computeAdvice(input), 'goal-behind-g1').proposal;
+      expect(after.params.monthly_contribution).not.toBe(before.params.monthly_contribution);
+      expect(after.fingerprint).not.toBe(before.fingerprint);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

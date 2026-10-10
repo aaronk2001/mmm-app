@@ -281,6 +281,7 @@ function computeAdvice(input = {}, { dismissed = {} } = {}) {
           fingerprint: fingerprint({
             rule: 'goal-behind', goal_id: g.id, target: g.target, current,
             monthly_contribution: g.monthly_contribution, target_date: g.target_date,
+            monthly_contribution_proposed: raised,
           }),
         },
       });
@@ -423,4 +424,4 @@ function computeDigest(input = {}) {
   };
 }
 
-module.exports = { computeAdvice, computeDigest };
+module.exports = { computeAdvice, computeDigest, fingerprint };
