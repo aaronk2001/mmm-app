@@ -32,6 +32,7 @@ export default function InsightsWidget() {
   const navigate = useNavigate();
   const [chatOpen, setChatOpen] = useState(false);
   const [recorded, setRecorded] = useState([]);
+  const [undoing, setUndoing] = useState(null);
   const findings = data?.findings || [];
 
   if (isLoading) {
@@ -39,6 +40,8 @@ export default function InsightsWidget() {
   }
 
   async function undo(entry) {
+    if (undoing) return;
+    setUndoing(entry.activity_log_id);
     try {
       await api('money/advice/undo', { method: 'POST', body: JSON.stringify({ activity_log_id: entry.activity_log_id }) });
       setRecorded((r) => r.filter((e) => e !== entry));
@@ -47,16 +50,29 @@ export default function InsightsWidget() {
     } catch (err) {
       toast.error(err.message);
       if (/not found|already/i.test(err.message)) setRecorded((r) => r.filter((e) => e !== entry));
+    } finally {
+      setUndoing(null);
     }
   }
 
   const attention = findings.filter((f) => f.severity !== 'good').length;
 
+  const recordedList = recorded.map((e) => (
+    <div key={e.activity_log_id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--m-ink-2)' }}>
+      <CheckCircle2 size={14} style={{ color: 'var(--m-green)', flexShrink: 0 }} />
+      <span style={{ flex: 1, minWidth: 0 }}>Recorded · {e.title}</span>
+      <button className="m-btn m-btn-ghost m-btn-sm m-no-drag" disabled={undoing === e.activity_log_id} onClick={() => undo(e)}>Undo</button>
+    </div>
+  ));
+
   if (!findings.length) {
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--m-muted)', textAlign: 'center', padding: 12 }}>
-        <CheckCircle2 size={28} style={{ color: 'var(--m-green)' }} />
-        <div style={{ fontSize: 13 }}>Add some accounts and transactions and your coach will start weighing in.</div>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10 }}>
+        {recordedList}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--m-muted)', textAlign: 'center', padding: 12 }}>
+          <CheckCircle2 size={28} style={{ color: 'var(--m-green)' }} />
+          <div style={{ fontSize: 13 }}>Add some accounts and transactions and your coach will start weighing in.</div>
+        </div>
       </div>
     );
   }
@@ -68,13 +84,7 @@ export default function InsightsWidget() {
           ? `${attention} thing${attention === 1 ? '' : 's'} worth your attention`
           : "You're in good shape — keep it up."}
       </div>
-      {recorded.map((e) => (
-        <div key={e.activity_log_id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--m-ink-2)' }}>
-          <CheckCircle2 size={14} style={{ color: 'var(--m-green)', flexShrink: 0 }} />
-          <span style={{ flex: 1, minWidth: 0 }}>Recorded · {e.title}</span>
-          <button className="m-btn m-btn-ghost m-btn-sm m-no-drag" onClick={() => undo(e)}>Undo</button>
-        </div>
-      ))}
+      {recordedList}
       {findings.map((f) => {
         const s = SEVERITY[f.severity] || SEVERITY.info;
         const path = toPath(f.action);

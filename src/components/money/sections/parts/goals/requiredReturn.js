@@ -24,11 +24,20 @@ export function assessReturn(r) {
   return { tone: 'bad', text: 'Unrealistic: extend the date, raise contributions, or lower the target.' };
 }
 
+export function monthsBetweenDates(fromStr, toStr) {
+  const [fy, fm] = fromStr.split('-').map(Number);
+  const [ty, tm] = toStr.split('-').map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
+const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export function requiredReturnFor({ current, monthly, target, targetDate, today = new Date() }) {
   if (!targetDate || target <= 0 || target <= current) return null;
-  const [y, m, d] = targetDate.split('-').map(Number);
-  const years = (new Date(y, m - 1, d) - today) / (365.25 * 86400e3);
-  if (years <= 0) {
+  const todayStr = isoDate(today);
+  const months = monthsBetweenDates(todayStr, targetDate);
+  const years = months / 12;
+  if (targetDate < todayStr) {
     return { years, annualReturn: null, assessment: { tone: 'warn', text: 'Target date has passed.' } };
   }
   const annualReturn = requiredAnnualReturn(current, monthly || 0, target, years);

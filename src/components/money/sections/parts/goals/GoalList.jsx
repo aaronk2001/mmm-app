@@ -234,7 +234,7 @@ export default function GoalList({
 
                   {needed && (
                     <div style={{ fontSize: '12px', color: RETURN_TONE_COLOR[needed.assessment.tone], marginTop: '6px' }}>
-                      {needed.annualReturn ? `Needs ${(needed.annualReturn * 100).toFixed(1)}%/yr · ` : ''}
+                      {needed.annualReturn && (needed.annualReturn * 100).toFixed(1) !== '0.0' ? `Needs ${(needed.annualReturn * 100).toFixed(1)}%/yr · ` : ''}
                       {needed.assessment.text}
                     </div>
                   )}

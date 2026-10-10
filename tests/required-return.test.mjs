@@ -63,4 +63,33 @@ describe('requiredReturnFor', () => {
     expect(out.years).toBeGreaterThan(9.9);
     expect(out.annualReturn).toBeGreaterThan(0);
   });
+
+  it('counts whole calendar months, ignoring the day of month', () => {
+    const a = requiredReturnFor({ current: 100, monthly: 10, target: 1000, targetDate: '2027-10-01', today });
+    const b = requiredReturnFor({ current: 100, monthly: 10, target: 1000, targetDate: '2027-10-30', today });
+    const c = requiredReturnFor({ current: 100, monthly: 10, target: 1000, targetDate: '2027-10-01', today: new Date(2026, 9, 1) });
+    expect(a.years).toBe(1);
+    expect(b.years).toBe(1);
+    expect(c.years).toBe(1);
+  });
+
+  it('needs no growth when the contribution is the calendar-month pace', () => {
+    const remaining = 5000;
+    const n = 7;
+    const monthly = Math.ceil(remaining / n);
+    const out = requiredReturnFor({ current: 1000, monthly, target: 1000 + remaining, targetDate: '2027-05-15', today });
+    expect(out.years).toBe(n / 12);
+    expect(out.annualReturn).toBe(0);
+    expect(out.assessment.text).toBe('On track without any investment growth.');
+  });
+
+  it('does not call a target later this month passed', () => {
+    const out = requiredReturnFor({ current: 100, monthly: 10, target: 1000, targetDate: '2026-10-25', today });
+    expect(out.assessment.text).not.toBe('Target date has passed.');
+  });
+
+  it('calls only a strictly earlier date passed', () => {
+    const out = requiredReturnFor({ current: 100, monthly: 10, target: 1000, targetDate: '2026-10-09', today });
+    expect(out.assessment.text).toBe('Target date has passed.');
+  });
 });
