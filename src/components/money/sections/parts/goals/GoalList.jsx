@@ -3,6 +3,7 @@ import { Calendar, CheckCircle2, Edit2, Trash2, Target, Plus, AlertCircle } from
 import Card from '../../../shared/Card';
 import Money from '../../../shared/Money';
 import EmptyState from '../../../shared/EmptyState';
+import { requiredReturnFor } from './requiredReturn';
 
 // Parse YYYY-MM-DD string to {year, month, day}
 const parseDate = (str) => {
@@ -27,6 +28,13 @@ const addMonths = (dateStr, months) => {
     y += 1;
   }
   return `${y}-${String(m).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+};
+
+const RETURN_TONE_COLOR = {
+  good: 'var(--m-green)',
+  info: 'var(--m-muted)',
+  warn: 'var(--m-amber)',
+  bad: 'var(--m-red)',
 };
 
 // Get today as YYYY-MM-DD
@@ -108,6 +116,13 @@ export default function GoalList({
             }
           }
         }
+
+        const needed = requiredReturnFor({
+          current,
+          monthly: goal.monthly_contribution,
+          target: goal.target,
+          targetDate: goal.target_date,
+        });
 
         return (
           <motion.div
@@ -214,6 +229,13 @@ export default function GoalList({
                   ) : (
                     <div style={{ fontSize: '12px', color: 'var(--m-muted)', marginTop: '6px' }}>
                       set a monthly contribution to project a date
+                    </div>
+                  )}
+
+                  {needed && (
+                    <div style={{ fontSize: '12px', color: RETURN_TONE_COLOR[needed.assessment.tone], marginTop: '6px' }}>
+                      {needed.annualReturn ? `Needs ${(needed.annualReturn * 100).toFixed(1)}%/yr · ` : ''}
+                      {needed.assessment.text}
                     </div>
                   )}
                 </div>
