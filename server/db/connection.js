@@ -150,6 +150,10 @@ function applyAdditiveMigrations(d) {
     d.exec('ALTER TABLE recurring ADD COLUMN account_id TEXT');
     console.log('[MMM db] added recurring.account_id');
   }
+  if (!hasCol('holdings', 'dividend_ttm_cents')) {
+    d.exec('ALTER TABLE holdings ADD COLUMN dividend_ttm_cents INTEGER NOT NULL DEFAULT 0');
+    console.log('[MMM db] added holdings.dividend_ttm_cents');
+  }
 }
 
 // First run only: import the legacy data.json (and back it up), else seed empty.

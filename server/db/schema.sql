@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS holdings (
   cost_basis_cents    INTEGER DEFAULT 0,
   current_price_cents INTEGER DEFAULT 0,
   price_source        TEXT    DEFAULT 'manual',
-  updated_at          TEXT
+  updated_at          TEXT,
+  dividend_ttm_cents  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings(account_id);
 

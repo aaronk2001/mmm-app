@@ -118,7 +118,7 @@ function validateHolding(body, { partial = false } = {}) {
   if (!partial || body.symbol !== undefined) {
     if (!body.symbol || !isShortText(String(body.symbol), 12)) e.push('symbol is required (max 12 chars)');
   }
-  for (const k of ['shares', 'cost_basis', 'current_price']) {
+  for (const k of ['shares', 'cost_basis', 'current_price', 'dividend_ttm']) {
     if (body[k] !== undefined && (!isMoney(body[k]) || parseFloat(body[k]) < 0)) e.push(`${k} must be a non-negative number`);
   }
   return result(e);

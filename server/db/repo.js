@@ -105,6 +105,7 @@ const rowHolding = (r) => ({
   id: r.id, account_id: r.account_id, symbol: r.symbol, shares: r.shares,
   cost_basis: toDollars(r.cost_basis_cents), current_price: toDollars(r.current_price_cents),
   price_source: r.price_source, updated_at: r.updated_at,
+  dividend_ttm: toDollars(r.dividend_ttm_cents),
 });
 const rowSnapshot = (r) => ({ date: r.date, assets: toDollars(r.assets_cents), liabilities: toDollars(r.liabilities_cents), net: toDollars(r.net_cents) });
 const rowRecurring = (r) => ({ id: r.id, payee: r.payee, amount: toDollars(r.amount_cents), cadence: r.cadence, kind: r.kind, next_date: r.next_date, note: r.note, account_id: r.account_id || null });
@@ -391,8 +392,8 @@ function getHoldings(d, accountId = null) {
 }
 function createHolding(d, h) {
   const id = h.id || newId();
-  d.prepare('INSERT INTO holdings (id, account_id, symbol, shares, cost_basis_cents, current_price_cents, price_source, updated_at) VALUES (?,?,?,?,?,?,?,?)')
-    .run(id, h.account_id || null, String(h.symbol).toUpperCase().trim(), parseFloat(h.shares) || 0, toCents(h.cost_basis), toCents(h.current_price), h.price_source || 'manual', h.updated_at || todayLocal());
+  d.prepare('INSERT INTO holdings (id, account_id, symbol, shares, cost_basis_cents, current_price_cents, price_source, updated_at, dividend_ttm_cents) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(id, h.account_id || null, String(h.symbol).toUpperCase().trim(), parseFloat(h.shares) || 0, toCents(h.cost_basis), toCents(h.current_price), h.price_source || 'manual', h.updated_at || todayLocal(), toCents(h.dividend_ttm));
   return rowHolding(d.prepare('SELECT * FROM holdings WHERE id = ?').get(id));
 }
 function updateHolding(d, id, patch) {
@@ -406,6 +407,7 @@ function updateHolding(d, id, patch) {
   if (patch.cost_basis !== undefined) { sets.push('cost_basis_cents = ?'); vals.push(toCents(patch.cost_basis)); }
   if (patch.current_price !== undefined) { sets.push('current_price_cents = ?'); vals.push(toCents(patch.current_price)); }
   if (patch.price_source !== undefined) { sets.push('price_source = ?'); vals.push(patch.price_source); }
+  if (patch.dividend_ttm !== undefined) { sets.push('dividend_ttm_cents = ?'); vals.push(toCents(patch.dividend_ttm)); }
   sets.push('updated_at = ?');
   vals.push(todayLocal());
   d.prepare(`UPDATE holdings SET ${sets.join(', ')} WHERE id = ?`).run(...vals, id);

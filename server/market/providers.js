@@ -87,6 +87,12 @@ function seriesFromChart(result) {
 
 // ── yahoo: chart-backed quote/chart/indices/futures (no crumb needed) ──────
 
+function dividendsFromChart(result) {
+  return Object.values(result?.events?.dividends || {})
+    .map((e) => ({ time: Number(e?.date), amount: Number(e?.amount) }))
+    .filter((e) => Number.isFinite(e.time) && Number.isFinite(e.amount));
+}
+
 async function chart(symbol, { range = '1mo', interval = '1d', ttl = DEFAULT_TTL } = {}) {
   const url = `${YF_HOST}/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false&events=div%7Csplit`;
   const env = await online.fetch(url, { feature: 'market', cacheKey: `yahoo:chart:${symbol}:${range}:${interval}`, ttl });
@@ -96,6 +102,7 @@ async function chart(symbol, { range = '1mo', interval = '1d', ttl = DEFAULT_TTL
     symbol,
     meta: result ? result.meta : null,
     series: result ? seriesFromChart(result) : null,
+    dividends: dividendsFromChart(result),
   };
 }
 
@@ -236,5 +243,6 @@ module.exports = {
   fred: { series },
   coingecko: { simplePrice },
   frankfurter: { latest },
+  dividendsFromChart,
   _setYahooForTests,
 };

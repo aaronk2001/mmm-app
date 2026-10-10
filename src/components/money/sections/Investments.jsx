@@ -7,6 +7,7 @@ import EmptyState from '../shared/EmptyState';
 import { useApi, api, queryClient } from '../../../lib/query';
 import { confirmDialog } from '../../../lib/confirm';
 import { toast } from '../../../lib/toast';
+import Money from '../shared/Money';
 
 const f$ = (n) => (Number(n) < 0 ? '-$' : '$') + Math.abs(Math.round(Number(n) || 0)).toLocaleString();
 const fSigned = (n) => (Number(n) >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(Number(n) || 0)).toLocaleString();
@@ -90,10 +91,11 @@ export default function Investments() {
     );
   }
 
-  const Stat = ({ label, value, color }) => (
+  const Stat = ({ label, value, color, sub }) => (
     <div>
       <div style={{ fontSize: 11, color: 'var(--m-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 700, color: color || 'var(--m-ink)', marginTop: 4, ...num }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--m-muted)', marginTop: 2 }}>{sub}</div>}
     </div>
   );
 
@@ -118,6 +120,11 @@ export default function Investments() {
                 <Stat label="Total Gain / Loss" value={fSigned(summary?.gain)} color={(summary?.gain || 0) >= 0 ? 'var(--m-green)' : 'var(--m-red)'} />
                 <Stat label="Return" value={(summary?.gainPct >= 0 ? '+' : '') + (summary?.gainPct ?? 0) + '%'} color={(summary?.gainPct || 0) >= 0 ? 'var(--m-green)' : 'var(--m-red)'} />
                 <Stat label="Cost Basis" value={f$(summary?.costBasis)} />
+                <Stat
+                  label="Est. annual dividends"
+                  value={summary?.annualIncome ? <Money value={summary.annualIncome} /> : '—'}
+                  sub={summary?.annualIncome ? `${summary.yieldPct}% yield · trailing 12 mo, gross` : null}
+                />
               </div>
             </Card>
             <Card className="m-card-no-hover">
@@ -160,8 +167,8 @@ export default function Investments() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--m-border)', textAlign: 'left' }}>
-                  {['Symbol', 'Shares', 'Cost', 'Price', 'Value', 'Gain', ''].map((h, i) => (
-                    <th key={i} style={{ padding: '10px 12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em', textAlign: i >= 1 && i <= 5 ? 'right' : 'left' }}>{h}</th>
+                  {['Symbol', 'Shares', 'Cost', 'Price', 'Value', 'Gain', 'Div/yr', ''].map((h, i) => (
+                    <th key={i} style={{ padding: '10px 12px', color: 'var(--m-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '.05em', textAlign: i >= 1 && i <= 6 ? 'right' : 'left' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -187,6 +194,7 @@ export default function Investments() {
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink)', fontWeight: 600, ...num }}>{f$(mv)}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: gain >= 0 ? 'var(--m-green)' : 'var(--m-red)', ...num }}>{fSigned(gain)}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--m-ink-2)', ...num }}>{h.shares * h.dividend_ttm > 0 ? <Money value={h.shares * h.dividend_ttm} /> : '—'}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <button className="m-btn m-btn-icon m-btn-ghost m-btn-sm" onClick={() => openEdit(h)} title="Edit" style={{ width: 30, height: 30, padding: 0 }}><Pencil size={13} /></button>
                         <button className="m-btn m-btn-icon m-btn-ghost m-btn-sm" onClick={() => remove(h.id)} title="Delete" style={{ width: 30, height: 30, padding: 0 }}><Trash2 size={13} /></button>

@@ -339,12 +339,14 @@ function computeInvestmentMetrics(holdings) {
   const list = holdings || [];
   let marketValue = 0;
   let costTotal = 0;
+  let income = 0;
   const bySymbol = {};
   for (const h of list) {
     const mv = (parseFloat(h.shares) || 0) * (parseFloat(h.current_price) || 0);
     const cb = (parseFloat(h.shares) || 0) * (parseFloat(h.cost_basis) || 0);
     marketValue += mv;
     costTotal += cb;
+    income += (parseFloat(h.shares) || 0) * (parseFloat(h.dividend_ttm) || 0);
     bySymbol[h.symbol] = (bySymbol[h.symbol] || 0) + mv;
   }
   const gain = marketValue - costTotal;
@@ -355,6 +357,8 @@ function computeInvestmentMetrics(holdings) {
     gain: round(gain),
     gainPct: costTotal > 0 ? round((gain / costTotal) * 100) : 0,
     holdingsCount: list.length,
+    annualIncome: round(income),
+    yieldPct: marketValue > 0 ? round((income / marketValue) * 100) : 0,
     allocation: Object.entries(bySymbol).map(([symbol, value]) => ({
       symbol,
       value: round(value),

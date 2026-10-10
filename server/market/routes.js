@@ -11,6 +11,7 @@ const { db } = require('../db/connection');
 const repo = require('../db/repo');
 const online = require('../online');
 const providers = require('./providers');
+const { trailingTwelveMonths } = require('./dividends');
 const { refreshSnapshots } = require('./snapshots');
 
 const router = express.Router();
@@ -129,18 +130,26 @@ router.post('/refresh-holdings', async (req, res) => {
     const holdings = repo.getHoldings(d);
     const symbols = [...new Set(holdings.map((h) => String(h.symbol).toUpperCase()))];
     const prices = {};
+    const dividends = {};
     for (const symbol of symbols) {
       // eslint-disable-next-line no-await-in-loop
       const q = await providers.yahoo.quote(symbol);
       if (q.quote?.price != null) prices[symbol] = q.quote.price;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const c = await providers.yahoo.chart(symbol, { range: '1y', interval: '1wk' });
+        if (c.meta) dividends[symbol] = trailingTwelveMonths(c.dividends);
+      } catch { /* a failed chart must not block the price update */ }
     }
     let updated = 0;
     for (const h of holdings) {
-      const price = prices[String(h.symbol).toUpperCase()];
+      const key = String(h.symbol).toUpperCase();
+      const price = prices[key];
       if (price != null) {
         repo.updateHolding(d, h.id, { current_price: price, price_source: 'yahoo' });
         updated += 1;
       }
+      if (dividends[key] != null) repo.updateHolding(d, h.id, { dividend_ttm: dividends[key] });
     }
     res.json({ ok: true, updated, total: holdings.length, holdings: repo.getHoldings(d) });
   } catch (err) { res.status(500).json({ error: err.message }); }
