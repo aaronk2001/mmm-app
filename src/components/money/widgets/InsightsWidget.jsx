@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertOctagon, AlertTriangle, Info, CheckCircle2, ArrowRight, MessageCircle, ChevronDown } from 'lucide-react';
-import { useApi } from '../../../lib/query';
+import { api, queryClient, useApi } from '../../../lib/query';
+import { toast } from '../../../lib/toast';
 import CoachChat from './CoachChat';
+import ProposalCard from './ProposalCard';
 
 const SEVERITY = {
   critical: { color: 'var(--m-red)', Icon: AlertOctagon },
@@ -29,10 +31,23 @@ export default function InsightsWidget() {
   const { data, isLoading } = useApi('money/advice');
   const navigate = useNavigate();
   const [chatOpen, setChatOpen] = useState(false);
+  const [recorded, setRecorded] = useState([]);
   const findings = data?.findings || [];
 
   if (isLoading) {
     return <div style={{ color: 'var(--m-muted)', fontSize: 13, padding: '8px 0' }}>Reading your numbers…</div>;
+  }
+
+  async function undo(entry) {
+    try {
+      await api('money/advice/undo', { method: 'POST', body: JSON.stringify({ activity_log_id: entry.activity_log_id }) });
+      setRecorded((r) => r.filter((e) => e !== entry));
+      toast.success('Undone');
+      queryClient.invalidateQueries();
+    } catch (err) {
+      toast.error(err.message);
+      if (/not found|already/i.test(err.message)) setRecorded((r) => r.filter((e) => e !== entry));
+    }
   }
 
   const attention = findings.filter((f) => f.severity !== 'good').length;
@@ -53,6 +68,13 @@ export default function InsightsWidget() {
           ? `${attention} thing${attention === 1 ? '' : 's'} worth your attention`
           : "You're in good shape — keep it up."}
       </div>
+      {recorded.map((e) => (
+        <div key={e.activity_log_id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--m-ink-2)' }}>
+          <CheckCircle2 size={14} style={{ color: 'var(--m-green)', flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 0 }}>Recorded · {e.title}</span>
+          <button className="m-btn m-btn-ghost m-btn-sm m-no-drag" onClick={() => undo(e)}>Undo</button>
+        </div>
+      ))}
       {findings.map((f) => {
         const s = SEVERITY[f.severity] || SEVERITY.info;
         const path = toPath(f.action);
@@ -73,7 +95,10 @@ export default function InsightsWidget() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--m-ink)' }}>{f.title}</div>
               <div style={{ fontSize: 12.5, color: 'var(--m-ink-2)', lineHeight: 1.5, marginTop: 2 }}>{f.detail}</div>
-              {f.action && path && (
+              {f.proposal && (
+                <ProposalCard finding={f} onDecided={(d) => setRecorded((r) => [...r, d])} />
+              )}
+              {!f.proposal && f.action && path && (
                 <button
                   className="m-no-drag"
                   onClick={() => navigate(path)}
